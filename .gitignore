@@ -1,0 +1,34 @@
+# secrets
+.env
+
+# local codex/bkit tooling
+.bkit-codex/
+.codex/
+.omx/
+.tools/
+.vscode/
+.agents/
+
+# python caches
+**/__pycache__/
+**/*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# .NET build outputs
+**/bin/
+**/obj/
+
+# local generated work/data
+console-workspace/
+review-build/
+review-desktop-pipeline-all/
+review-live/
+review-mockups/
+tmp-inspect-collector-feed/
+tmp-verify-force-refresh/
+배포/
+*.xlsx
+*.docx
+image.png
+nul
