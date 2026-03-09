@@ -1,0 +1,491 @@
+<Window x:Class="NaraCollector.Desktop.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="동국문화재연구원 낙찰분석프로그램"
+        Width="1880"
+        Height="1060"
+        MinWidth="1420"
+        MinHeight="900"
+        Background="{StaticResource Bg0Brush}"
+        Foreground="{StaticResource TextPrimaryBrush}">
+
+    <Grid Margin="18" Opacity="0">
+        <Grid.Triggers>
+            <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                <BeginStoryboard>
+                    <Storyboard>
+                        <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                         From="0"
+                                         To="1"
+                                         Duration="0:0:0.30" />
+                    </Storyboard>
+                </BeginStoryboard>
+            </EventTrigger>
+        </Grid.Triggers>
+
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="1.1*" />
+            <RowDefinition Height="12" />
+            <RowDefinition Height="0.95*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Style="{StaticResource HeroCardBorderStyle}" Margin="0,0,0,12" Padding="20,18">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0">
+                    <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="동국문화재연구원 공고 수집기" />
+                    <TextBlock Margin="0,8,0,0"
+                               Foreground="{StaticResource TextMutedBrush}"
+                               Text="좌측은 오늘 이후 입찰공고, 우측은 최근 3개월 낙찰공고를 API 증분 수집으로 유지합니다." />
+
+                    <WrapPanel Margin="0,16,0,0">
+                        <Border Width="200"
+                                Margin="0,0,12,12"
+                                Style="{StaticResource MetricCardBorderStyle}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource EyebrowTextStyle}" Text="입찰공고" />
+                                <TextBlock Margin="0,6,0,0"
+                                           FontFamily="{StaticResource NumberFont}"
+                                           FontSize="26"
+                                           FontWeight="SemiBold"
+                                           Text="{Binding IncrementalBidNoticeItems.Count, StringFormat={}{0:N0}}" />
+                                <TextBlock Margin="0,6,0,0"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           Text="{Binding IncrementalBidSummaryText}"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Width="200"
+                                Margin="0,0,12,12"
+                                Style="{StaticResource MetricCardBorderStyle}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource EyebrowTextStyle}" Text="낙찰공고" />
+                                <TextBlock Margin="0,6,0,0"
+                                           FontFamily="{StaticResource NumberFont}"
+                                           FontSize="26"
+                                           FontWeight="SemiBold"
+                                           Text="{Binding IncrementalAwardNoticeItems.Count, StringFormat={}{0:N0}}" />
+                                <TextBlock Margin="0,6,0,0"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           Text="{Binding IncrementalAwardSummaryText}"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Width="220"
+                                Margin="0,0,12,12"
+                                Style="{StaticResource MetricCardBorderStyle}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource EyebrowTextStyle}" Text="수집 상태" />
+                                <TextBlock Margin="0,6,0,0"
+                                           FontSize="18"
+                                           FontWeight="SemiBold"
+                                           Text="{Binding LoadStatusText}"
+                                           TextWrapping="Wrap" />
+                                <TextBlock Margin="0,8,0,0"
+                                           FontFamily="{StaticResource NumberFont}"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           Text="{Binding LoadProgress, StringFormat={}{0:0}%}" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Width="220"
+                                Margin="0,0,0,12"
+                                Style="{StaticResource MetricCardBorderStyle}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource EyebrowTextStyle}" Text="현재 범위" />
+                                <TextBlock Margin="0,6,0,0"
+                                           FontSize="18"
+                                           FontWeight="SemiBold"
+                                           Text="{Binding SelectedRegion}" />
+                                <TextBlock Margin="0,8,0,0"
+                                           FontFamily="{StaticResource NumberFont}"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           Text="{Binding SelectedMinAdjustRate, StringFormat={}{0} ~ }">
+                                </TextBlock>
+                                <TextBlock FontFamily="{StaticResource NumberFont}"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           Text="{Binding SelectedMaxAdjustRate}" />
+                            </StackPanel>
+                        </Border>
+                    </WrapPanel>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Top">
+                    <Button Style="{StaticResource SecondaryButtonStyle}"
+                            Margin="0,0,0,8"
+                            Content="차트 화면"
+                            Click="OpenChartWindowClick" />
+                    <Button Style="{StaticResource PrimaryButtonStyle}"
+                            Margin="0,0,0,8"
+                            Content="업데이트"
+                            Command="{Binding CollectDataCommand}" />
+                    <Button x:Name="AutoCollectButton"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Margin="0,0,0,8"
+                            Content="1분 자동수집"
+                            Click="ToggleAutoCollectClick" />
+                    <Button Style="{StaticResource DangerButtonStyle}"
+                            Margin="0,0,0,8"
+                            Content="중지"
+                            Command="{Binding StopCollectCommand}" />
+                    <Button Style="{StaticResource GhostButtonStyle}"
+                            Content="필터 초기화"
+                            Command="{Binding ResetFilterCommand}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Margin="0,0,0,12" Padding="14,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="280" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                    <TextBlock Style="{StaticResource EyebrowTextStyle}" Text="지역" />
+                    <WrapPanel Margin="0,6,0,0">
+                        <CheckBox Style="{StaticResource FilterChipCheckBoxStyle}"
+                                  Content="전국"
+                                  IsChecked="{Binding IncludeNationwide, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                  Checked="MainFilterCheckedChanged"
+                                  Unchecked="MainFilterCheckedChanged" />
+                        <CheckBox Style="{StaticResource FilterChipCheckBoxStyle}"
+                                  Content="대구"
+                                  IsChecked="{Binding IncludeDaegu, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                  Checked="MainFilterCheckedChanged"
+                                  Unchecked="MainFilterCheckedChanged" />
+                        <CheckBox Style="{StaticResource FilterChipCheckBoxStyle}"
+                                  Content="경북"
+                                  IsChecked="{Binding IncludeGyeongbuk, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                  Checked="MainFilterCheckedChanged"
+                                  Unchecked="MainFilterCheckedChanged" />
+                    </WrapPanel>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Margin="0,0,16,0">
+                    <TextBlock Style="{StaticResource EyebrowTextStyle}" Text="최소" />
+                    <ComboBox Width="104"
+                              Margin="0,6,0,0"
+                              ItemsSource="{Binding AdjustRateRangeOptions}"
+                              SelectedItem="{Binding SelectedMinAdjustRate}"
+                              SelectionChanged="MainFilterSelectionChanged" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Margin="0,0,16,0">
+                    <TextBlock Style="{StaticResource EyebrowTextStyle}" Text="최대" />
+                    <ComboBox Width="104"
+                              Margin="0,6,0,0"
+                              ItemsSource="{Binding AdjustRateRangeOptions}"
+                              SelectedItem="{Binding SelectedMaxAdjustRate}"
+                              SelectionChanged="MainFilterSelectionChanged" />
+                </StackPanel>
+
+                <TextBlock Grid.Column="3"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource TextMutedBrush}"
+                           Text="{Binding CurrentFilterSummary}"
+                           TextTrimming="CharacterEllipsis" />
+
+                <StackPanel Grid.Column="4" Margin="18,0,0,0" VerticalAlignment="Center">
+                    <ProgressBar Height="8"
+                                 Minimum="0"
+                                 Maximum="100"
+                                 Value="{Binding LoadProgress, Mode=OneWay}" />
+                    <TextBlock Margin="0,8,0,0"
+                               Foreground="{StaticResource TextMutedBrush}"
+                               Text="{Binding LastSyncText}"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Margin="0,4,0,0"
+                               Foreground="{StaticResource TextSubtleBrush}"
+                               Text="전장 맵 / 패턴 비교는 상단 '차트 화면'에서 확인"
+                               TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="1*" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="1*" />
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Style="{StaticResource CardBorderStyle}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <DockPanel Grid.Row="0" Margin="0,0,0,10">
+                        <TextBlock DockPanel.Dock="Left" Style="{StaticResource SectionTitleTextStyle}" Text="오늘 이후 입찰공고" />
+                        <TextBlock DockPanel.Dock="Right" Foreground="{StaticResource TextMutedBrush}" Text="{Binding IncrementalBidSummaryText}" />
+                    </DockPanel>
+                    <DataGrid Grid.Row="1"
+                              ItemsSource="{Binding IncrementalBidNoticeItems}"
+                              AutoGenerateColumns="False"
+                              CanUserAddRows="False"
+                              IsReadOnly="True"
+                              EnableRowVirtualization="True"
+                              EnableColumnVirtualization="True"
+                              RowHeaderWidth="0">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="입찰마감" Binding="{Binding NoticeDate, StringFormat=yyyy-MM-dd HH:mm}" Width="0.95*" />
+                            <DataGridTextColumn Header="공고번호" Binding="{Binding NoticeNumber}" Width="1.05*" />
+                            <DataGridTextColumn Header="공고명" Binding="{Binding NoticeName}" Width="2.35*" />
+                            <DataGridTextColumn Header="발주처" Binding="{Binding OrderingAgency}" Width="1.35*" />
+                            <DataGridTextColumn Header="지역" Binding="{Binding RegionText}" Width="0.7*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="2" Style="{StaticResource CardBorderStyle}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <DockPanel Grid.Row="0" Margin="0,0,0,10">
+                        <TextBlock DockPanel.Dock="Left" Style="{StaticResource SectionTitleTextStyle}" Text="최근 3개월 낙찰공고" />
+                        <TextBlock DockPanel.Dock="Right" Foreground="{StaticResource TextMutedBrush}" Text="{Binding IncrementalAwardSummaryText}" />
+                    </DockPanel>
+                    <DataGrid Grid.Row="1"
+                              ItemsSource="{Binding IncrementalAwardNoticeItems}"
+                              AutoGenerateColumns="False"
+                              CanUserAddRows="False"
+                              IsReadOnly="True"
+                              EnableRowVirtualization="True"
+                              EnableColumnVirtualization="True"
+                              RowHeaderWidth="0">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="개찰일" Binding="{Binding NoticeDate, StringFormat=yyyy-MM-dd HH:mm}" Width="0.95*" />
+                            <DataGridTextColumn Header="공고번호" Binding="{Binding NoticeNumber}" Width="1.05*" />
+                            <DataGridTextColumn Header="공고명" Binding="{Binding NoticeName}" Width="2.35*" />
+                            <DataGridTextColumn Header="발주처" Binding="{Binding OrderingAgency}" Width="1.35*" />
+                            <DataGridTextColumn Header="참여업체" Binding="{Binding ParticipantCountText}" Width="0.7*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Grid Grid.Row="4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="1.15*" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="1.0*" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="1.35*" />
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Style="{StaticResource CardBorderStyle}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <DockPanel Grid.Row="0" Margin="0,0,0,10">
+                        <TextBlock DockPanel.Dock="Left" Style="{StaticResource SectionTitleTextStyle}" Text="동국 밀착 연구원" />
+                        <TextBlock DockPanel.Dock="Right"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   Text="{Binding TacticalBlockerHeadlineText}"
+                                   TextTrimming="CharacterEllipsis" />
+                    </DockPanel>
+                    <DataGrid Grid.Row="1"
+                              ItemsSource="{Binding TacticalBlockerRows}"
+                              AutoGenerateColumns="False"
+                              CanUserAddRows="False"
+                              IsReadOnly="True"
+                              EnableRowVirtualization="True"
+                              EnableColumnVirtualization="True"
+                              RowHeaderWidth="0">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="연구원" Binding="{Binding CompanyName}" Width="1.9*" />
+                            <DataGridTextColumn Header="Δ사정률" Binding="{Binding RelativeRateText}" Width="0.8*" />
+                            <DataGridTextColumn Header="동시" Binding="{Binding OverlapText}" Width="0.55*" />
+                            <DataGridTextColumn Header="표본" Binding="{Binding SampleText}" Width="0.45*" />
+                            <DataGridTextColumn Header="유형" Binding="{Binding ThreatLabel}" Width="0.75*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="2" Style="{StaticResource CardBorderStyle}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <DockPanel Grid.Row="0" Margin="0,0,0,10">
+                        <TextBlock DockPanel.Dock="Left" Style="{StaticResource SectionTitleTextStyle}" Text="우측 방해 연구원" />
+                        <TextBlock DockPanel.Dock="Right"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   Text="{Binding TacticalPrimaryAnchorText}"
+                                   TextTrimming="CharacterEllipsis" />
+                    </DockPanel>
+                    <DataGrid Grid.Row="1"
+                              ItemsSource="{Binding TacticalRightAnchorRows}"
+                              AutoGenerateColumns="False"
+                              CanUserAddRows="False"
+                              IsReadOnly="True"
+                              EnableRowVirtualization="True"
+                              EnableColumnVirtualization="True"
+                              RowHeaderWidth="0">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="연구원" Binding="{Binding CompanyName}" Width="1.6*" />
+                            <DataGridTextColumn Header="Δ사정률" Binding="{Binding RelativeRateText}" Width="0.8*" />
+                            <DataGridTextColumn Header="동시" Binding="{Binding OverlapText}" Width="0.55*" />
+                            <DataGridTextColumn Header="유형" Binding="{Binding ThreatLabel}" Width="0.8*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="4" Style="{StaticResource CardBorderStyle}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <DockPanel Grid.Row="0" Margin="0,0,0,10">
+                        <TextBlock DockPanel.Dock="Left" Style="{StaticResource SectionTitleTextStyle}" Text="최근 3개월 밀착 공고" />
+                        <TextBlock DockPanel.Dock="Right"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   Text="{Binding TacticalHeroSummaryText}"
+                                   TextTrimming="CharacterEllipsis" />
+                    </DockPanel>
+                    <DataGrid Grid.Row="1"
+                              ItemsSource="{Binding TacticalNoticeRows}"
+                              AutoGenerateColumns="False"
+                              CanUserAddRows="False"
+                              IsReadOnly="True"
+                              EnableRowVirtualization="True"
+                              EnableColumnVirtualization="True"
+                              RowHeaderWidth="0">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="개찰일" Binding="{Binding OpenDate, StringFormat=yyyy-MM-dd}" Width="0.85*" />
+                            <DataGridTextColumn Header="공고번호" Binding="{Binding NoticeNumber}" Width="1.0*" />
+                            <DataGridTextColumn Header="공고명" Binding="{Binding NoticeName}" Width="1.8*" />
+                            <DataGridTextColumn Header="붙은 연구원" Binding="{Binding CloseCompanies}" Width="1.45*" />
+                            <DataGridTextColumn Header="동국 사정률" Binding="{Binding DonggukAdjustRateText}" Width="0.75*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="5" Margin="0,12,0,0" Style="{StaticResource CardBorderStyle}" Padding="14,10">
+            <Expander IsExpanded="False" Header="고급 필터 / 추적 업체">
+                <Grid Margin="0,10,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="220" />
+                        <ColumnDefinition Width="220" />
+                        <ColumnDefinition Width="220" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                        <TextBlock Style="{StaticResource EyebrowTextStyle}" Text="시작일" />
+                        <DatePicker SelectedDate="{Binding StartDate, UpdateSourceTrigger=PropertyChanged}"
+                                    SelectedDateChanged="MainFilterDateChanged" />
+                        <TextBlock Margin="0,10,0,0" Style="{StaticResource EyebrowTextStyle}" Text="키워드 / 공고번호" />
+                        <TextBox Text="{Binding KeywordText, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" Margin="0,0,12,0">
+                        <TextBlock Style="{StaticResource EyebrowTextStyle}" Text="종료일" />
+                        <DatePicker SelectedDate="{Binding EndDate, UpdateSourceTrigger=PropertyChanged}"
+                                    SelectedDateChanged="MainFilterDateChanged" />
+                        <TextBlock Margin="0,10,0,0" Style="{StaticResource EyebrowTextStyle}" Text="발주처" />
+                        <TextBox Text="{Binding OrderingAgencyText, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2" Margin="0,0,12,0">
+                        <TextBlock Style="{StaticResource EyebrowTextStyle}" Text="추적 업체 요약" />
+                        <Border Margin="0,4,0,0" Style="{StaticResource InlineSummaryBorderStyle}">
+                            <StackPanel>
+                                <TextBlock FontWeight="SemiBold" Text="{Binding SelectedCompanySummary}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Margin="0,2,0,0" Foreground="{StaticResource TextMutedBrush}" Text="{Binding SelectedCompanyCountText}" />
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Margin="0,10,0,0" Style="{StaticResource EyebrowTextStyle}" Text="업체 검색" />
+                        <TextBox Text="{Binding CompanySearchText, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+
+                    <ListBox Grid.Column="3"
+                             MinHeight="180"
+                             ItemsSource="{Binding CompanyCheckItems}"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             ScrollViewer.CanContentScroll="True"
+                             VirtualizingPanel.IsVirtualizing="True"
+                             VirtualizingPanel.VirtualizationMode="Recycling"
+                             FontSize="13">
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Visibility" Value="Visible" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsVisible}" Value="False">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <CheckBox Margin="0,0,12,6"
+                                          Content="{Binding DisplayName}"
+                                          ToolTip="{Binding Name}"
+                                          Style="{StaticResource ListCheckBoxStyle}"
+                                          IsChecked="{Binding IsChecked, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Expander>
+        </Border>
+
+        <Border Grid.Row="6" Margin="0,12,0,0" Style="{StaticResource CardBorderStyle}" Padding="14,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="360" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource TextMutedBrush}"
+                           Text="{Binding CurrentFilterSummary}"
+                           TextTrimming="CharacterEllipsis" />
+
+                <TextBlock Grid.Column="1"
+                           HorizontalAlignment="Right"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource TextMutedBrush}"
+                           Text="{Binding LastSyncText}"
+                           TextTrimming="CharacterEllipsis" />
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

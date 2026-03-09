@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>NaraCollector.Desktop</RootNamespace>
+    <AssemblyName>동국문화재연구원_낙찰분석프로그램</AssemblyName>
+    <AssemblyTitle>동국문화재연구원 낙찰분석프로그램</AssemblyTitle>
+    <Product>동국문화재연구원 낙찰분석프로그램</Product>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ClosedXML" Version="0.105.0" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="bidder_colors.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup Condition="Exists('..\..\..\.agents\skills\shadow-strategy\analysis_profile.json')">
+    <Content Include="..\..\..\.agents\skills\shadow-strategy\analysis_profile.json">
+      <Link>analysis_profile.json</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup Condition="Exists('..\..\..\.agents\skills\API\rule_profile.json')">
+    <Content Include="..\..\..\.agents\skills\API\rule_profile.json">
+      <Link>rule_profile.json</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\map-background.png" />
+  </ItemGroup>
+
+  <ItemGroup Condition="Exists('..\..\..\전체_통합_데이터.xlsx')">
+    <Content Include="..\..\..\전체_통합_데이터.xlsx">
+      <Link>전체_통합_데이터.xlsx</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="NaraCollector.Desktop.Tests" />
+  </ItemGroup>
+</Project>

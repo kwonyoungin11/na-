@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ClosedXML" Version="0.105.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.3.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../NaraCollector.Desktop/Models/DashboardModels.cs" Link="Source/DashboardModels.cs" />
+    <Compile Include="../NaraCollector.Desktop/Services/IAppPathResolver.cs" Link="Source/IAppPathResolver.cs" />
+    <Compile Include="../NaraCollector.Desktop/Services/DefaultAppPathResolver.cs" Link="Source/DefaultAppPathResolver.cs" />
+    <Compile Include="../NaraCollector.Desktop/Services/CompanyNamePresentation.cs" Link="Source/CompanyNamePresentation.cs" />
+    <Compile Include="../NaraCollector.Desktop/Services/CompetitionAnalysisProfile.cs" Link="Source/CompetitionAnalysisProfile.cs" />
+    <Compile Include="../NaraCollector.Desktop/Services/CompetitionStrategyProfile.cs" Link="Source/CompetitionStrategyProfile.cs" />
+    <Compile Include="../NaraCollector.Desktop/Services/CompetitionRecommendationEngine.cs" Link="Source/CompetitionRecommendationEngine.cs" />
+    <Compile Include="../NaraCollector.Desktop/Services/ParticipantSameDayClusterReducer.cs" Link="Source/ParticipantSameDayClusterReducer.cs" />
+    <Compile Include="../NaraCollector.Desktop/Services/AnalysisMath.cs" Link="Source/AnalysisMath.cs" />
+    <Compile Include="../NaraCollector.Desktop/Services/CrowdingAnalysisService.cs" Link="Source/CrowdingAnalysisService.cs" />
+    <Compile Include="../NaraCollector.Desktop/Services/CollisionAnalysisService.cs" Link="Source/CollisionAnalysisService.cs" />
+    <Compile Include="../NaraCollector.Desktop/Services/CSharpAnalysisPipelineRunner.cs" Link="Source/CSharpAnalysisPipelineRunner.cs" />
+    <Compile Include="../NaraCollector.Desktop/Services/ConsolePipelineInsightService.cs" Link="Source/ConsolePipelineInsightService.cs" />
+    <Compile Include="../NaraCollector.Desktop/Services/NaraApiScriptRunner.cs" Link="Source/NaraApiScriptRunner.cs" />
+    <Compile Include="../NaraCollector.Desktop/Services/NaraApiParticipantParser.cs" Link="Source/NaraApiParticipantParser.cs" />
+    <Compile Include="../NaraCollector.Desktop/Services/NaraApiSnapshotBuilder.cs" Link="Source/NaraApiSnapshotBuilder.cs" />
+    <Compile Include="../NaraCollector.Desktop/Services/NaraApiDashboardRepository.cs" Link="Source/NaraApiDashboardRepository.cs" />
+    <Compile Include="../NaraCollector.Desktop/ViewModels/MainWindowFilterState.cs" Link="Source/MainWindowFilterState.cs" />
+    <Compile Include="../NaraCollector.Desktop/ViewModels/MainWindowSnapshotCoordinator.cs" Link="Source/MainWindowSnapshotCoordinator.cs" />
+    <Compile Include="../NaraCollector.Desktop/ViewModels/MainWindowAlertPublisher.cs" Link="Source/MainWindowAlertPublisher.cs" />
+  </ItemGroup>
+</Project>

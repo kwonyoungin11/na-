@@ -7,13 +7,29 @@
 .omx/
 .tools/
 .vscode/
-.agents/
+.agents/skills/API/.api_key.env
+.agents/skills/bkend-*
+.agents/skills/bkit-*
+.agents/skills/code-review
+.agents/skills/codex-learning
+.agents/skills/desktop-app
+.agents/skills/development-pipeline
+.agents/skills/dynamic
+.agents/skills/enterprise
+.agents/skills/mobile-app
+.agents/skills/pdca
+.agents/skills/phase-*
+.agents/skills/plan-plus
+.agents/skills/starter
+.agents/skills/zero-script-qa
 
 # python caches
 **/__pycache__/
 **/*.py[cod]
 .pytest_cache/
 .ruff_cache/
+**/.bkit-memory.json
+**/.pdca-status.json
 
 # .NET build outputs
 **/bin/
@@ -21,6 +37,7 @@
 
 # local generated work/data
 console-workspace/
+data/
 review-build/
 review-desktop-pipeline-all/
 review-live/
@@ -28,7 +45,12 @@ review-mockups/
 tmp-inspect-collector-feed/
 tmp-verify-force-refresh/
 배포/
+/docs/
+/PLANS.md
+/launch_nara_current.ps1
+.agents/**/output/
 *.xlsx
 *.docx
+전체_통합_데이터_전처리요약_*.json
 image.png
 nul

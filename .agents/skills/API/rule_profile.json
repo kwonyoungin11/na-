@@ -1,0 +1,99 @@
+{
+  "profile_name": "cultural-heritage-survey-v1",
+  "primary_keywords": [
+    "발굴조사",
+    "정밀발굴조사",
+    "시굴조사",
+    "지표조사",
+    "표본조사",
+    "매장유산",
+    "문화재조사",
+    "문화재발굴조사"
+  ],
+  "recovery_keywords": [
+    "발굴",
+    "시굴"
+  ],
+  "domain_context_tokens": [
+    "발굴조사",
+    "정밀발굴조사",
+    "시굴조사",
+    "지표조사",
+    "표본조사",
+    "매장유산",
+    "매장문화재",
+    "문화재조사",
+    "문화재발굴조사",
+    "문화재"
+  ],
+  "required_service_tokens": [
+    "기술용역",
+    "용역"
+  ],
+  "excluded_service_tokens": [
+    "공사",
+    "물품",
+    "구매",
+    "제조",
+    "설치",
+    "보수",
+    "정비",
+    "철거",
+    "조성공사",
+    "건설공사"
+  ],
+  "excluded_notice_kind_tokens": [
+    "취소공고"
+  ],
+  "collector_domain_context_tokens": [
+    "발굴조사",
+    "정밀발굴조사",
+    "시굴조사",
+    "지표조사",
+    "표본조사",
+    "매장유산",
+    "매장문화재",
+    "문화재조사",
+    "문화재발굴조사",
+    "문화재",
+    "국가유산영향진단",
+    "영향진단",
+    "유해발굴"
+  ],
+  "collector_required_service_tokens": [],
+  "collector_excluded_service_tokens": [],
+  "collector_allowed_groups": [
+    "servc"
+  ],
+  "collector_excluded_notice_tokens": [
+    "임차",
+    "보고서",
+    "발간",
+    "제작",
+    "인부",
+    "측량",
+    "촬영",
+    "스캔",
+    "모집단",
+    "경제지표",
+    "통계",
+    "조사구",
+    "단가계약",
+    "중장비",
+    "방안 연구"
+  ],
+  "allowed_regions": [
+    "전국",
+    "대구",
+    "경북"
+  ],
+  "mixed_region_policy": "exclude_non_nationwide_multi_region",
+  "min_participants": 5,
+  "target_company_terms": [
+    "문화재연구원"
+  ],
+  "retired_company_tokens": [
+    "한국문화재연구원",
+    "효림"
+  ]
+}
