@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Collections.Specialized;
 using System.Windows;
 using System.Windows.Media;
 using NaraCollector.Desktop.Models;
@@ -17,6 +18,7 @@ internal static class TacticalChartPalette
     public static readonly Pen FocusPen = PenFromHex("#2563EB", 1.6);
     public static readonly Brush FocusBrush = BrushFromHex("#DBEAFE");
     public static readonly Brush RecommendationBrush = BrushFromHex("#FDE68A");
+    public static readonly Pen HighlightSelectionPen = PenFromHex("#FACC15", 2.4);
     public static readonly Brush HeatNeutralBrush = BrushFromHex("#E5E7EB");
     public static readonly Brush HeatFocusBrush = BrushFromHex("#93C5FD");
     public static readonly Brush HeatThreatBrush = BrushFromHex("#FCA5A5");
@@ -367,7 +369,78 @@ public sealed class TrendLineChartControl : FrameworkElement
         nameof(ItemsSource),
         typeof(IEnumerable<TrendPointModel>),
         typeof(TrendLineChartControl),
-        new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+        new FrameworkPropertyMetadata(
+            null,
+            FrameworkPropertyMetadataOptions.AffectsRender,
+            OnItemsSourceChanged));
+
+    public static readonly DependencyProperty SecondaryItemsSourceProperty = DependencyProperty.Register(
+        nameof(SecondaryItemsSource),
+        typeof(IEnumerable<TrendPointModel>),
+        typeof(TrendLineChartControl),
+        new FrameworkPropertyMetadata(
+            null,
+            FrameworkPropertyMetadataOptions.AffectsRender,
+            OnSecondaryItemsSourceChanged));
+
+    public static readonly DependencyProperty FooterCaptionProperty = DependencyProperty.Register(
+        nameof(FooterCaption),
+        typeof(string),
+        typeof(TrendLineChartControl),
+        new FrameworkPropertyMetadata(
+            string.Empty,
+            FrameworkPropertyMetadataOptions.AffectsRender));
+
+    public static readonly DependencyProperty RecommendationBandMinProperty = DependencyProperty.Register(
+        nameof(RecommendationBandMin),
+        typeof(double?),
+        typeof(TrendLineChartControl),
+        new FrameworkPropertyMetadata(
+            null,
+            FrameworkPropertyMetadataOptions.AffectsRender));
+
+    public static readonly DependencyProperty RecommendationBandMaxProperty = DependencyProperty.Register(
+        nameof(RecommendationBandMax),
+        typeof(double?),
+        typeof(TrendLineChartControl),
+        new FrameworkPropertyMetadata(
+            null,
+            FrameworkPropertyMetadataOptions.AffectsRender));
+
+    public static readonly DependencyProperty RecommendationTextProperty = DependencyProperty.Register(
+        nameof(RecommendationText),
+        typeof(string),
+        typeof(TrendLineChartControl),
+        new FrameworkPropertyMetadata(
+            string.Empty,
+            FrameworkPropertyMetadataOptions.AffectsRender));
+
+    public static readonly DependencyProperty HighlightedKeyProperty = DependencyProperty.Register(
+        nameof(HighlightedKey),
+        typeof(string),
+        typeof(TrendLineChartControl),
+        new FrameworkPropertyMetadata(
+            string.Empty,
+            FrameworkPropertyMetadataOptions.AffectsRender));
+
+    public static readonly DependencyProperty PrimaryLegendTextProperty = DependencyProperty.Register(
+        nameof(PrimaryLegendText),
+        typeof(string),
+        typeof(TrendLineChartControl),
+        new FrameworkPropertyMetadata(
+            string.Empty,
+            FrameworkPropertyMetadataOptions.AffectsRender));
+
+    public static readonly DependencyProperty SecondaryLegendTextProperty = DependencyProperty.Register(
+        nameof(SecondaryLegendText),
+        typeof(string),
+        typeof(TrendLineChartControl),
+        new FrameworkPropertyMetadata(
+            string.Empty,
+            FrameworkPropertyMetadataOptions.AffectsRender));
+
+    private INotifyCollectionChanged? _collectionChangedSource;
+    private INotifyCollectionChanged? _secondaryCollectionChangedSource;
 
     public IEnumerable<TrendPointModel>? ItemsSource
     {
@@ -375,58 +448,574 @@ public sealed class TrendLineChartControl : FrameworkElement
         set => SetValue(ItemsSourceProperty, value);
     }
 
+    public IEnumerable<TrendPointModel>? SecondaryItemsSource
+    {
+        get => (IEnumerable<TrendPointModel>?)GetValue(SecondaryItemsSourceProperty);
+        set => SetValue(SecondaryItemsSourceProperty, value);
+    }
+
+    public string FooterCaption
+    {
+        get => (string)GetValue(FooterCaptionProperty);
+        set => SetValue(FooterCaptionProperty, value);
+    }
+
+    public double? RecommendationBandMin
+    {
+        get => (double?)GetValue(RecommendationBandMinProperty);
+        set => SetValue(RecommendationBandMinProperty, value);
+    }
+
+    public double? RecommendationBandMax
+    {
+        get => (double?)GetValue(RecommendationBandMaxProperty);
+        set => SetValue(RecommendationBandMaxProperty, value);
+    }
+
+    public string RecommendationText
+    {
+        get => (string)GetValue(RecommendationTextProperty);
+        set => SetValue(RecommendationTextProperty, value);
+    }
+
+    public string HighlightedKey
+    {
+        get => (string)GetValue(HighlightedKeyProperty);
+        set => SetValue(HighlightedKeyProperty, value);
+    }
+
+    public string PrimaryLegendText
+    {
+        get => (string)GetValue(PrimaryLegendTextProperty);
+        set => SetValue(PrimaryLegendTextProperty, value);
+    }
+
+    public string SecondaryLegendText
+    {
+        get => (string)GetValue(SecondaryLegendTextProperty);
+        set => SetValue(SecondaryLegendTextProperty, value);
+    }
+
+    private static void OnItemsSourceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is not TrendLineChartControl control)
+        {
+            return;
+        }
+
+        control.DetachItemsSource();
+        control.AttachItemsSource(e.NewValue as IEnumerable<TrendPointModel>);
+        control.InvalidateVisual();
+    }
+
+    private static void OnSecondaryItemsSourceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is not TrendLineChartControl control)
+        {
+            return;
+        }
+
+        control.DetachSecondaryItemsSource();
+        control.AttachSecondaryItemsSource(e.NewValue as IEnumerable<TrendPointModel>);
+        control.InvalidateVisual();
+    }
+
+    private void AttachItemsSource(IEnumerable<TrendPointModel>? source)
+    {
+        if (source is not INotifyCollectionChanged notifyCollectionChanged)
+        {
+            return;
+        }
+
+        _collectionChangedSource = notifyCollectionChanged;
+        _collectionChangedSource.CollectionChanged += HandleItemsSourceCollectionChanged;
+    }
+
+    private void AttachSecondaryItemsSource(IEnumerable<TrendPointModel>? source)
+    {
+        if (source is not INotifyCollectionChanged notifyCollectionChanged)
+        {
+            return;
+        }
+
+        _secondaryCollectionChangedSource = notifyCollectionChanged;
+        _secondaryCollectionChangedSource.CollectionChanged += HandleItemsSourceCollectionChanged;
+    }
+
+    private void DetachItemsSource()
+    {
+        if (_collectionChangedSource is null)
+        {
+            return;
+        }
+
+        _collectionChangedSource.CollectionChanged -= HandleItemsSourceCollectionChanged;
+        _collectionChangedSource = null;
+    }
+
+    private void DetachSecondaryItemsSource()
+    {
+        if (_secondaryCollectionChangedSource is null)
+        {
+            return;
+        }
+
+        _secondaryCollectionChangedSource.CollectionChanged -= HandleItemsSourceCollectionChanged;
+        _secondaryCollectionChangedSource = null;
+    }
+
+    private void HandleItemsSourceCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        InvalidateVisual();
+    }
+
     protected override void OnRender(DrawingContext dc)
     {
         base.OnRender(dc);
         dc.DrawRoundedRectangle(TacticalChartPalette.Background, null, new Rect(RenderSize), 18, 18);
         var items = (ItemsSource ?? Array.Empty<TrendPointModel>()).ToList();
-        if (items.Count < 2)
+        var secondaryItems = (SecondaryItemsSource ?? Array.Empty<TrendPointModel>()).ToList();
+        var finitePrimaryValues = items
+            .Select(x => x.Value)
+            .Where(value => !double.IsNaN(value) && !double.IsInfinity(value))
+            .ToList();
+        var finiteSecondaryValues = secondaryItems
+            .Select(x => x.Value)
+            .Where(value => !double.IsNaN(value) && !double.IsInfinity(value))
+            .ToList();
+        if (finitePrimaryValues.Count == 0 && finiteSecondaryValues.Count == 0)
         {
+            DrawEmptyState(dc);
+            DrawFooterCaption(dc);
             return;
         }
 
-        var plotRect = new Rect(16, 14, Math.Max(80, RenderSize.Width - 32), Math.Max(50, RenderSize.Height - 34));
-        var min = items.Min(x => x.Value);
-        var max = items.Max(x => x.Value);
+        var plotRect = new Rect(58, 14, Math.Max(80, RenderSize.Width - 76), Math.Max(60, RenderSize.Height - 64));
+        var min = finitePrimaryValues.Concat(finiteSecondaryValues).Min();
+        var max = finitePrimaryValues.Concat(finiteSecondaryValues).Max();
+        var recommendationMin = RecommendationBandMin;
+        var recommendationMax = RecommendationBandMax;
+        if (recommendationMin.HasValue && recommendationMax.HasValue)
+        {
+            min = Math.Min(min, Math.Min(recommendationMin.Value, recommendationMax.Value));
+            max = Math.Max(max, Math.Max(recommendationMin.Value, recommendationMax.Value));
+        }
+
         if (Math.Abs(max - min) < 0.00001)
         {
             max += 0.0001;
             min -= 0.0001;
         }
 
+        var padding = Math.Max(0.04, (max - min) * 0.12);
+        min -= padding;
+        max += padding;
+
         dc.DrawRoundedRectangle(TacticalChartPalette.PanelBackground, null, plotRect, 14, 14);
+        DrawRecommendationOverlay(dc, plotRect, min, max);
+        DrawLegend(dc, plotRect);
+
+        const int horizontalGuideCount = 5;
+        for (var guideIndex = 0; guideIndex < horizontalGuideCount; guideIndex++)
+        {
+            var ratio = guideIndex / (horizontalGuideCount - 1.0);
+            var y = plotRect.Top + (plotRect.Height * ratio);
+            dc.DrawLine(TacticalChartPalette.GridPen, new Point(plotRect.Left, y), new Point(plotRect.Right, y));
+
+            var guideValue = max - ((max - min) * ratio);
+            var label = new FormattedText(
+                guideValue.ToString("F1", CultureInfo.InvariantCulture),
+                CultureInfo.GetCultureInfo("ko-KR"),
+                FlowDirection.LeftToRight,
+                new Typeface("Segoe UI"),
+                10,
+                TacticalChartPalette.AxisText,
+                1.0);
+            dc.DrawText(label, new Point(plotRect.Left - label.Width - 10, y - (label.Height / 2)));
+        }
+
         dc.DrawLine(TacticalChartPalette.AxisPen, new Point(plotRect.Left, plotRect.Bottom), new Point(plotRect.Right, plotRect.Bottom));
         dc.DrawLine(TacticalChartPalette.AxisPen, new Point(plotRect.Left, plotRect.Top), new Point(plotRect.Left, plotRect.Bottom));
 
-        var geometry = new StreamGeometry();
-        using (var ctx = geometry.Open())
+        if (items.Count == 1 && secondaryItems.Count <= 1)
         {
-            for (var index = 0; index < items.Count; index++)
+            DrawSinglePoint(dc, plotRect, items[0], min, max, HighlightedKey);
+            if (secondaryItems.Count == 1 && !double.IsNaN(secondaryItems[0].Value) && !double.IsInfinity(secondaryItems[0].Value))
             {
-                var x = plotRect.Left + (plotRect.Width * index / (items.Count - 1.0));
-                var y = plotRect.Bottom - ((items[index].Value - min) / (max - min)) * plotRect.Height;
-                if (index == 0)
+                DrawSeries(
+                    dc,
+                    plotRect,
+                    secondaryItems,
+                    min,
+                    max,
+                    TacticalChartPalette.BarSecondaryBrush,
+                    2.0,
+                    drawPointLabels: false,
+                    drawXAxisLabels: false,
+                    highlightedKey: HighlightedKey);
+            }
+            DrawFooterCaption(dc);
+            return;
+        }
+
+        if (secondaryItems.Count > 0)
+        {
+            DrawSeries(
+                dc,
+                plotRect,
+                secondaryItems,
+                min,
+                max,
+                TacticalChartPalette.BarSecondaryBrush,
+                2.0,
+                drawPointLabels: false,
+                drawXAxisLabels: false,
+                highlightedKey: HighlightedKey);
+        }
+
+        DrawSeries(
+            dc,
+            plotRect,
+            items,
+            min,
+            max,
+            TacticalChartPalette.MarkerBrush,
+            2.2,
+            drawPointLabels: true,
+            drawXAxisLabels: true,
+            highlightedKey: HighlightedKey);
+
+        DrawFooterCaption(dc);
+    }
+
+    private static void DrawEmptyState(DrawingContext dc)
+    {
+        var emptyText = new FormattedText(
+            "표시할 사정률 데이터가 없습니다.",
+            CultureInfo.GetCultureInfo("ko-KR"),
+            FlowDirection.LeftToRight,
+            new Typeface("Segoe UI"),
+            13,
+            TacticalChartPalette.AxisText,
+            1.0);
+        dc.DrawText(emptyText, new Point(20, 18));
+    }
+
+    private static void DrawSinglePoint(DrawingContext dc, Rect plotRect, TrendPointModel item, double min, double max, string? highlightedKey)
+    {
+        var x = plotRect.Left + (plotRect.Width / 2);
+        var y = plotRect.Bottom - ((item.Value - min) / (max - min)) * plotRect.Height;
+        var point = new Point(x, y);
+        dc.DrawEllipse(TacticalChartPalette.MarkerBrush, null, point, 3.4, 3.4);
+        if (IsHighlighted(item, highlightedKey))
+        {
+            dc.DrawEllipse(null, TacticalChartPalette.HighlightSelectionPen, point, 7.4, 7.4);
+        }
+
+        var valueLabel = new FormattedText(
+            item.Value.ToString("F3", CultureInfo.InvariantCulture),
+            CultureInfo.GetCultureInfo("ko-KR"),
+            FlowDirection.LeftToRight,
+            new Typeface("Segoe UI"),
+            9,
+            TacticalChartPalette.StrongText,
+            1.0);
+        dc.DrawText(valueLabel, new Point(x - (valueLabel.Width / 2), Math.Max(0, y - valueLabel.Height - 6)));
+
+        var label = new FormattedText(
+            item.Label,
+            CultureInfo.GetCultureInfo("ko-KR"),
+            FlowDirection.LeftToRight,
+            new Typeface("Segoe UI"),
+            9,
+            TacticalChartPalette.AxisText,
+            1.0);
+        dc.DrawText(label, new Point(x - (label.Width / 2), plotRect.Bottom + 6));
+    }
+
+    private void DrawFooterCaption(DrawingContext dc)
+    {
+        var caption = FooterCaption?.Trim();
+        if (string.IsNullOrWhiteSpace(caption))
+        {
+            return;
+        }
+
+        var captionText = new FormattedText(
+            caption,
+            CultureInfo.GetCultureInfo("ko-KR"),
+            FlowDirection.LeftToRight,
+            new Typeface("Segoe UI"),
+            10,
+            TacticalChartPalette.AxisText,
+            1.0);
+        dc.DrawText(
+            captionText,
+            new Point(
+                Math.Max(12, RenderSize.Width - captionText.Width - 14),
+                Math.Max(12, RenderSize.Height - captionText.Height - 10)));
+    }
+
+    private void DrawRecommendationOverlay(DrawingContext dc, Rect plotRect, double min, double max)
+    {
+        if (!RecommendationBandMin.HasValue || !RecommendationBandMax.HasValue)
+        {
+            return;
+        }
+
+        var bandMin = Math.Min(RecommendationBandMin.Value, RecommendationBandMax.Value);
+        var bandMax = Math.Max(RecommendationBandMin.Value, RecommendationBandMax.Value);
+        if (bandMax <= bandMin || Math.Abs(max - min) < 0.000001)
+        {
+            return;
+        }
+
+        var yTop = plotRect.Bottom - ((bandMax - min) / (max - min)) * plotRect.Height;
+        var yBottom = plotRect.Bottom - ((bandMin - min) / (max - min)) * plotRect.Height;
+        var bandRect = new Rect(plotRect.Left, yTop, plotRect.Width, Math.Max(4, yBottom - yTop));
+        dc.DrawRoundedRectangle(
+            TacticalChartPalette.RecommendationBrush,
+            TacticalChartPalette.FocusPen,
+            bandRect,
+            8,
+            8);
+
+        var centerY = bandRect.Top + (bandRect.Height / 2);
+        var arrowStart = new Point(Math.Max(plotRect.Left + 80, plotRect.Right - 170), Math.Max(plotRect.Top + 20, centerY - 26));
+        var arrowTip = new Point(plotRect.Right - 10, centerY);
+        dc.DrawLine(TacticalChartPalette.FocusPen, arrowStart, arrowTip);
+        dc.DrawLine(TacticalChartPalette.FocusPen, arrowTip, new Point(arrowTip.X - 10, arrowTip.Y - 6));
+        dc.DrawLine(TacticalChartPalette.FocusPen, arrowTip, new Point(arrowTip.X - 10, arrowTip.Y + 6));
+
+        var headerText = string.IsNullOrWhiteSpace(RecommendationText)
+            ? "추천구간"
+            : RecommendationText.Trim();
+        var header = new FormattedText(
+            headerText,
+            CultureInfo.GetCultureInfo("ko-KR"),
+            FlowDirection.LeftToRight,
+            new Typeface("Segoe UI"),
+            10,
+            TacticalChartPalette.StrongText,
+            1.0);
+        var detail = new FormattedText(
+            $"기초대비사정율 {bandMin:F5}% ~ {bandMax:F5}%",
+            CultureInfo.GetCultureInfo("ko-KR"),
+            FlowDirection.LeftToRight,
+            new Typeface("Segoe UI"),
+            9,
+            TacticalChartPalette.AxisText,
+            1.0);
+        var boxWidth = Math.Max(header.Width, detail.Width) + 18;
+        var boxHeight = header.Height + detail.Height + 12;
+        var boxRect = new Rect(
+            Math.Max(plotRect.Left + 8, plotRect.Right - boxWidth - 10),
+            Math.Max(plotRect.Top + 8, centerY - boxHeight - 10),
+            boxWidth,
+            boxHeight);
+        dc.DrawRoundedRectangle(
+            TacticalChartPalette.Background,
+            TacticalChartPalette.FocusPen,
+            boxRect,
+            8,
+            8);
+        dc.DrawText(header, new Point(boxRect.Left + 9, boxRect.Top + 4));
+        dc.DrawText(detail, new Point(boxRect.Left + 9, boxRect.Top + 4 + header.Height));
+    }
+
+    private void DrawLegend(DrawingContext dc, Rect plotRect)
+    {
+        var legendRows = new List<(Brush Brush, string Text)>();
+        if (!string.IsNullOrWhiteSpace(PrimaryLegendText))
+        {
+            legendRows.Add((TacticalChartPalette.MarkerBrush, PrimaryLegendText.Trim()));
+        }
+
+        if (!string.IsNullOrWhiteSpace(SecondaryLegendText))
+        {
+            legendRows.Add((TacticalChartPalette.BarSecondaryBrush, SecondaryLegendText.Trim()));
+        }
+
+        if (legendRows.Count == 0)
+        {
+            return;
+        }
+
+        const double rowHeight = 18;
+        const double swatchWidth = 18;
+        var textWidth = legendRows
+            .Select(row => new FormattedText(
+                    row.Text,
+                    CultureInfo.GetCultureInfo("ko-KR"),
+                    FlowDirection.LeftToRight,
+                    new Typeface("Segoe UI"),
+                    10,
+                    TacticalChartPalette.StrongText,
+                    1.0)
+                .Width)
+            .DefaultIfEmpty(0)
+            .Max();
+        var legendRect = new Rect(
+            plotRect.Left + 10,
+            plotRect.Top + 8,
+            swatchWidth + textWidth + 24,
+            (legendRows.Count * rowHeight) + 10);
+        dc.DrawRoundedRectangle(
+            TacticalChartPalette.Background,
+            TacticalChartPalette.GridPen,
+            legendRect,
+            8,
+            8);
+
+        for (var index = 0; index < legendRows.Count; index++)
+        {
+            var rowTop = legendRect.Top + 6 + (index * rowHeight);
+            var swatchRect = new Rect(legendRect.Left + 8, rowTop + 4, swatchWidth, 3);
+            dc.DrawRoundedRectangle(legendRows[index].Brush, null, swatchRect, 2, 2);
+            var label = new FormattedText(
+                legendRows[index].Text,
+                CultureInfo.GetCultureInfo("ko-KR"),
+                FlowDirection.LeftToRight,
+                new Typeface("Segoe UI"),
+                10,
+                TacticalChartPalette.StrongText,
+                1.0);
+            dc.DrawText(label, new Point(swatchRect.Right + 6, rowTop - 1));
+        }
+    }
+
+    protected override void OnVisualParentChanged(DependencyObject oldParent)
+    {
+        base.OnVisualParentChanged(oldParent);
+        if (VisualParent is null)
+        {
+            DetachItemsSource();
+            DetachSecondaryItemsSource();
+        }
+    }
+
+    private static void DrawSeries(
+        DrawingContext dc,
+        Rect plotRect,
+        IReadOnlyList<TrendPointModel> items,
+        double min,
+        double max,
+        Brush lineBrush,
+        double thickness,
+        bool drawPointLabels,
+        bool drawXAxisLabels,
+        string? highlightedKey)
+    {
+        if (items.Count == 0)
+        {
+            return;
+        }
+
+        var pen = new Pen(lineBrush, thickness);
+        pen.Freeze();
+        var markerBrush = lineBrush;
+        var markerRadius = items.Count switch
+        {
+            > 120 => 1.6,
+            > 60 => 2.0,
+            > 24 => 2.6,
+            _ => 3.2,
+        };
+        var labelStep = Math.Max(1, (int)Math.Ceiling(items.Count / 8.0));
+        var finiteValues = items.Where(x => !double.IsNaN(x.Value) && !double.IsInfinity(x.Value)).ToList();
+        if (finiteValues.Count > 0)
+        {
+            var geometry = new StreamGeometry();
+            using (var ctx = geometry.Open())
+            {
+                for (var index = 0; index < items.Count; index++)
                 {
-                    ctx.BeginFigure(new Point(x, y), false, false);
-                }
-                else
-                {
-                    ctx.LineTo(new Point(x, y), true, true);
+                    var value = items[index].Value;
+                    if (double.IsNaN(value) || double.IsInfinity(value))
+                    {
+                        continue;
+                    }
+
+                    var x = plotRect.Left + (plotRect.Width * index / Math.Max(1.0, items.Count - 1.0));
+                    var y = plotRect.Bottom - ((value - min) / (max - min)) * plotRect.Height;
+
+                    if (index == 0
+                        || double.IsNaN(items[index - 1].Value)
+                        || double.IsInfinity(items[index - 1].Value))
+                    {
+                        ctx.BeginFigure(new Point(x, y), false, false);
+                    }
+                    else
+                    {
+                        ctx.LineTo(new Point(x, y), true, true);
+                    }
                 }
             }
+            geometry.Freeze();
+            dc.DrawGeometry(null, pen, geometry);
         }
-        geometry.Freeze();
-        dc.DrawGeometry(null, TacticalChartPalette.FocusPen, geometry);
 
         for (var index = 0; index < items.Count; index++)
         {
-            var x = plotRect.Left + (plotRect.Width * index / (items.Count - 1.0));
-            var y = plotRect.Bottom - ((items[index].Value - min) / (max - min)) * plotRect.Height;
-            dc.DrawEllipse(TacticalChartPalette.MarkerBrush, null, new Point(x, y), 3.5, 3.5);
-            var label = new FormattedText(items[index].Label, CultureInfo.GetCultureInfo("ko-KR"), FlowDirection.LeftToRight, new Typeface("Segoe UI"), 9, TacticalChartPalette.AxisText, 1.0);
-            dc.DrawText(label, new Point(x - (label.Width / 2), plotRect.Bottom + 2));
+            var value = items[index].Value;
+            if (double.IsNaN(value) || double.IsInfinity(value))
+            {
+                continue;
+            }
+
+            var x = plotRect.Left + (plotRect.Width * index / Math.Max(1.0, items.Count - 1.0));
+            var y = plotRect.Bottom - ((value - min) / (max - min)) * plotRect.Height;
+            var point = new Point(x, y);
+            dc.DrawEllipse(markerBrush, null, point, markerRadius, markerRadius);
+            if (IsHighlighted(items[index], highlightedKey))
+            {
+                dc.DrawEllipse(null, TacticalChartPalette.HighlightSelectionPen, point, markerRadius + 4.0, markerRadius + 4.0);
+            }
+
+            if (!drawPointLabels)
+            {
+                continue;
+            }
+
+            var shouldDrawLabel = index == 0
+                                  || index == items.Count - 1
+                                  || index % labelStep == 0;
+            if (!shouldDrawLabel)
+            {
+                continue;
+            }
+
+            var valueLabel = new FormattedText(
+                value.ToString("F3", CultureInfo.InvariantCulture),
+                CultureInfo.GetCultureInfo("ko-KR"),
+                FlowDirection.LeftToRight,
+                new Typeface("Segoe UI"),
+                9,
+                TacticalChartPalette.StrongText,
+                1.0);
+            dc.DrawText(valueLabel, new Point(x - (valueLabel.Width / 2), Math.Max(0, y - valueLabel.Height - 6)));
+
+            if (!drawXAxisLabels)
+            {
+                continue;
+            }
+
+            var label = new FormattedText(
+                items[index].Label,
+                CultureInfo.GetCultureInfo("ko-KR"),
+                FlowDirection.LeftToRight,
+                new Typeface("Segoe UI"),
+                9,
+                TacticalChartPalette.AxisText,
+                1.0);
+            dc.DrawText(label, new Point(x - (label.Width / 2), plotRect.Bottom + 6));
         }
     }
+
+    private static bool IsHighlighted(TrendPointModel item, string? highlightedKey)
+        => !string.IsNullOrWhiteSpace(highlightedKey)
+           && !string.IsNullOrWhiteSpace(item.Key)
+           && string.Equals(item.Key, highlightedKey, StringComparison.OrdinalIgnoreCase);
 }
 
 public sealed class HistogramChartControl : FrameworkElement

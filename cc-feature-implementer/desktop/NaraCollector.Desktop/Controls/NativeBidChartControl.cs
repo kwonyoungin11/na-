@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO;
+using System.Text.Json;
 using System.Threading;
 using System.Windows;
 using System.Windows.Input;
@@ -64,14 +65,15 @@ public sealed class NativeBidChartControl : FrameworkElement
     private static readonly Color DonggukFillColor = Color.FromRgb(0xD3, 0x2F, 0x2F);
     private static readonly Lazy<CompetitionAnalysisProfile> AnalysisProfile = new(() => CompetitionAnalysisProfileProvider.Load());
     private static readonly Lazy<CompetitionRecommendationEngine> RecommendationEngine = new(() => new CompetitionRecommendationEngine(AnalysisProfile.Value));
+    private static readonly Lazy<IReadOnlyDictionary<string, Color>> FixedCompanyColors = new(LoadFixedCompanyColors);
     private static readonly object RenderErrorLogSync = new();
     private static readonly Pen GridPen = CreatePen("#D9DEE7", 1.0);
     private static readonly Pen MajorGridPen = CreatePen("#BFC7D4", 1.0);
     private static readonly Pen AxisPen = CreatePen("#5E6A7D", 1.2);
     private static readonly Pen SelectionPen = CreatePen("#FFB84A", 1.4);
     private static readonly Pen BlockBorderPen = CreatePen("#21252B", 0.8);
-    private static readonly Pen RankHighlightPen = CreatePen("#B91C1C", 2.2);
-    private static readonly Pen RankHighlightOuterPen = CreatePen("#7F1D1D", 3.2);
+    private static readonly Pen RankHighlightPen = CreatePen("#FACC15", 2.3);
+    private static readonly Pen RankHighlightOuterPen = CreatePen("#CA8A04", 3.2);
     private static readonly Pen HoverHighlightPen = CreatePen("#F59E0B", 1.8);
     private static readonly Pen RecommendationBandPen = CreatePen("#FDE68A", 0.6);
     private static readonly Pen RecommendationArrowPen = CreatePen("#EA580C", 2.0);
@@ -84,6 +86,7 @@ public sealed class NativeBidChartControl : FrameworkElement
     private static readonly Pen RecommendationTargetGlowPen = CreatePen("#FDBA74", 4.2);
     private static readonly Pen PointerGuidePen = CreateDashedPen("#2563EB", 1.2, 4.0, 3.0);
     private static readonly Pen DistributionCenterPen = CreatePen("#F59E0B", 1.6);
+    private static readonly Pen DistributionStackBorderPen = CreatePen("#D8E2F2", 0.8);
     private static readonly Brush BackgroundBrush = CreateBrush("#F6F8FB");
     private static readonly Brush PlotBackgroundBrush = CreateBrush("#FFFFFF");
     private static readonly Brush RecommendationBandBrush = CreateBrush("#2AFDE68A");
@@ -98,10 +101,27 @@ public sealed class NativeBidChartControl : FrameworkElement
     private static readonly Brush DistributionMinorBarBrush = CreateBrush("#9CC4FF");
     private static readonly Brush TextBrush = CreateBrush("#111111");
     private static readonly Brush SubtleTextBrush = CreateBrush("#5A6473");
-    private static readonly Brush RankHighlightFillBrush = CreateBrush("#55FCA5A5");
     private static readonly Brush RankBadgeBrush = CreateBrush("#C62828");
     private static readonly Brush RankBadgeTextBrush = Brushes.White;
-    private static readonly Brush WinnerPulseBrush = CreateBrush("#22F97316");
+    private static readonly Pen TrendMarkerPen = CreatePen("#FFFFFF", 1.1);
+
+    public static readonly DependencyProperty PinnedRecommendationBandMinProperty = DependencyProperty.Register(
+        nameof(PinnedRecommendationBandMin),
+        typeof(double?),
+        typeof(NativeBidChartControl),
+        new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+
+    public static readonly DependencyProperty PinnedRecommendationBandMaxProperty = DependencyProperty.Register(
+        nameof(PinnedRecommendationBandMax),
+        typeof(double?),
+        typeof(NativeBidChartControl),
+        new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+
+    public static readonly DependencyProperty PinnedRecommendationTextProperty = DependencyProperty.Register(
+        nameof(PinnedRecommendationText),
+        typeof(string),
+        typeof(NativeBidChartControl),
+        new FrameworkPropertyMetadata(string.Empty, FrameworkPropertyMetadataOptions.AffectsRender));
 
     private readonly Dictionary<(int RowIndex, int ColumnIndex), List<ParticipantRecord>> _cellLookup = [];
     private readonly Dictionary<string, Color> _companyColorCache = new(StringComparer.OrdinalIgnoreCase);
@@ -142,6 +162,24 @@ public sealed class NativeBidChartControl : FrameworkElement
     private string[] _hoverOverlayLines = [];
     private int _prepareVersion;
     private double _pulsePhase;
+
+    public double? PinnedRecommendationBandMin
+    {
+        get => (double?)GetValue(PinnedRecommendationBandMinProperty);
+        set => SetValue(PinnedRecommendationBandMinProperty, value);
+    }
+
+    public double? PinnedRecommendationBandMax
+    {
+        get => (double?)GetValue(PinnedRecommendationBandMaxProperty);
+        set => SetValue(PinnedRecommendationBandMaxProperty, value);
+    }
+
+    public string PinnedRecommendationText
+    {
+        get => (string)GetValue(PinnedRecommendationTextProperty);
+        set => SetValue(PinnedRecommendationTextProperty, value);
+    }
 
     private static readonly Color[] DistinctCompanyPalette =
     [
@@ -767,12 +805,15 @@ public sealed class NativeBidChartControl : FrameworkElement
                 return false;
             })
             .ToList();
-        filteredPoints = ParticipantSameDayClusterReducer
-            .Collapse(
-                filteredPoints,
-                AnalysisProfile.Value.SameDayClusterRateTolerance,
-                AnalysisProfile.Value.SameDayClusterMinClusterSize)
-            .ToList();
+        if (mode != NativeBidChartMode.Scatter)
+        {
+            filteredPoints = ParticipantSameDayClusterReducer
+                .Collapse(
+                    filteredPoints,
+                    AnalysisProfile.Value.SameDayClusterRateTolerance,
+                    AnalysisProfile.Value.SameDayClusterMinClusterSize)
+                .ToList();
+        }
 
         var recommendation = BuildRecommendationSnapshot(recommendationPoints, minRate, maxRate);
         var rows = new List<RowInfo>();
@@ -787,6 +828,16 @@ public sealed class NativeBidChartControl : FrameworkElement
                 .Select(g => new RowInfo(
                     g.Key,
                     g.Max(x => x.OpenDate),
+                    participants
+                        .Where(x => string.Equals(
+                            string.IsNullOrWhiteSpace(x.NoticeNumber) ? x.NoticeNo : x.NoticeNumber,
+                            g.Key,
+                            StringComparison.OrdinalIgnoreCase))
+                        .Where(x => x.AdjustRate.HasValue)
+                        .Where(x => x.IsAwarded || x.Rank == 1)
+                        .OrderByDescending(x => x.OpenDate)
+                        .ThenBy(x => x.Rank > 0 ? x.Rank : int.MaxValue)
+                        .FirstOrDefault(),
                     g.OrderBy(x => x.Rank > 0 ? x.Rank : int.MaxValue)
                         .ThenBy(x => x.CompanyName, StringComparer.OrdinalIgnoreCase)
                         .ToList()))
@@ -811,6 +862,11 @@ public sealed class NativeBidChartControl : FrameworkElement
                     }
                     bucket.Add(participant);
                 }
+            }
+
+            foreach (var key in cellLookup.Keys.ToList())
+            {
+                cellLookup[key] = SortCellBucketForDisplay(cellLookup[key]);
             }
         }
 
@@ -911,25 +967,27 @@ public sealed class NativeBidChartControl : FrameworkElement
         var drawRowLabels = !HighPerformanceMode
             || (_scale >= 1.0 && visibleRows <= 140 && visibleCellEstimate <= 18000);
 
-        var recommendation = _lastRecommendation with
-        {
-            RecommendedRate = Math.Clamp(_lastRecommendation.RecommendedRate, _minRate, _maxRate),
-            BandMin = Math.Clamp(_lastRecommendation.BandMin, _minRate, _maxRate),
-            BandMax = Math.Clamp(_lastRecommendation.BandMax, _minRate, _maxRate),
-        };
-        var bandStartColumn = ToColumnIndex(Math.Min(recommendation.BandMin, recommendation.BandMax));
-        var bandEndColumn = ToColumnIndex(Math.Max(recommendation.BandMin, recommendation.BandMax));
+        var recommendation = ResolveDisplayRecommendation();
+        var bandStartColumn = recommendation is null
+            ? 0
+            : ToColumnIndex(Math.Min(recommendation.BandMin, recommendation.BandMax));
+        var bandEndColumn = recommendation is null
+            ? 0
+            : ToColumnIndex(Math.Max(recommendation.BandMin, recommendation.BandMax));
 
         dc.PushClip(new RectangleGeometry(_plotRect));
         dc.PushTransform(new TranslateTransform(_plotRect.Left + _offset.X, _plotRect.Top + _offset.Y));
         dc.PushTransform(new ScaleTransform(_scale, _scale));
 
-        var recommendationBand = new Rect(
-            bandStartColumn * cellWidth,
-            0,
-            Math.Max(1, ((bandEndColumn - bandStartColumn) + 1) * cellWidth),
-            worldHeight);
-        dc.DrawRectangle(RecommendationBandBrush, RecommendationBandPen, recommendationBand);
+        if (recommendation is not null)
+        {
+            var recommendationBand = new Rect(
+                bandStartColumn * cellWidth,
+                0,
+                Math.Max(1, ((bandEndColumn - bandStartColumn) + 1) * cellWidth),
+                worldHeight);
+            dc.DrawRectangle(RecommendationBandBrush, RecommendationBandPen, recommendationBand);
+        }
 
         for (var col = colStart; col <= colEnd; col++)
         {
@@ -951,6 +1009,7 @@ public sealed class NativeBidChartControl : FrameworkElement
         var hoverCompany = _hoverCompany;
         for (var row = rowStart; row <= rowEnd; row++)
         {
+            var rowInfo = _rows[row];
             for (var col = colStart; col <= colEnd; col++)
             {
                 if (!_cellLookup.TryGetValue((row, col), out var bucket))
@@ -968,15 +1027,15 @@ public sealed class NativeBidChartControl : FrameworkElement
 
                     if (point.Rank == 1)
                     {
-                        var pulseScale = 1.0 + (Math.Sin(_pulsePhase) * 0.12);
+                        var pulse = (Math.Sin(_pulsePhase * 0.18) + 1.0) / 2.0;
+                        var pulseScale = 1.08 + (pulse * 0.34);
                         var pulseRect = new Rect(
                             rect.Left - ((rect.Width * (pulseScale - 1.0)) / 2.0),
                             rect.Top - ((rect.Height * (pulseScale - 1.0)) / 2.0),
                             rect.Width * pulseScale,
                             rect.Height * pulseScale);
-                        dc.DrawRoundedRectangle(WinnerPulseBrush, null, pulseRect, 3, 3);
-                        dc.DrawRectangle(RankHighlightFillBrush, null, rect);
-                        dc.DrawRectangle(null, RankHighlightOuterPen, rect);
+                        var outerPen = CreateTransientPen(Color.FromArgb((byte)(145 + (pulse * 95)), 0xFA, 0xCC, 0x15), 3.0 + (pulse * 2.1));
+                        dc.DrawRoundedRectangle(null, outerPen, pulseRect, 3, 3);
                         dc.DrawRectangle(null, RankHighlightPen, rect);
                         var badgeRect = new Rect(
                             rect.Right - Math.Max(6, rect.Width * 0.45),
@@ -1009,6 +1068,23 @@ public sealed class NativeBidChartControl : FrameworkElement
                     DrawShortText(dc, shortName, rect);
                 }
             }
+
+            if (rowInfo.AwardedPoint?.AdjustRate is double awardedRate
+                && (awardedRate < _minRate || awardedRate > _maxRate))
+            {
+                var markerRect = awardedRate < _minRate
+                    ? new Rect(2, (row * cellHeight) + 2, Math.Max(7, cellWidth * 0.55), Math.Max(7, cellHeight * 0.42))
+                    : new Rect(worldWidth - Math.Max(11, cellWidth * 0.7), (row * cellHeight) + 2, Math.Max(7, cellWidth * 0.55), Math.Max(7, cellHeight * 0.42));
+                dc.DrawRoundedRectangle(RankBadgeBrush, RankHighlightOuterPen, markerRect, 2, 2);
+                DrawText(
+                    dc,
+                    "1",
+                    new Point(markerRect.Left + 1.0, markerRect.Top - 0.6),
+                    Math.Max(5.3, markerRect.Height - 1.2),
+                    FontWeights.Bold,
+                    RankBadgeTextBrush,
+                    markerRect.Width - 1.5);
+            }
         }
 
         dc.Pop();
@@ -1017,8 +1093,15 @@ public sealed class NativeBidChartControl : FrameworkElement
 
         DrawScatterAxes(dc, cellWidth, cellHeight, colStart, colEnd, rowStart, rowEnd, drawRowLabels);
         DrawHoveredRateGuide(dc);
-        DrawRecommendationArrow(dc, recommendation, cellWidth);
-        DrawRecommendedLabel(dc, recommendation);
+        if (recommendation is not null)
+        {
+            DrawRecommendationArrow(dc, recommendation, cellWidth);
+            DrawRecommendedLabel(dc, recommendation);
+        }
+        else
+        {
+            _recommendationHotRect = Rect.Empty;
+        }
 
         if (progress < 1.0)
         {
@@ -1050,9 +1133,21 @@ public sealed class NativeBidChartControl : FrameworkElement
         }
 
         var groupedByCompany = _filteredPoints
-            .GroupBy(x => string.IsNullOrWhiteSpace(x.NormalizedCompanyName) ? x.CompanyName : x.NormalizedCompanyName)
-            .OrderByDescending(g => g.Count())
-            .Take(IsAllCompanySelected() ? 8 : 1)
+            .GroupBy(GetCompanyGroupKey)
+            .ToList();
+
+        groupedByCompany = IsAllCompanySelected()
+            ? groupedByCompany
+                .OrderByDescending(g => g.Count())
+                .Take(8)
+                .ToList()
+            : groupedByCompany
+                .OrderBy(g => ResolveSelectedCompanyOrder(g.Key))
+                .ThenByDescending(g => g.Count())
+                .ToList();
+
+        groupedByCompany = groupedByCompany
+            .Where(g => !string.IsNullOrWhiteSpace(g.Key))
             .ToList();
 
         if (groupedByCompany.Count == 0)
@@ -1076,6 +1171,7 @@ public sealed class NativeBidChartControl : FrameworkElement
         dc.PushTransform(new TranslateTransform(_plotRect.Left + _offset.X, _plotRect.Top));
         dc.PushTransform(new ScaleTransform(_scale, 1.0));
 
+        var showMarkers = !IsAllCompanySelected();
         foreach (var g in groupedByCompany)
         {
             var points = g
@@ -1117,6 +1213,20 @@ public sealed class NativeBidChartControl : FrameworkElement
             var pen = new Pen(new SolidColorBrush(color), IsAllCompanySelected() ? 1.8 : 2.6);
             pen.Freeze();
             dc.DrawGeometry(null, pen, geometry);
+
+            if (!showMarkers)
+            {
+                continue;
+            }
+
+            var markerBrush = ResolveCompanyBrush(g.Key, g.Key);
+            const double markerRadius = 3.2;
+            for (var i = 0; i < points.Count; i++)
+            {
+                var px = (points[i].X / (double)maxX) * worldWidth;
+                var py = _plotRect.Height - ((points[i].Y - yMin) / ySpan) * _plotRect.Height;
+                dc.DrawEllipse(markerBrush, TrendMarkerPen, new Point(px, py), markerRadius, markerRadius);
+            }
         }
 
         dc.Pop();
@@ -1139,23 +1249,65 @@ public sealed class NativeBidChartControl : FrameworkElement
 
         var rates = _filteredPoints
             .Where(x => x.AdjustRate.HasValue)
+            .ToList();
+        var filteredRates = rates
             .Select(x => x.AdjustRate!.Value)
             .Where(x => x >= _minRate && x <= _maxRate)
             .ToList();
-        if (rates.Count == 0)
+        if (filteredRates.Count == 0)
         {
             DrawMessage(dc, area, "분포를 표시할 데이터가 없습니다.");
             return;
         }
 
-        var bins = new int[_columnCount];
-        foreach (var rate in rates)
+        var groupedByCompany = rates
+            .GroupBy(GetCompanyGroupKey)
+            .ToList();
+        groupedByCompany = IsAllCompanySelected()
+            ? groupedByCompany
+                .OrderByDescending(g => g.Count())
+                .Take(8)
+                .ToList()
+            : groupedByCompany
+                .OrderBy(g => ResolveSelectedCompanyOrder(g.Key))
+                .ThenByDescending(g => g.Count())
+                .ToList();
+
+        var companyBins = groupedByCompany
+            .Select(g =>
+            {
+                var bins = new int[_columnCount];
+                foreach (var row in g.Where(x => x.AdjustRate.HasValue))
+                {
+                    var rate = row.AdjustRate!.Value;
+                    if (rate < _minRate || rate > _maxRate)
+                    {
+                        continue;
+                    }
+
+                    var index = ToColumnIndex(rate);
+                    bins[index]++;
+                }
+
+                return new
+                {
+                    Company = g.Key,
+                    Brush = ResolveCompanyBrush(g.Key, g.Key),
+                    Bins = bins,
+                };
+            })
+            .Where(x => x.Bins.Any(count => count > 0))
+            .ToList();
+        var totalBins = new int[_columnCount];
+        foreach (var series in companyBins)
         {
-            var index = ToColumnIndex(rate);
-            bins[index]++;
+            for (var i = 0; i < _columnCount; i++)
+            {
+                totalBins[i] += series.Bins[i];
+            }
         }
 
-        var maxCount = Math.Max(1, bins.Max());
+        var maxCount = Math.Max(1, totalBins.Max());
         var worldWidth = GetDistributionWorldWidth();
         var barWidth = worldWidth / _columnCount;
 
@@ -1167,11 +1319,30 @@ public sealed class NativeBidChartControl : FrameworkElement
 
         for (var i = 0; i < _columnCount; i++)
         {
-            var h = (bins[i] / (double)maxCount) * _plotRect.Height;
             var x = i * barWidth;
-            var y = _plotRect.Height - h;
-            var brush = i % _labelEvery == 0 ? DistributionMajorBarBrush : DistributionMinorBarBrush;
-            dc.DrawRectangle(brush, null, new Rect(x + 1, y, Math.Max(1, barWidth - 2), h));
+            if (IsAllCompanySelected())
+            {
+                var h = (totalBins[i] / (double)maxCount) * _plotRect.Height;
+                var y = _plotRect.Height - h;
+                var brush = i % _labelEvery == 0 ? DistributionMajorBarBrush : DistributionMinorBarBrush;
+                dc.DrawRectangle(brush, DistributionStackBorderPen, new Rect(x + 1, y, Math.Max(1, barWidth - 2), h));
+                continue;
+            }
+
+            var accumulatedHeight = 0.0;
+            foreach (var series in companyBins)
+            {
+                var count = series.Bins[i];
+                if (count <= 0)
+                {
+                    continue;
+                }
+
+                var segmentHeight = (count / (double)maxCount) * _plotRect.Height;
+                var y = _plotRect.Height - accumulatedHeight - segmentHeight;
+                dc.DrawRectangle(series.Brush, DistributionStackBorderPen, new Rect(x + 1, y, Math.Max(1, barWidth - 2), segmentHeight));
+                accumulatedHeight += segmentHeight;
+            }
         }
 
         var centerIndex = ToColumnIndex(100.0);
@@ -1184,7 +1355,7 @@ public sealed class NativeBidChartControl : FrameworkElement
 
         DrawText(
             dc,
-            $"사정률 분포 ({rates.Count:N0}건, 중심 100.000)",
+            $"사정률 분포 ({filteredRates.Count:N0}건, 중심 100.000)",
             new Point(_plotRect.Left + 6, _plotRect.Top + 6),
             12,
             FontWeights.SemiBold,
@@ -1427,7 +1598,7 @@ public sealed class NativeBidChartControl : FrameworkElement
 
     private void DrawRecommendedLabel(DrawingContext dc, RecommendationSnapshot recommendation)
     {
-        var header = $"추천 {FormatRate(recommendation.RecommendedRate)}";
+        var header = BuildDisplayRecommendationHeader(recommendation);
         var detail =
             $"{FormatRate(recommendation.BandMin)}%~{FormatRate(recommendation.BandMax)}% · {FormatDecisionCategory(recommendation.DecisionCategory)} · 앵커 {recommendation.AnchorCompany} · 좌측여유 {FormatGap(recommendation.LeftSpaceWidth)}";
         DrawText(
@@ -1559,8 +1730,8 @@ public sealed class NativeBidChartControl : FrameworkElement
         arrowHead.Freeze();
         dc.DrawGeometry(RecommendationArrowBrush, null, arrowHead);
 
-        var label = $"{FormatDecisionCategory(recommendation.DecisionCategory)} {FormatRate(recommendation.RecommendedRate)}";
-        var rangeText = $"{FormatRate(recommendation.BandMin)}%~{FormatRate(recommendation.BandMax)}% · 근거공고 {recommendation.SupportingNoticeCount:N0}건 / 참고낙찰 {recommendation.AwardNoticeCount:N0}건 · 클릭 적용";
+        var label = BuildDisplayRecommendationHeader(recommendation);
+        var rangeText = $"{FormatRate(recommendation.BandMin)}%~{FormatRate(recommendation.BandMax)}% · 기초대비사정율 · 클릭 적용";
 
         const double labelWidth = 216;
         const double labelHeight = 38;
@@ -1767,8 +1938,8 @@ public sealed class NativeBidChartControl : FrameworkElement
         }
 
         var hoveredRow = _rows[row];
-        var awardedPoint = hoveredRow.Points
-            .FirstOrDefault(x => x.IsAwarded || x.Rank == 1);
+        var awardedPoint = hoveredRow.AwardedPoint
+            ?? hoveredRow.Points.FirstOrDefault(x => x.IsAwarded || x.Rank == 1);
         var currentRate = _hoverRate ?? ToRateFromColumn(col);
 
         if (!_cellLookup.TryGetValue((row, col), out var bucket) || bucket.Count == 0)
@@ -1815,6 +1986,13 @@ public sealed class NativeBidChartControl : FrameworkElement
 
     private bool UpdateRecommendationHover(Point position)
     {
+        if (ResolveDisplayRecommendation() is null)
+        {
+            _isRecommendationHovered = false;
+            ToolTip = null;
+            return false;
+        }
+
         var hovered = Mode == NativeBidChartMode.Scatter
                       && _recommendationHotRect != Rect.Empty
                       && _recommendationHotRect.Contains(position);
@@ -1905,23 +2083,31 @@ public sealed class NativeBidChartControl : FrameworkElement
         ParticipantRecord? awardedPoint,
         ParticipantRecord? hoveredPoint)
     {
+        var displayRecommendation = ResolveDisplayRecommendation();
         var lines = new List<string>
         {
             $"기초대비사정률 {FormatRate(currentRate)}",
             $"공고 {noticeNumber}",
-            $"추천 {FormatRate(_lastRecommendation.RecommendedRate)}",
         };
+
+        if (displayRecommendation is not null)
+        {
+            lines.Add($"추천 {FormatRate(displayRecommendation.RecommendedRate)}");
+        }
 
         if (awardedPoint?.AdjustRate is double awardRate)
         {
             var awardCompany = string.IsNullOrWhiteSpace(awardedPoint.NormalizedCompanyName)
                 ? awardedPoint.CompanyName
                 : awardedPoint.NormalizedCompanyName;
-            lines.Add($"실제낙찰 {FormatRate(awardRate)} · {awardCompany}");
+            var rangeSuffix = awardRate < _minRate || awardRate > _maxRate
+                ? " · 범위밖"
+                : string.Empty;
+            lines.Add($"1위업체 {FormatRate(awardRate)} · {awardCompany}{rangeSuffix}");
         }
         else
         {
-            lines.Add("실제낙찰 -");
+            lines.Add("1위업체 -");
         }
 
         if (hoveredPoint is not null)
@@ -1999,17 +2185,19 @@ public sealed class NativeBidChartControl : FrameworkElement
 
     private bool TryApplyRecommendedRange(Point position)
     {
+        var displayRecommendation = ResolveDisplayRecommendation();
         if (Mode != NativeBidChartMode.Scatter
+            || displayRecommendation is null
             || _recommendationHotRect == Rect.Empty
             || !_recommendationHotRect.Contains(position))
         {
             return false;
         }
 
-        var min = Math.Clamp(Math.Min(_lastRecommendation.BandMin, _lastRecommendation.BandMax), _minRate, _maxRate);
-        var max = Math.Clamp(Math.Max(_lastRecommendation.BandMin, _lastRecommendation.BandMax), _minRate, _maxRate);
+        var min = Math.Clamp(Math.Min(displayRecommendation.BandMin, displayRecommendation.BandMax), _minRate, _maxRate);
+        var max = Math.Clamp(Math.Max(displayRecommendation.BandMin, displayRecommendation.BandMax), _minRate, _maxRate);
         RateRangeSelected?.Invoke(this, new RateRangeSelectedEventArgs(min, max));
-        ToolTip = $"{BuildRecommendationTooltip(_lastRecommendation)}\n추천 구간을 필터로 적용했습니다.";
+        ToolTip = $"{BuildRecommendationTooltip(displayRecommendation)}\n추천 구간을 필터로 적용했습니다.";
         return true;
     }
 
@@ -2433,6 +2621,13 @@ public sealed class NativeBidChartControl : FrameworkElement
             return cached;
         }
 
+        var normalizedKey = NormalizeCompanyToken(key);
+        if (FixedCompanyColors.Value.TryGetValue(normalizedKey, out var fixedColor))
+        {
+            _companyColorCache[key] = fixedColor;
+            return fixedColor;
+        }
+
         unchecked
         {
             var hash = 23;
@@ -2533,6 +2728,167 @@ public sealed class NativeBidChartControl : FrameworkElement
         }
 
         return false;
+    }
+
+    private static string GetCompanyGroupKey(ParticipantRecord row)
+    {
+        return string.IsNullOrWhiteSpace(row.NormalizedCompanyName) ? row.CompanyName : row.NormalizedCompanyName;
+    }
+
+    private int ResolveSelectedCompanyOrder(string? companyKey)
+    {
+        if (string.IsNullOrWhiteSpace(companyKey))
+        {
+            return int.MaxValue;
+        }
+
+        var selectedTokens = SplitSelectedCompanyTokens(SelectedCompany)
+            .Where(x => !IsAllCompanyToken(x))
+            .Select(NormalizeCompanyToken)
+            .ToList();
+        if (selectedTokens.Count == 0)
+        {
+            return 0;
+        }
+
+        var normalizedKey = NormalizeCompanyToken(companyKey);
+        for (var i = 0; i < selectedTokens.Count; i++)
+        {
+            if (normalizedKey.Contains(selectedTokens[i], StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+
+        return int.MaxValue;
+    }
+
+    private static IReadOnlyDictionary<string, Color> LoadFixedCompanyColors()
+    {
+        try
+        {
+            var path = Path.Combine(AppContext.BaseDirectory, "bidder_colors.json");
+            if (!File.Exists(path))
+            {
+                return new Dictionary<string, Color>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            using var stream = File.OpenRead(path);
+            using var document = JsonDocument.Parse(stream);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return new Dictionary<string, Color>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            var output = new Dictionary<string, Color>(StringComparer.OrdinalIgnoreCase);
+            foreach (var property in document.RootElement.EnumerateObject())
+            {
+                if (property.Value.ValueKind != JsonValueKind.Object)
+                {
+                    continue;
+                }
+
+                if (!property.Value.TryGetProperty("color", out var colorElement))
+                {
+                    continue;
+                }
+
+                var hex = colorElement.GetString();
+                if (string.IsNullOrWhiteSpace(hex))
+                {
+                    continue;
+                }
+
+                var normalizedName = NormalizeCompanyToken(property.Name);
+                if (normalizedName.Length == 0)
+                {
+                    continue;
+                }
+
+                output[normalizedName] = (Color)ColorConverter.ConvertFromString(hex)!;
+            }
+
+            return output;
+        }
+        catch
+        {
+            return new Dictionary<string, Color>(StringComparer.OrdinalIgnoreCase);
+        }
+    }
+
+    private static Pen CreateTransientPen(Color color, double thickness)
+    {
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        var pen = new Pen(brush, thickness);
+        pen.Freeze();
+        return pen;
+    }
+
+    private RecommendationSnapshot? ResolveDisplayRecommendation()
+    {
+        if (PinnedRecommendationBandMin.HasValue && PinnedRecommendationBandMax.HasValue)
+        {
+            var bandMin = Math.Min(PinnedRecommendationBandMin.Value, PinnedRecommendationBandMax.Value);
+            var bandMax = Math.Max(PinnedRecommendationBandMin.Value, PinnedRecommendationBandMax.Value);
+            return _lastRecommendation with
+            {
+                RecommendedRate = (bandMin + bandMax) / 2.0,
+                BandMin = bandMin,
+                BandMax = bandMax,
+                DecisionCategory = "candidate",
+                ReasonSummary = string.IsNullOrWhiteSpace(PinnedRecommendationText)
+                    ? _lastRecommendation.ReasonSummary
+                    : PinnedRecommendationText.Trim(),
+            };
+        }
+
+        return HasActionableRecommendation(_lastRecommendation)
+            ? _lastRecommendation
+            : null;
+    }
+
+    private string BuildDisplayRecommendationHeader(RecommendationSnapshot recommendation)
+    {
+        var pinned = PinnedRecommendationText?.Trim();
+        if (!string.IsNullOrWhiteSpace(pinned)
+            && !pinned.Contains("추천 밴드 없음", StringComparison.Ordinal))
+        {
+            return pinned;
+        }
+
+        return $"1순위 추천 {FormatRate(recommendation.RecommendedRate)}";
+    }
+
+    internal static List<ParticipantRecord> SortCellBucketForDisplay(IEnumerable<ParticipantRecord> bucket)
+    {
+        return bucket
+            .OrderBy(x => x.IsAwarded || x.Rank == 1 ? 1 : 0)
+            .ThenBy(x => x.Rank > 0 ? x.Rank : int.MaxValue)
+            .ThenBy(x => x.CompanyName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static bool HasActionableRecommendation(RecommendationSnapshot recommendation)
+    {
+        if (!string.Equals(recommendation.DecisionCategory, "candidate", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (recommendation.BandMax <= recommendation.BandMin)
+        {
+            return false;
+        }
+
+        if (recommendation.CompetitorSampleCount <= 0
+            && recommendation.SupportingNoticeCount <= 0
+            && recommendation.AwardNoticeCount <= 0)
+        {
+            return false;
+        }
+
+        return true;
     }
 
     private static Color ColorFromHsv(double hue, double saturation, double value)
@@ -2697,5 +3053,6 @@ public sealed class NativeBidChartControl : FrameworkElement
     private sealed record RowInfo(
         string NoticeNumber,
         DateTime OpenDate,
+        ParticipantRecord? AwardedPoint,
         IReadOnlyList<ParticipantRecord> Points);
 }

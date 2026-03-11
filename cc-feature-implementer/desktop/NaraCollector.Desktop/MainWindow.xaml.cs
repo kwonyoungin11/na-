@@ -35,9 +35,12 @@ public partial class MainWindow : Window
 
     private void MainWindowLoaded(object sender, RoutedEventArgs e)
     {
-        // 시작 시 자동 로딩은 하지 않는다.
-        // 이후 필터 변경 반영은 ViewModel의 필터 동기화 로직에서 처리한다.
         UpdateAutoCollectButtonContent();
+        if (!_viewModel.IsLoading && _viewModel.ApplyFilterCommand.CanExecute(null))
+        {
+            _viewModel.ApplyFilterCommand.Execute(null);
+        }
+
         Dispatcher.BeginInvoke(
             () => BringWindowToFront(this),
             DispatcherPriority.ApplicationIdle);
@@ -187,7 +190,7 @@ public partial class MainWindow : Window
         MessageBox.Show(
             this,
             message,
-            "동국문화재연구원 순위 알림",
+            "동국문화유산연구원 순위 알림",
             MessageBoxButton.OK,
             MessageBoxImage.Information);
     }

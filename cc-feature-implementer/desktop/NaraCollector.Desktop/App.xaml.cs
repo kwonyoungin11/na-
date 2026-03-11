@@ -44,7 +44,7 @@ public partial class App : Application
         WriteCrashLog("DispatcherUnhandledException", e.Exception);
         MessageBox.Show(
             $"예외가 발생했습니다.\n{e.Exception.Message}\n\n로그: {GetCrashLogPath()}",
-            "동국문화재연구원 낙찰분석프로그램",
+            "동국문화유산연구원 낙찰분석프로그램",
             MessageBoxButton.OK,
             MessageBoxImage.Warning);
         e.Handled = true;

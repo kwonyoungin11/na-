@@ -14,7 +14,7 @@ public partial class ChartPopupWindow : Window
     public ChartPopupWindow(MainWindowViewModel viewModel)
     {
         InitializeComponent();
-        _viewModel = viewModel;
+        _viewModel = viewModel.CreateChartPopupViewModel();
         DataContext = _viewModel;
         Closing += ChartPopupWindowClosing;
     }

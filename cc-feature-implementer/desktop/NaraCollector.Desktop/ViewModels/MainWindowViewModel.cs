@@ -71,7 +71,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private string _interactivePointerHintText = "후보 밴드 내부/외부 여부와 거리를 실시간으로 확인할 수 있습니다.";
     private string _incrementalBidSummaryText = "업데이트 대기";
     private string _incrementalAwardSummaryText = "업데이트 대기";
+    private string _noticeAdjustRateTrendSummaryText = "날짜순 최근 6개월 이내 · 데이터 대기";
+    private string _nextBidRecommendationText = "다음 입찰공고 추천자리 대기";
+    private string _bidRecommendationReasonText = "입찰공고를 선택하면 추천 근거가 표시됩니다.";
+    private string _highlightedTrendNoticeNumber = string.Empty;
     private NoticeRowModel? _selectedNotice;
+    private CollectorNoticeRowModel? _selectedBidNoticeItem;
+    private CollectorNoticeRowModel? _selectedAwardNoticeItem;
     private CancellationTokenSource? _loadCts;
     private IReadOnlyList<ParticipantRecord> _currentParticipants = Array.Empty<ParticipantRecord>();
     private IReadOnlyList<ParticipantRecord> _tacticalBattlefieldParticipants = Array.Empty<ParticipantRecord>();
@@ -113,6 +119,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public ObservableCollection<NoticeRowModel> NoticeItems { get; } = [];
     public ObservableCollection<CollectorNoticeRowModel> IncrementalBidNoticeItems { get; } = [];
     public ObservableCollection<CollectorNoticeRowModel> IncrementalAwardNoticeItems { get; } = [];
+    public ObservableCollection<CollectorNoticeRowModel> VisibleBidNoticeItems { get; } = [];
+    public ObservableCollection<CollectorNoticeRowModel> VisibleAwardNoticeItems { get; } = [];
     public ObservableCollection<CompanyAggregateRowModel> CompanyAggregateRows { get; } = [];
     public ObservableCollection<AdjustRateBinRowModel> AdjustRateBinRows { get; } = [];
     public ObservableCollection<TacticalCompanyRowModel> TacticalBlockerRows { get; } = [];
@@ -121,6 +129,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public ObservableCollection<MetricBarRowModel> OverlapMetricRows { get; } = [];
     public ObservableCollection<MetricBarRowModel> ProximityMetricRows { get; } = [];
     public ObservableCollection<TrendPointModel> DonggukTrendPoints { get; } = [];
+    public ObservableCollection<TrendPointModel> NoticeAdjustRateTrendPoints { get; } = [];
+    public ObservableCollection<TrendPointModel> NoticeAwardReferenceTrendPoints { get; } = [];
     public ObservableCollection<HistogramBinModel> DensityHistogramBins { get; } = [];
     public ObservableCollection<ZoneSegmentModel> ZoneCompositionRows { get; } = [];
     public ObservableCollection<TacticalCompanyRowModel> TacticalRightAnchorRows { get; } = [];
@@ -539,6 +549,30 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         private set => SetProperty(ref _incrementalAwardSummaryText, value);
     }
 
+    public string NoticeAdjustRateTrendSummaryText
+    {
+        get => _noticeAdjustRateTrendSummaryText;
+        private set => SetProperty(ref _noticeAdjustRateTrendSummaryText, value);
+    }
+
+    public string NextBidRecommendationText
+    {
+        get => _nextBidRecommendationText;
+        private set => SetProperty(ref _nextBidRecommendationText, value);
+    }
+
+    public string BidRecommendationReasonText
+    {
+        get => _bidRecommendationReasonText;
+        private set => SetProperty(ref _bidRecommendationReasonText, value);
+    }
+
+    public string HighlightedTrendNoticeNumber
+    {
+        get => _highlightedTrendNoticeNumber;
+        private set => SetProperty(ref _highlightedTrendNoticeNumber, value);
+    }
+
     public bool IsApplyingSnapshot
     {
         get => _isApplyingSnapshot;
@@ -549,6 +583,34 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     {
         get => _selectedNotice;
         set => SetProperty(ref _selectedNotice, value);
+    }
+
+    public CollectorNoticeRowModel? SelectedBidNoticeItem
+    {
+        get => _selectedBidNoticeItem;
+        set
+        {
+            if (!SetProperty(ref _selectedBidNoticeItem, value))
+            {
+                return;
+            }
+
+            RefreshFirstPageBidRecommendation();
+        }
+    }
+
+    public CollectorNoticeRowModel? SelectedAwardNoticeItem
+    {
+        get => _selectedAwardNoticeItem;
+        set
+        {
+            if (!SetProperty(ref _selectedAwardNoticeItem, value))
+            {
+                return;
+            }
+
+            HighlightedTrendNoticeNumber = value?.NoticeNumber ?? string.Empty;
+        }
     }
 
     public IReadOnlyList<ParticipantRecord> CurrentParticipants
@@ -847,7 +909,6 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         PeriodPresets.Add("전체기간");
 
         RegionOptions.Add("전국");
-        RegionOptions.Add("대구");
         RegionOptions.Add("경북");
 
         DataTypeOptions.Add("낙찰");
@@ -905,11 +966,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         var selectedRegion = IncludeNationwide
             ? "전국"
-            : IncludeDaegu
-                ? "대구"
-                : IncludeGyeongbuk
-                    ? "경북"
-                    : "전국";
+            : IncludeGyeongbuk
+                ? "경북"
+                : "전국";
 
         if (!string.Equals(_selectedRegion, selectedRegion, StringComparison.Ordinal))
         {
@@ -929,11 +988,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             .Split([',', '/', ';', '|', '·', 'ㆍ'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        var target = tokens.Contains("대구")
-            ? "대구"
-            : tokens.Contains("경북")
-                ? "경북"
-                : "전국";
+        var target = tokens.Contains("경북")
+            ? "경북"
+            : "전국";
 
         ApplySingleRegionSelection(target);
     }
@@ -1114,6 +1171,43 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         SelectedCompany = AllCompanyOption;
     }
 
+    public MainWindowViewModel CreateChartPopupViewModel()
+    {
+        var popupViewModel = new MainWindowViewModel(_repository, _consolePipelineInsightService);
+        popupViewModel.CopyPopupFilterStateFrom(this);
+        return popupViewModel;
+    }
+
+    private void CopyPopupFilterStateFrom(MainWindowViewModel source)
+    {
+        _suppressAutoApply = true;
+        try
+        {
+            SelectedPeriodPreset = source.SelectedPeriodPreset;
+            StartDate = source.StartDate;
+            EndDate = source.EndDate;
+            SelectedRegion = source.SelectedRegion;
+            SelectedDataType = source.SelectedDataType;
+            SelectedCompany = source.SelectedCompany;
+            SelectedChartPrecision = source.SelectedChartPrecision;
+            SelectedMinAdjustRate = source.SelectedMinAdjustRate;
+            SelectedMaxAdjustRate = source.SelectedMaxAdjustRate;
+            KeywordText = source.KeywordText;
+            OrderingAgencyText = source.OrderingAgencyText;
+            CompanySearchText = source.CompanySearchText;
+        }
+        finally
+        {
+            _suppressAutoApply = false;
+        }
+
+        _pendingAutoApplyFilter = BuildFilter();
+        if (ApplyFilterCommand.CanExecute(null))
+        {
+            ApplyFilterCommand.Execute(null);
+        }
+    }
+
     private static bool IsAllCompanyToken(string? value)
     {
         return string.IsNullOrWhiteSpace(value)
@@ -1288,14 +1382,24 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             ReplaceCollection(NoticeItems, snapshot.NoticeRows);
             ReplaceCollection(IncrementalBidNoticeItems, snapshot.IncrementalBidNoticeRows ?? []);
             ReplaceCollection(IncrementalAwardNoticeItems, snapshot.IncrementalAwardNoticeRows ?? []);
-            IncrementalBidSummaryText = BuildBidNoticeSummary(IncrementalBidNoticeItems);
-            IncrementalAwardSummaryText = BuildAwardNoticeSummary(IncrementalAwardNoticeItems);
+            var visibleBidRows = ResolveVisibleBidNoticeRows(IncrementalBidNoticeItems, IncrementalAwardNoticeItems, snapshot.NoticeRows);
+            ReplaceCollection(VisibleBidNoticeItems, visibleBidRows);
+            IncrementalBidSummaryText = BuildBidNoticeSummary(IncrementalBidNoticeItems, visibleBidRows.Count);
             SavedFilePath = snapshot.SavedFilePath;
             var participants = (snapshot.Participants ?? Array.Empty<ParticipantRecord>())
                 .Where(x =>
                     !IsRetiredCompanyName(x.CompanyName)
                     && !IsRetiredCompanyName(x.NormalizedCompanyName))
                 .ToList();
+            var donggukAwardRows = DonggukAdjustRateTrendBuilder.BuildAwardNoticeRows(participants, EndDate);
+            ReplaceCollection(VisibleAwardNoticeItems, donggukAwardRows);
+            IncrementalAwardSummaryText = BuildDonggukAwardNoticeSummary(donggukAwardRows);
+            ReplaceCollection(NoticeAdjustRateTrendPoints, DonggukAdjustRateTrendBuilder.BuildPoints(participants, EndDate));
+            ReplaceCollection(NoticeAwardReferenceTrendPoints, DonggukAdjustRateTrendBuilder.BuildAwardReferencePoints(participants, EndDate));
+            NoticeAdjustRateTrendSummaryText = DonggukAdjustRateTrendBuilder.BuildSummary(participants, EndDate);
+            SelectedBidNoticeItem = null;
+            SelectedAwardNoticeItem = null;
+            RefreshFirstPageBidRecommendation();
             CurrentParticipants = participants;
             PublishDonggukRankAlerts(participants);
             RefreshWholeMarketAnalytics(participants);
@@ -2025,30 +2129,83 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         return double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) ? value : null;
     }
 
-    private static string BuildBidNoticeSummary(IReadOnlyCollection<CollectorNoticeRowModel> rows)
+    private static List<CollectorNoticeRowModel> ResolveVisibleBidNoticeRows(
+        IReadOnlyCollection<CollectorNoticeRowModel> incrementalRows,
+        IReadOnlyCollection<CollectorNoticeRowModel> incrementalAwardRows,
+        IReadOnlyList<NoticeRowModel> snapshotRows)
+    {
+        return CollectorNoticeRules.CreateVisibleBidRows(incrementalRows, incrementalAwardRows, snapshotRows, DateTime.Now);
+    }
+
+    private static string BuildBidNoticeSummary(IReadOnlyCollection<CollectorNoticeRowModel> rows, int visibleCount)
     {
         if (rows.Count == 0)
         {
-            return "오늘 이후 입찰공고 0건";
+            return visibleCount > 0
+                ? $"오늘 이후 입찰공고 없음 · 팝업 공고 {visibleCount:N0}건 표시"
+                : "오늘 이후 입찰공고 0건";
         }
 
         var nearest = rows
             .OrderBy(x => x.NoticeDate)
             .First();
-        return $"오늘 이후 입찰공고 {rows.Count:N0}건 · 가장 빠름 {nearest.NoticeDate:MM-dd HH:mm}";
+        return visibleCount < rows.Count
+            ? $"오늘 이후 입찰공고 표시 {visibleCount:N0}건 · 원본 {rows.Count:N0}건 · 가장 빠름 {nearest.NoticeDate:MM-dd HH:mm}"
+            : $"오늘 이후 입찰공고 {rows.Count:N0}건 · 가장 빠름 {nearest.NoticeDate:MM-dd HH:mm}";
     }
 
-    private static string BuildAwardNoticeSummary(IReadOnlyCollection<CollectorNoticeRowModel> rows)
+    private static string BuildDonggukAwardNoticeSummary(IReadOnlyCollection<CollectorNoticeRowModel> rows)
     {
         if (rows.Count == 0)
         {
-            return "최근 3개월 낙찰공고 0건";
+            return "동국 연동 낙찰공고 0건";
         }
 
         var latest = rows
             .OrderByDescending(x => x.NoticeDate)
             .First();
-        return $"최근 3개월 낙찰공고 {rows.Count:N0}건 · 최신 {latest.NoticeDate:MM-dd HH:mm}";
+        return $"동국 연동 낙찰공고 {rows.Count:N0}건 · 최신 {latest.NoticeDate:MM-dd HH:mm}";
+    }
+
+    private void RefreshFirstPageBidRecommendation()
+    {
+        var targetBid = SelectedBidNoticeItem
+            ?? VisibleBidNoticeItems.OrderBy(x => x.NoticeDate).FirstOrDefault();
+
+        if (targetBid is null)
+        {
+            NextBidRecommendationText = "다음 입찰공고 없음";
+            BidRecommendationReasonText = "표시할 입찰공고가 없습니다.";
+            return;
+        }
+
+        var targetLabel = SelectedBidNoticeItem is null ? "다음 입찰공고" : $"선택 공고 {targetBid.NoticeNumber}";
+        var regionLabel = NormalizeBidRegionExplanation(targetBid.RegionText);
+
+        if (RecommendationBandMin.HasValue && RecommendationBandMax.HasValue)
+        {
+            var bandMin = Math.Min(RecommendationBandMin.Value, RecommendationBandMax.Value);
+            var bandMax = Math.Max(RecommendationBandMin.Value, RecommendationBandMax.Value);
+            NextBidRecommendationText = $"{targetLabel} 추천자리 {bandMin:F5}% ~ {bandMax:F5}% · {targetBid.NoticeDate:MM-dd HH:mm}";
+            BidRecommendationReasonText = $"{ConsolePipelineRecommendationReasonText} · 지역 {regionLabel}";
+            return;
+        }
+
+        NextBidRecommendationText = $"{targetLabel} 추천자리 없음 · {targetBid.NoticeDate:MM-dd HH:mm}";
+        BidRecommendationReasonText = $"근거 부족 또는 stale 분석 · 지역 {regionLabel}";
+    }
+
+    private static string NormalizeBidRegionExplanation(string? regionText)
+    {
+        if (string.IsNullOrWhiteSpace(regionText))
+        {
+            return "미상(전국 아님)";
+        }
+
+        var normalized = regionText.Trim();
+        return string.Equals(normalized, "미상", StringComparison.OrdinalIgnoreCase)
+            ? "미상(전국 아님)"
+            : normalized;
     }
 
     public void UpdateHoveredRate(double? hoveredRate)
@@ -2221,6 +2378,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             ConsolePipelineRecommendationReasonText = insight.RecommendationReasonText;
             RaisePropertyChanged(nameof(RecommendationBandMin));
             RaisePropertyChanged(nameof(RecommendationBandMax));
+            RefreshFirstPageBidRecommendation();
         }
         catch (Exception ex)
         {
@@ -2234,6 +2392,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             ConsolePipelineRecommendationReasonText = "분석 파일을 읽는 중 오류가 발생했습니다.";
             RaisePropertyChanged(nameof(RecommendationBandMin));
             RaisePropertyChanged(nameof(RecommendationBandMax));
+            RefreshFirstPageBidRecommendation();
             AppendEvent($"콘솔 분석 로드 실패: {ex.Message}");
         }
     }

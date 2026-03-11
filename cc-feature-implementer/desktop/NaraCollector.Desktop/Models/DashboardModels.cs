@@ -70,7 +70,8 @@ public record MetricBarRowModel(
 
 public record TrendPointModel(
     string Label,
-    double Value);
+    double Value,
+    string Key = "");
 
 public record HistogramBinModel(
     string Label,

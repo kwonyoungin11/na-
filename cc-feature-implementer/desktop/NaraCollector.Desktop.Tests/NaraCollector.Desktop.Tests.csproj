@@ -26,6 +26,7 @@
     <Compile Include="../NaraCollector.Desktop/Services/CompetitionRecommendationEngine.cs" Link="Source/CompetitionRecommendationEngine.cs" />
     <Compile Include="../NaraCollector.Desktop/Services/ParticipantSameDayClusterReducer.cs" Link="Source/ParticipantSameDayClusterReducer.cs" />
     <Compile Include="../NaraCollector.Desktop/Services/AnalysisMath.cs" Link="Source/AnalysisMath.cs" />
+    <Compile Include="../NaraCollector.Desktop/Services/CollectorNoticeRules.cs" Link="Source/CollectorNoticeRules.cs" />
     <Compile Include="../NaraCollector.Desktop/Services/CrowdingAnalysisService.cs" Link="Source/CrowdingAnalysisService.cs" />
     <Compile Include="../NaraCollector.Desktop/Services/CollisionAnalysisService.cs" Link="Source/CollisionAnalysisService.cs" />
     <Compile Include="../NaraCollector.Desktop/Services/CSharpAnalysisPipelineRunner.cs" Link="Source/CSharpAnalysisPipelineRunner.cs" />
@@ -34,6 +35,8 @@
     <Compile Include="../NaraCollector.Desktop/Services/NaraApiParticipantParser.cs" Link="Source/NaraApiParticipantParser.cs" />
     <Compile Include="../NaraCollector.Desktop/Services/NaraApiSnapshotBuilder.cs" Link="Source/NaraApiSnapshotBuilder.cs" />
     <Compile Include="../NaraCollector.Desktop/Services/NaraApiDashboardRepository.cs" Link="Source/NaraApiDashboardRepository.cs" />
+    <Compile Include="../NaraCollector.Desktop/Services/DonggukAdjustRateTrendBuilder.cs" Link="Source/DonggukAdjustRateTrendBuilder.cs" />
+    <Compile Include="../NaraCollector.Desktop/Services/NoticeAdjustRateTrendBuilder.cs" Link="Source/NoticeAdjustRateTrendBuilder.cs" />
     <Compile Include="../NaraCollector.Desktop/ViewModels/MainWindowFilterState.cs" Link="Source/MainWindowFilterState.cs" />
     <Compile Include="../NaraCollector.Desktop/ViewModels/MainWindowSnapshotCoordinator.cs" Link="Source/MainWindowSnapshotCoordinator.cs" />
     <Compile Include="../NaraCollector.Desktop/ViewModels/MainWindowAlertPublisher.cs" Link="Source/MainWindowAlertPublisher.cs" />

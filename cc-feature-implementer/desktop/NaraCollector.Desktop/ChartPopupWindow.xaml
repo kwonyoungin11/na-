@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:controls="clr-namespace:NaraCollector.Desktop.Controls"
         mc:Ignorable="d"
-        Title="동국문화재연구원 낙찰분석프로그램 - 분석 창"
+        Title="동국문화유산연구원 낙찰분석프로그램 - 분석 창"
         Width="1920"
         Height="1080"
         MinWidth="1320"
@@ -47,6 +47,9 @@
                                     SelectedCompany="{Binding SelectedCompany}"
                                     MinAdjustRate="{Binding SelectedMinAdjustRate}"
                                     MaxAdjustRate="{Binding SelectedMaxAdjustRate}"
+                                    PinnedRecommendationBandMin="{Binding RecommendationBandMin}"
+                                    PinnedRecommendationBandMax="{Binding RecommendationBandMax}"
+                                    PinnedRecommendationText="{Binding ConsolePipelineRecommendationText}"
                                     Precision="{Binding SelectedChartPrecision}"
                                     Mode="Scatter"
                                     CompanyPicked="ChartCompanyPicked"
@@ -178,6 +181,13 @@
                                 <ComboBox Width="84"
                                           ItemsSource="{Binding ChartPrecisionOptions}"
                                           SelectedItem="{Binding SelectedChartPrecision}" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Margin="0,4,0,0">
+                                <TextBlock Margin="0,0,0,4" Foreground="{StaticResource TextMutedBrush}" Text="지역" />
+                                <ComboBox Width="128"
+                                          ItemsSource="{Binding RegionOptions}"
+                                          SelectedItem="{Binding SelectedRegion}"
+                                          SelectionChanged="GlobalFilterSelectionChanged" />
                             </StackPanel>
                             <StackPanel Grid.Row="3" Grid.Column="0" Margin="0,0,8,0">
                                 <TextBlock Margin="0,0,0,4" Foreground="{StaticResource TextMutedBrush}" Text="최소" />

@@ -43,6 +43,21 @@
         <GradientStop Color="#F3F5F8" Offset="0.55" />
         <GradientStop Color="#EEF2F7" Offset="1" />
     </LinearGradientBrush>
+    <LinearGradientBrush x:Key="GlassWindowBackgroundBrush" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#EAF8FBFD" Offset="0" />
+        <GradientStop Color="#DFF2F6FA" Offset="0.55" />
+        <GradientStop Color="#D6EEF3F8" Offset="1" />
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="GlassCardBackgroundBrush" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#D6FFFFFF" Offset="0" />
+        <GradientStop Color="#C4FFFFFF" Offset="0.55" />
+        <GradientStop Color="#B8F6F8FB" Offset="1" />
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="GlassHeroBackgroundBrush" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#DAFFFFFF" Offset="0" />
+        <GradientStop Color="#CCFFFFFF" Offset="0.55" />
+        <GradientStop Color="#BEEFF4F8" Offset="1" />
+    </LinearGradientBrush>
     <LinearGradientBrush x:Key="HeroBackgroundBrush" StartPoint="0,0" EndPoint="1,1">
         <GradientStop Color="#FFFFFF" Offset="0" />
         <GradientStop Color="#FBFCFE" Offset="0.6" />

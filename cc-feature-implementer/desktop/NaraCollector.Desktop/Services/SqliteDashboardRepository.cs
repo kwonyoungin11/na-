@@ -1469,7 +1469,7 @@ public sealed class SqliteDashboardRepository : IDashboardRepository
 
     private static DateTime GetBidCollectorRetentionStart(DateTime now)
     {
-        return now.Date.AddDays(-15);
+        return now;
     }
 
     internal static DateTime TestHook_GetBidCollectorRetentionStart(DateTime now)
@@ -1479,7 +1479,7 @@ public sealed class SqliteDashboardRepository : IDashboardRepository
 
     private static DateTime GetBidCollectorRetentionEndExclusive(DateTime now)
     {
-        return now.Date.AddDays(16);
+        return now.Date.AddYears(1);
     }
 
     internal static DateTime TestHook_GetBidCollectorRetentionEndExclusive(DateTime now)
@@ -1489,7 +1489,7 @@ public sealed class SqliteDashboardRepository : IDashboardRepository
 
     private static DateTime GetAwardCollectorRetentionStart(DateTime? masterLatestOpenDate, DateTime now)
     {
-        return masterLatestOpenDate?.AddMinutes(1) ?? now.AddMonths(-3);
+        return now.Date.AddMonths(-1);
     }
 
     internal static DateTime TestHook_GetAwardCollectorRetentionStart(DateTime? masterLatestOpenDate, DateTime now)
@@ -1873,8 +1873,7 @@ public sealed class SqliteDashboardRepository : IDashboardRepository
         var start = GetBidCollectorRetentionStart(now);
         var endExclusive = GetBidCollectorRetentionEndExclusive(now);
         var region = (filter.Region ?? string.Empty).Trim();
-
-        return rows
+        var filteredRows = rows
             .Where(x => x.NoticeDate >= start && x.NoticeDate < endExclusive)
             .Where(x =>
                 string.IsNullOrWhiteSpace(region)
@@ -1884,6 +1883,8 @@ public sealed class SqliteDashboardRepository : IDashboardRepository
             .OrderBy(x => x.NoticeDate)
             .ThenBy(x => x.NoticeNumber, StringComparer.OrdinalIgnoreCase)
             .ToList();
+
+        return CollectorNoticeRules.ExcludeAwardedBidRows(filteredRows, _collectorAwardCache ?? []);
     }
 
     private IReadOnlyList<CollectorNoticeRowModel> FilterAwardCollectorNoticeRows(
@@ -1893,7 +1894,7 @@ public sealed class SqliteDashboardRepository : IDashboardRepository
     {
         var start = awardRetentionStartOverride
             ?? GetAwardCollectorRetentionStart(_masterLatestOpenDateCache, DateTime.Now);
-        var end = filter.EndDate.Date.AddDays(1);
+        var end = DateTime.Now.Date.AddDays(1);
         var region = (filter.Region ?? string.Empty).Trim();
 
         return rows
