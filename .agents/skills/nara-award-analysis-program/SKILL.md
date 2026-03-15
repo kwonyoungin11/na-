@@ -11,11 +11,11 @@ allowed-tools: Bash, Read, Write
 - 재접속 후에도 동일한 방식으로 수집/전처리/검증/실행을 반복한다.
 
 ## 고정 정책 (반드시 준수)
-1. 데이터 기준 시드: `/mnt/a/c/전체_통합_데이터.xlsx`
+1. 데이터 기준 시드: `/mnt/a/c/nara-workspace/master/전체_통합_데이터.xlsx`
 2. 데이터 구분: **낙찰 전용** (입찰 제외)
 3. 지역 규칙: `전국`, `대구`, `경북` 분리(혼합 금지)
 4. 수집 방식: 수집 완료시각 체크포인트 이후 **증분 수집**
-   - 체크포인트: `C:\Users\<USER>\AppData\Local\NaraCollector\collect_state.json`
+   - 체크포인트: `A:\c\nara-workspace\app\collect_state.json`
    - API 원천 수집 규칙은 `/mnt/a/c/.agents/skills/API/rule_profile.json` 을 따른다.
 5. 품질 로그: 수집 후 아래 두 줄 반드시 확인
    - `교차검증: 신규/중복/기존충돌/누락행/누락공고`
@@ -57,7 +57,7 @@ python /mnt/a/c/.agents/skills/nara-award-analysis-program/scripts/verify_award_
 - 실행로그: `/mnt/a/c/cc-feature-implementer/docs/개발_실행로그.md`
 - 재접속 요약: `/mnt/a/c/cc-feature-implementer/docs/reconnect-handover.md`
 - OpenAPI 6종 메모: `/mnt/a/c/cc-feature-implementer/docs/나라장터_openapi_6종_적용메모.md`
-- 앱 DB(기본): `C:\Users\<USER>\AppData\Local\NaraCollector\nara-dashboard.db`
+- 앱 DB(기본): `A:\c\nara-workspace\app\nara-dashboard.db`
 
 ## 장애 대응
 - 수집 0건 반복: 기간/키워드/체크포인트/네트워크/API키 확인

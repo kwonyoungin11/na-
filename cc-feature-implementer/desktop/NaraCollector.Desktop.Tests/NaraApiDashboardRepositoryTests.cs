@@ -91,7 +91,7 @@ public class NaraApiDashboardRepositoryTests
                     {"bidNtceNo":"R26BK99999999","bidNtceNm":"2026년 인천사회지표 조사 및 지역통계 작성 용역","dminsttNm":"인천광역시","opengDt":"2026-03-27 16:00:00","rgstDt":"2026-03-08 13:27:30","_src_group":"servc","rgnLmtBidLocplcJdgmBssNm":"인천"}
                     """,
                     """
-                    {"bidNtceNo":"R26BK88888888","bidNtceNm":"경주 서악동 고분군 발굴조사 보고서 제작","dminsttNm":"경주시","opengDt":"2026-03-12 14:00:00","rgstDt":"2026-03-08 13:27:40","_src_group":"servc","rgnLmtBidLocplcJdgmBssNm":"경북"}
+                    {"bidNtceNo":"R26BK88888888","bidNtceNm":"경주 서악동 고분군 정밀발굴조사 용역","dminsttNm":"경주시","opengDt":"2026-03-12 14:00:00","rgstDt":"2026-03-08 13:27:40","_src_group":"servc","rgnLmtBidLocplcJdgmBssNm":"경북"}
                     """,
                     """
                     {"bidNtceNo":"R26BK77777777","bidNtceNm":"문화재 시굴조사 관련 장비 물품","dminsttNm":"경주시","opengDt":"2026-03-18 10:00:00","rgstDt":"2026-03-08 13:27:50","_src_group":"thng","rgnLmtBidLocplcJdgmBssNm":"경북"}
@@ -105,15 +105,15 @@ public class NaraApiDashboardRepositoryTests
                     {"bidNtceNo":"R26BK01363668","bidNtceNm":"(긴급)대구 달성 북성벽 시굴·정밀발굴조사용역","dminsttNm":"대구광역시","opengDt":"2026-03-08 13:28:00","prtcptCnum":"8","_src_group":"servc"}
                     """,
                     """
-                    {"bidNtceNo":"R26BK88888888","bidNtceNm":"경주 서악동 고분군 발굴조사 보고서 제작","dminsttNm":"경주시","opengDt":"2026-03-08 13:28:20","prtcptCnum":"3","_src_group":"servc"}
+                    {"bidNtceNo":"R26BK88888888","bidNtceNm":"경주 서악동 고분군 정밀발굴조사 용역","dminsttNm":"경주시","opengDt":"2026-03-08 13:28:20","prtcptCnum":"3","_src_group":"servc"}
                     """
                 ]);
 
             var filter = new DashboardFilter(
                 StartDate: new DateTime(2026, 3, 1, 0, 0, 0),
                 EndDate: new DateTime(2026, 3, 31, 23, 59, 59),
-                Region: "전국",
-                Keyword: "시굴조사,발굴조사",
+                Region: "경북",
+                Keyword: "발굴조사",
                 OrderingAgency: string.Empty,
                 DataType: "낙찰",
                 Company: string.Empty,
@@ -123,13 +123,13 @@ public class NaraApiDashboardRepositoryTests
             var result = NaraApiDashboardRepository.TestHook_LoadCollectorNoticeFeed(root, filter);
 
             var bid = Assert.Single(result.BidRows);
-            Assert.Equal("R26BK01363668", bid.NoticeNumber);
-            Assert.Equal("대구", bid.RegionText);
+            Assert.Equal("R26BK88888888", bid.NoticeNumber);
+            Assert.Equal("경북", bid.RegionText);
 
             var award = Assert.Single(result.AwardRows);
-            Assert.Equal("R26BK01363668", award.NoticeNumber);
-            Assert.Equal("8개사", award.ParticipantCountText);
-            Assert.Equal("대구", award.RegionText);
+            Assert.Equal("R26BK88888888", award.NoticeNumber);
+            Assert.Equal("3개사", award.ParticipantCountText);
+            Assert.Equal("경북", award.RegionText);
         }
         finally
         {
@@ -160,7 +160,7 @@ public class NaraApiDashboardRepositoryTests
             var filter = new DashboardFilter(
                 StartDate: new DateTime(2026, 3, 1, 0, 0, 0),
                 EndDate: new DateTime(2026, 3, 31, 23, 59, 59),
-                Region: "전국",
+                Region: "경북",
                 Keyword: string.Empty,
                 OrderingAgency: string.Empty,
                 DataType: "낙찰",
@@ -170,8 +170,7 @@ public class NaraApiDashboardRepositoryTests
 
             var result = NaraApiDashboardRepository.TestHook_LoadCollectorNoticeFeed(root, filter);
 
-            var bid = Assert.Single(result.BidRows);
-            Assert.Equal("전북", bid.RegionText);
+            Assert.Empty(result.BidRows);
         }
         finally
         {
@@ -242,10 +241,10 @@ public class NaraApiDashboardRepositoryTests
             var result = NaraApiDashboardRepository.TestHook_LoadCollectorNoticeFeed(root, filter);
 
             Assert.Equal(
-                ["R26BK20000001", "R26BK20000002", "R26BK20000003"],
+                ["R26BK20000002"],
                 result.BidRows.Select(x => x.NoticeNumber).OrderBy(x => x).ToArray());
             Assert.Equal(
-                ["R26BK20000001", "R26BK20000002", "R26BK20000003"],
+                ["R26BK20000002"],
                 result.AwardRows.Select(x => x.NoticeNumber).OrderBy(x => x).ToArray());
         }
         finally
@@ -277,7 +276,7 @@ public class NaraApiDashboardRepositoryTests
             var filter = new DashboardFilter(
                 StartDate: new DateTime(2026, 2, 21, 0, 0, 0),
                 EndDate: new DateTime(2026, 3, 8, 23, 59, 59),
-                Region: "전국",
+                Region: "전체",
                 Keyword: string.Empty,
                 OrderingAgency: string.Empty,
                 DataType: "낙찰",

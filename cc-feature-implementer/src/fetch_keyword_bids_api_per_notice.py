@@ -9,6 +9,7 @@ from collections import Counter, deque
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
+import sys
 from typing import Any, Dict, Iterable, List, Mapping, Sequence, Set, Tuple
 
 import pandas as pd
@@ -32,6 +33,11 @@ from fetch_keyword_bids_api_only import (
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from nara_workspace_paths import default_env_path, first_stage_dir
+
 DEFAULT_RULE_PROFILE_PATH = PROJECT_ROOT / ".agents" / "skills" / "API" / "rule_profile.json"
 
 RAW_CANDIDATE_COLUMNS = [
@@ -758,11 +764,11 @@ def write_stage_summary(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="나라장터 API 공고별 개별 엑셀 생성")
-    parser.add_argument("--env-file", default="/mnt/a/c/.env")
+    parser.add_argument("--env-file", default=str(default_env_path()))
     parser.add_argument("--start", default="202502260000", type=parse_ymdhm)
     parser.add_argument("--end", default="202602262359", type=parse_ymdhm)
     parser.add_argument("--keywords", default="")
-    parser.add_argument("--output-dir", default="/mnt/a/c/data/공고별_개별데이터")
+    parser.add_argument("--output-dir", default=str(first_stage_dir("adhoc")))
     parser.add_argument("--max-notices", type=int, default=None, help="테스트용 상한")
     parser.add_argument("--no-filters", action="store_true", help="상세수집 후 전처리 필터만 비활성화 (후보 검증은 유지)")
     parser.add_argument("--rule-profile", default=str(DEFAULT_RULE_PROFILE_PATH), help="정본 규칙 프로필 JSON")

@@ -21,7 +21,7 @@ public sealed class DashboardOutputService
     public DashboardOutputService(string? appRootDirectory = null)
     {
         AppRootDirectory = appRootDirectory
-            ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NaraCollector");
+            ?? DefaultAppPathResolver.ResolveDefaultAppRootDirectory();
         MasterExcelPath = ResolveMasterExcelPath(AppRootDirectory);
     }
 

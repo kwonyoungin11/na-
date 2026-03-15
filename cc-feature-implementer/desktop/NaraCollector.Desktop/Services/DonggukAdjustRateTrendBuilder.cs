@@ -7,9 +7,9 @@ internal static class DonggukAdjustRateTrendBuilder
 {
     private const string DonggukCompanyName = "동국문화재연구원";
 
-    public static IReadOnlyList<TrendPointModel> BuildPoints(IReadOnlyList<ParticipantRecord> participants, DateTime? endDateOverride = null)
+    public static IReadOnlyList<TrendPointModel> BuildPoints(IReadOnlyList<ParticipantRecord> participants, DateTime startDate, DateTime endDate)
     {
-        return BuildRecentRows(participants, endDateOverride)
+        return BuildRowsInWindow(participants, startDate, endDate)
             .Select(x => new TrendPointModel(
                 x.OpenDate.ToString("MM-dd", CultureInfo.InvariantCulture),
                 x.DonggukAdjustRate,
@@ -17,9 +17,15 @@ internal static class DonggukAdjustRateTrendBuilder
             .ToList();
     }
 
-    public static IReadOnlyList<TrendPointModel> BuildAwardReferencePoints(IReadOnlyList<ParticipantRecord> participants, DateTime? endDateOverride = null)
+    public static IReadOnlyList<TrendPointModel> BuildPoints(IReadOnlyList<ParticipantRecord> participants, DateTime? endDateOverride = null)
     {
-        return BuildRecentRows(participants, endDateOverride)
+        var endDate = (endDateOverride ?? DateTime.Today).Date;
+        return BuildPoints(participants, endDate.AddMonths(-3), endDate);
+    }
+
+    public static IReadOnlyList<TrendPointModel> BuildAwardReferencePoints(IReadOnlyList<ParticipantRecord> participants, DateTime startDate, DateTime endDate)
+    {
+        return BuildRowsInWindow(participants, startDate, endDate)
             .Select(x => new TrendPointModel(
                 x.OpenDate.ToString("MM-dd", CultureInfo.InvariantCulture),
                 x.AwardAdjustRate ?? double.NaN,
@@ -27,9 +33,15 @@ internal static class DonggukAdjustRateTrendBuilder
             .ToList();
     }
 
-    public static IReadOnlyList<CollectorNoticeRowModel> BuildAwardNoticeRows(IReadOnlyList<ParticipantRecord> participants, DateTime? endDateOverride = null)
+    public static IReadOnlyList<TrendPointModel> BuildAwardReferencePoints(IReadOnlyList<ParticipantRecord> participants, DateTime? endDateOverride = null)
     {
-        return BuildRecentRows(participants, endDateOverride)
+        var endDate = (endDateOverride ?? DateTime.Today).Date;
+        return BuildAwardReferencePoints(participants, endDate.AddMonths(-3), endDate);
+    }
+
+    public static IReadOnlyList<CollectorNoticeRowModel> BuildAwardNoticeRows(IReadOnlyList<ParticipantRecord> participants, DateTime startDate, DateTime endDate)
+    {
+        return BuildRowsInWindow(participants, startDate, endDate)
             .Where(x => x.AwardAdjustRate.HasValue)
             .OrderByDescending(x => x.OpenDate)
             .Select(x => new CollectorNoticeRowModel(
@@ -38,35 +50,47 @@ internal static class DonggukAdjustRateTrendBuilder
                 NoticeName: x.NoticeName,
                 OrderingAgency: x.OrderingAgency,
                 RegionText: x.Region,
-                ParticipantCountText: $"사정률 {x.AwardAdjustRate!.Value:F5}"))
+                ParticipantCountText: $"동국 {x.DonggukAdjustRate:F5} / {x.DonggukRank}위 · 낙찰 {x.AwardAdjustRate!.Value:F5}"))
             .ToList();
+    }
+
+    public static IReadOnlyList<CollectorNoticeRowModel> BuildAwardNoticeRows(IReadOnlyList<ParticipantRecord> participants, DateTime? endDateOverride = null)
+    {
+        var endDate = (endDateOverride ?? DateTime.Today).Date;
+        return BuildAwardNoticeRows(participants, endDate.AddMonths(-3), endDate);
+    }
+
+    public static string BuildSummary(IReadOnlyList<ParticipantRecord> participants, DateTime startDate, DateTime endDate)
+    {
+        var rows = BuildRowsInWindow(participants, startDate, endDate);
+        if (rows.Count == 0)
+        {
+            return $"동국 참여 공고 · {startDate:yyyy-MM-dd}~{endDate:yyyy-MM-dd} · 데이터 대기";
+        }
+
+        return $"동국 참여 공고 · {rows[0].OpenDate:yyyy-MM-dd}~{rows[^1].OpenDate:yyyy-MM-dd} · 공고 {rows.Count:N0}건";
     }
 
     public static string BuildSummary(IReadOnlyList<ParticipantRecord> participants, DateTime? endDateOverride = null)
     {
-        var rows = BuildRecentRows(participants, endDateOverride);
-        if (rows.Count == 0)
-        {
-            return "동국 최근 3개월 기초대비사정률 · 데이터 대기";
-        }
-
-        return $"동국 최근 3개월 기초대비사정률 · {rows[0].OpenDate:yyyy-MM-dd}~{rows[^1].OpenDate:yyyy-MM-dd} · 공고 {rows.Count:N0}건";
+        var endDate = (endDateOverride ?? DateTime.Today).Date;
+        return BuildSummary(participants, endDate.AddMonths(-3), endDate);
     }
 
-    private static List<DonggukTrendRow> BuildRecentRows(IReadOnlyList<ParticipantRecord> participants, DateTime? endDateOverride)
+    private static List<DonggukTrendRow> BuildRowsInWindow(IReadOnlyList<ParticipantRecord> participants, DateTime startDate, DateTime endDate)
     {
         if (participants.Count == 0)
         {
             return [];
         }
 
-        var endDate = (endDateOverride ?? DateTime.Today).Date;
-        var startBoundary = endDate.AddMonths(-3);
+        var startBoundary = startDate.Date;
+        var endBoundary = endDate.Date;
 
         return participants
             .Where(IsDonggukParticipant)
             .Where(x => x.AdjustRate.HasValue)
-            .Where(x => x.OpenDate.Date >= startBoundary && x.OpenDate.Date <= endDate)
+            .Where(x => x.OpenDate.Date >= startBoundary && x.OpenDate.Date <= endBoundary)
             .GroupBy(
                 x => string.IsNullOrWhiteSpace(x.NoticeNumber) ? x.NoticeNo : x.NoticeNumber,
                 StringComparer.OrdinalIgnoreCase)
@@ -93,6 +117,7 @@ internal static class DonggukAdjustRateTrendBuilder
                     donggukRow.OrderingAgency,
                     string.IsNullOrWhiteSpace(donggukRow.Region) ? (awardRow?.Region ?? string.Empty) : donggukRow.Region,
                     donggukRow.OpenDate,
+                    donggukRow.Rank,
                     donggukRow.AdjustRate!.Value,
                     awardRow?.AdjustRate);
             })
@@ -113,6 +138,7 @@ internal static class DonggukAdjustRateTrendBuilder
         string OrderingAgency,
         string Region,
         DateTime OpenDate,
+        int DonggukRank,
         double DonggukAdjustRate,
         double? AwardAdjustRate);
 }

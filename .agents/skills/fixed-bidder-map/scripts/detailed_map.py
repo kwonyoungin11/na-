@@ -2,7 +2,7 @@
 """
 전체업체 고정자리 상세 지도 생성기
 
-- 입력: /mnt/a/c/전체_통합_데이터.xlsx
+- 입력: /mnt/a/c/nara-workspace/master/전체_통합_데이터.xlsx
 - 분석구간: 기초대비사정률 99.5 ~ 100.0
 - 기간: 12개월 / 6개월 / 3개월 / 1개월
 - 기본 제외 없음(필요 시 명시적으로 지정)
@@ -22,14 +22,20 @@ import re
 from dataclasses import asdict, dataclass
 from datetime import timedelta
 from pathlib import Path
+import sys
 from typing import Any
 
 import pandas as pd
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
-DATA_PATH = PROJECT_ROOT / "전체_통합_데이터.xlsx"
-OUTPUT_DIR = Path(__file__).parent.parent / "output"
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from nara_workspace_paths import analysis_dir, master_path
+
+DATA_PATH = master_path()
+OUTPUT_DIR = analysis_dir() / "fixed_bidder_map_detailed"
 
 PERIODS: dict[str, timedelta] = {
     "12m": timedelta(days=365),

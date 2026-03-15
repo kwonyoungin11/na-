@@ -426,9 +426,7 @@ public sealed class NativeBidChartControl : FrameworkElement
         try
         {
             var path = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "NaraCollector",
-                "logs",
+                DefaultAppPathResolver.ResolveDefaultAppLogDirectory(),
                 "chart-render.log");
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 
@@ -947,7 +945,6 @@ public sealed class NativeBidChartControl : FrameworkElement
 
         var (cellWidth, cellHeight) = GetScatterCellSize();
         var worldWidth = _columnCount * cellWidth;
-        var worldHeight = _rows.Count * cellHeight;
 
         var invScale = 1.0 / Math.Max(0.0001, _scale);
         var visibleWorld = new Rect(
@@ -956,10 +953,16 @@ public sealed class NativeBidChartControl : FrameworkElement
             _plotRect.Width * invScale,
             _plotRect.Height * invScale);
 
-        var colStart = Math.Clamp((int)Math.Floor(visibleWorld.Left / cellWidth) - 1, 0, Math.Max(0, _columnCount - 1));
-        var colEnd = Math.Clamp((int)Math.Ceiling(visibleWorld.Right / cellWidth) + 1, 0, Math.Max(0, _columnCount - 1));
-        var rowStart = Math.Clamp((int)Math.Floor(visibleWorld.Top / cellHeight) - 1, 0, Math.Max(0, _rows.Count - 1));
-        var rowEnd = Math.Clamp((int)Math.Ceiling(visibleWorld.Bottom / cellHeight) + 1, 0, Math.Max(0, _rows.Count - 1));
+        var gridColStart = (int)Math.Floor(visibleWorld.Left / cellWidth) - 1;
+        var gridColEnd = (int)Math.Ceiling(visibleWorld.Right / cellWidth) + 1;
+        var colStart = Math.Clamp(gridColStart, 0, Math.Max(0, _columnCount - 1));
+        var colEnd = Math.Clamp(gridColEnd, 0, Math.Max(0, _columnCount - 1));
+        var gridRowStart = (int)Math.Floor(visibleWorld.Top / cellHeight) - 1;
+        var unclampedGridRowEnd = (int)Math.Ceiling(visibleWorld.Bottom / cellHeight) + 1;
+        var worldRowCount = Math.Max(_rows.Count, unclampedGridRowEnd + 1);
+        var worldHeight = worldRowCount * cellHeight;
+        var rowStart = Math.Clamp(gridRowStart, 0, Math.Max(0, _rows.Count - 1));
+        var rowEnd = Math.Clamp(unclampedGridRowEnd, 0, Math.Max(0, _rows.Count - 1));
         var visibleRows = Math.Max(1, rowEnd - rowStart + 1);
         var visibleCols = Math.Max(1, colEnd - colStart + 1);
         var visibleCellEstimate = visibleRows * visibleCols;
@@ -989,17 +992,22 @@ public sealed class NativeBidChartControl : FrameworkElement
             dc.DrawRectangle(RecommendationBandBrush, RecommendationBandPen, recommendationBand);
         }
 
-        for (var col = colStart; col <= colEnd; col++)
+        var gridTop = gridRowStart * cellHeight;
+        var gridBottom = (unclampedGridRowEnd + 1) * cellHeight;
+        var gridLeft = gridColStart * cellWidth;
+        var gridRight = (gridColEnd + 1) * cellWidth;
+
+        for (var col = gridColStart; col <= gridColEnd; col++)
         {
             var x = col * cellWidth;
             var pen = col % _labelEvery == 0 ? MajorGridPen : GridPen;
-            dc.DrawLine(pen, new Point(x, 0), new Point(x, worldHeight));
+            dc.DrawLine(pen, new Point(x, gridTop), new Point(x, gridBottom));
         }
 
-        for (var row = rowStart; row <= rowEnd; row++)
+        for (var row = gridRowStart; row <= unclampedGridRowEnd; row++)
         {
             var y = row * cellHeight;
-            dc.DrawLine(GridPen, new Point(0, y), new Point(worldWidth, y));
+            dc.DrawLine(GridPen, new Point(gridLeft, y), new Point(gridRight, y));
         }
 
         var progress = _animateDiff

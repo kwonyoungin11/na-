@@ -113,12 +113,12 @@ total_score = (shadow × 0.35) + (margin × 0.30) + (competition × 0.20) + (win
 
 ## 입력 데이터
 
-- **경로(기본)**: `/mnt/a/c/전체_통합_데이터.xlsx`
+- **경로(기본)**: `/mnt/a/c/nara-workspace/master/전체_통합_데이터.xlsx`
 - **필수 컬럼**: 업체명, 기초대비사정률, 투찰일시, 순위
 
 ## 콘솔 분리 원칙
 - C# 언급 없는 요청에서는 C# 런타임 경로를 사용하지 않음
-- 콘솔 분석 산출물은 `console-workspace/analysis/optimal-position`에 저장
+- 콘솔 분석 산출물은 `nara-workspace/analysis/optimal-position`에 저장
 
 ## 파이프라인 의존성
 

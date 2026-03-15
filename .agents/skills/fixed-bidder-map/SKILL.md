@@ -50,9 +50,9 @@ python .agents/skills/fixed-bidder-map/scripts/detailed_map.py \
 
 콘솔 전체 파이프라인(`.agents/skills/logic/scripts/analyze.py`)을 돌리면 아래 경로로 자동 갱신됩니다.
 
-- `console-workspace/analysis/fixed_bidder_map_detailed/detailed_fixed_bidder_map.json`
-- `console-workspace/analysis/fixed_bidder_map_detailed/detailed_fixed_bidder_map.xlsx`
-- `console-workspace/analysis/fixed_bidder_map_detailed/detailed_fixed_bidder_map.md`
+- `nara-workspace/analysis/fixed_bidder_map_detailed/detailed_fixed_bidder_map.json`
+- `nara-workspace/analysis/fixed_bidder_map_detailed/detailed_fixed_bidder_map.xlsx`
+- `nara-workspace/analysis/fixed_bidder_map_detailed/detailed_fixed_bidder_map.md`
 
 ## 출력 형식
 

@@ -8,7 +8,7 @@ namespace NaraCollector.Desktop.Tests;
 public class RetiredCompanyExclusionTests
 {
     [Fact]
-    public void LoadParticipantsFromMasterExcel_ExcludesRetiredCompanies_AndCompanyOptions()
+    public void LoadParticipantsFromMasterExcel_ExcludesOnlyHyorim_AndKeepsKoreanInstitute()
     {
         var tempFile = Path.Combine(Path.GetTempPath(), $"participants-{Guid.NewGuid():N}.xlsx");
         try
@@ -48,19 +48,23 @@ public class RetiredCompanyExclusionTests
 
             var participants = parser.LoadParticipantsFromMasterExcel(tempFile, filter, CancellationToken.None);
 
-            Assert.Single(participants);
+            Assert.Equal(2, participants.Count);
             Assert.DoesNotContain(
                 participants,
-                row => row.CompanyName.Contains("효림", StringComparison.OrdinalIgnoreCase)
-                       || row.CompanyName.Contains("한국문화재연구원", StringComparison.OrdinalIgnoreCase));
+                row => row.CompanyName.Contains("효림", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(
+                participants,
+                row => row.CompanyName.Contains("한국문화재연구원", StringComparison.OrdinalIgnoreCase));
 
             var snapshot = new NaraApiSnapshotBuilder().BuildSnapshot(participants, filter, "unit-test");
             var companyOptions = snapshot.CompanyOptions ?? [];
-            Assert.Single(companyOptions);
+            Assert.Equal(2, companyOptions.Count);
             Assert.DoesNotContain(
                 companyOptions,
-                name => name.Contains("효림", StringComparison.OrdinalIgnoreCase)
-                        || name.Contains("한국문화재연구원", StringComparison.OrdinalIgnoreCase));
+                name => name.Contains("효림", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(
+                companyOptions,
+                name => name.Contains("한국문화재연구원", StringComparison.OrdinalIgnoreCase));
         }
         finally
         {

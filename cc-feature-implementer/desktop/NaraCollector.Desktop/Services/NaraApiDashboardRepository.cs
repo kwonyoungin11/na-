@@ -437,11 +437,20 @@ public sealed class NaraApiDashboardRepository
             }
 
             var regionText = InferCollectorRegion(
+                GetString(root, "prtcptPsblRgnNm"),
+                GetString(root, "prtcptLmtRgnNm"),
                 GetString(root, "rgnLmtBidLocplcJdgmBssNm"),
                 GetString(root, "jntcontrctDutyRgnNm1"),
                 GetString(root, "jntcontrctDutyRgnNm2"),
                 GetString(root, "jntcontrctDutyRgnNm3"),
-                agency);
+                GetString(root, "incntvRgnNm1"),
+                GetString(root, "incntvRgnNm2"),
+                GetString(root, "incntvRgnNm3"),
+                GetString(root, "incntvRgnNm4"),
+                string.Equals(GetString(root, "rgnLmtYn"), "N", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(GetString(root, "bidPrtcptLmtYn"), "N", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(GetString(root, "cmmnSpldmdCorpRgnLmtYn"), "N", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(GetString(root, "rgnLmtBidLocplcJdgmBssCd"), "N", StringComparison.OrdinalIgnoreCase));
             if (!MatchesCollectorRegion(regionText, filter.Region))
             {
                 continue;
@@ -495,10 +504,6 @@ public sealed class NaraApiDashboardRepository
 
             noticeRegionMap.TryGetValue(noticeNumber.Trim(), out var regionText);
             var agency = FirstNonEmpty(GetString(root, "dminsttNm"), GetString(root, "ntceInsttNm"));
-            if (string.IsNullOrWhiteSpace(regionText) || string.Equals(regionText, "미상", StringComparison.OrdinalIgnoreCase))
-            {
-                regionText = InferCollectorRegion(agency);
-            }
             if (!MatchesCollectorRegion(regionText, filter.Region))
             {
                 continue;
@@ -553,7 +558,13 @@ public sealed class NaraApiDashboardRepository
             try
             {
                 using var document = JsonDocument.Parse(File.ReadAllText(apiRuleProfilePath));
-                var values = ReadStringArray(document.RootElement, "primary_keywords", DefaultKeywords);
+                var primary = ReadStringArray(document.RootElement, "primary_keywords", DefaultKeywords);
+                var recovery = ReadStringArray(document.RootElement, "recovery_keywords", Array.Empty<string>(), allowEmpty: true);
+                var values = primary
+                    .Concat(recovery)
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
                 var normalized = NaraApiParticipantParser.NormalizeKeywords(string.Join(",", values));
                 if (!string.IsNullOrWhiteSpace(normalized))
                 {
@@ -651,7 +662,7 @@ public sealed class NaraApiDashboardRepository
 
     private static bool MatchesCollectorRegion(string? inferredRegion, string? selectedRegion)
     {
-        if (string.IsNullOrWhiteSpace(selectedRegion) || string.Equals(selectedRegion, "전국", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(selectedRegion) || string.Equals(selectedRegion, "전체", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
@@ -661,19 +672,48 @@ public sealed class NaraApiDashboardRepository
             return false;
         }
 
-        return inferredRegion.Contains(selectedRegion.Trim(), StringComparison.OrdinalIgnoreCase);
+        var target = selectedRegion.Trim();
+        if (string.Equals(target, "전국", StringComparison.OrdinalIgnoreCase))
+        {
+            return inferredRegion.Contains("전국", StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (string.Equals(target, "경북", StringComparison.OrdinalIgnoreCase))
+        {
+            return inferredRegion.Contains("경북", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return inferredRegion.Contains(target, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string InferCollectorRegion(params string[] values)
     {
+        return InferCollectorRegion(values, false);
+    }
+
+    private static string InferCollectorRegion(IEnumerable<string?> values, bool unrestrictedNationwide)
+    {
         var combined = string.Join(" ", values.Where(x => !string.IsNullOrWhiteSpace(x)));
         if (string.IsNullOrWhiteSpace(combined))
         {
-            return string.Empty;
+            return unrestrictedNationwide ? "전국" : string.Empty;
         }
 
         var normalized = NaraApiParticipantParser.NormalizeRegionValue(combined);
-        return NormalizeCollectorRegionText(normalized);
+        var region = NormalizeCollectorRegionText(normalized);
+        return string.IsNullOrWhiteSpace(region) && unrestrictedNationwide
+            ? "전국"
+            : region;
+    }
+
+    private static string InferCollectorRegion(params object?[] values)
+    {
+        var unrestrictedNationwide = values.OfType<bool>().LastOrDefault();
+        var textValues = values
+            .Where(x => x is not null && x is not bool)
+            .Select(x => x?.ToString())
+            .ToArray();
+        return InferCollectorRegion(textValues, unrestrictedNationwide);
     }
 
     private static string NormalizeCollectorRegionText(string? value)

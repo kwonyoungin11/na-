@@ -8,11 +8,17 @@
 import argparse
 import json
 from pathlib import Path
+import sys
 
 import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
-DEFAULT_DATA_PATH = PROJECT_ROOT / "전체_통합_데이터.xlsx"
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from nara_workspace_paths import master_path
+
+DEFAULT_DATA_PATH = master_path()
 DEFAULT_OUTPUT_PATH = Path(__file__).resolve().parents[1] / "bidder_colors.json"
 MY_COMPANY = "동국문화재연구원"
 MY_COMPANY_COLOR = "#FF0000"

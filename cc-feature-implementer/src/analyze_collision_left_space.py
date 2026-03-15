@@ -6,10 +6,17 @@ import argparse
 import json
 from dataclasses import dataclass
 from pathlib import Path
+import sys
 from typing import Any
 
 import numpy as np
 import pandas as pd
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from nara_workspace_paths import master_path, output_dir
 
 from analyze_crowding_probability import load_bid_data
 
@@ -334,8 +341,8 @@ def save_analysis(result: dict[str, Any], config: CollisionAnalysisConfig) -> No
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="충돌앵커-좌측여유 분석")
-    parser.add_argument("--data", default="/mnt/a/c/전체_통합_데이터.xlsx", help="입력 Excel 경로")
-    parser.add_argument("--output-dir", default="/mnt/a/c/console-workspace/output/collision_left_space_analysis", help="출력 디렉터리")
+    parser.add_argument("--data", default=str(master_path()), help="입력 Excel 경로")
+    parser.add_argument("--output-dir", default=str(output_dir() / "collision_left_space_analysis"), help="출력 디렉터리")
     parser.add_argument("--min-anchor-samples", type=int, default=20, help="앵커업체 최소 표본수")
     parser.add_argument("--min-rate", type=float, default=None, help="분석 최소 사정률 (기본: 데이터 최소값)")
     parser.add_argument("--max-rate", type=float, default=None, help="분석 최대 사정률 (기본: 데이터 최대값)")

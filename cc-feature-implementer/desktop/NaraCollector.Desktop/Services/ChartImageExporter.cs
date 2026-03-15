@@ -37,9 +37,12 @@ public static class ChartImageExporter
         }
 
         var map = ParseArgMap(args);
+        var workspaceRoot = DefaultAppPathResolver.ResolveDefaultWorkspaceRoot();
+        var defaultInput = Path.Combine(workspaceRoot, "master", "전체_통합_데이터.xlsx");
+        var defaultOutput = Path.Combine(workspaceRoot, "charts", "시각화_csharp.png");
 
-        var input = GetValue(map, "input", "/mnt/a/c/전체_통합_데이터_경북.xlsx");
-        var output = GetValue(map, "output", "/mnt/a/c/경북_시각화_csharp.png");
+        var input = GetValue(map, "input", defaultInput);
+        var output = GetValue(map, "output", defaultOutput);
         var precision = GetValue(map, "precision", "0.01");
         if (precision != "0.001")
         {

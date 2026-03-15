@@ -79,15 +79,15 @@ dotnet publish -c Release -r win-x64 --self-contained false
 - 압축본:
   - `NaraCollector.Desktop-win-x64.zip`
 
-## 8. 실시간 수집/저장 동작
-- 기본 동작은 **API 우선**입니다.
-  1) `NaraApiDashboardRepository`가 OpenAPI 수집
-  2) 엄격 전처리 적용(전국/대구/경북, 참여업체 5개 이상, 문화재연구원 포함, 중복 제거, 99~101 범위)
-  3) `DashboardOutputService`가 저장:
-     - SQLite: `%LOCALAPPDATA%/NaraCollector/nara-dashboard.db`
-     - CSV: `%LOCALAPPDATA%/NaraCollector/exports/`
+## 8. 파이프라인 연동/저장 동작
+- 기본 동작은 **외부 파이프라인(stage1/stage2) 결과 연동**입니다.
+  1) 수집/전처리는 앱 밖에서 수행
+  2) 앱은 `A:\c\nara-workspace\master\전체_통합_데이터.xlsx` 와 `A:\c\nara-workspace\output\raw\` 를 다시 읽음
+  3) `DashboardOutputService`가 앱 전용 캐시를 갱신:
+     - SQLite: `A:\c\nara-workspace\app/nara-dashboard.db`
+     - CSV: `A:\c\nara-workspace\app/exports/`
      - 차트 출력: 네이티브 렌더링 기반 PNG/내부 화면 표시
-- API 실패 시 로컬 SQLite를 조회하고, 둘 다 실패하면 샘플 데이터로 fallback.
+- 앱의 `업데이트`는 API 수집이 아니라 **파이프라인 결과 다시 불러오기**입니다.
 
 ## 7. 참고
 - 디자인 시스템: `../docs/02-design/design-system.md`

@@ -155,7 +155,9 @@ public class MainWindowViewModelComponentsTests
         Assert.Equal("공고-1", rows[0].NoticeName);
         Assert.Equal("기관A", rows[0].OrderingAgency);
         Assert.Equal("경북", rows[0].RegionText);
-        Assert.Contains("99.45600", rows[0].ParticipantCountText, StringComparison.Ordinal);
+        Assert.Contains("동국 99.22200", rows[0].ParticipantCountText, StringComparison.Ordinal);
+        Assert.Contains("3위", rows[0].ParticipantCountText, StringComparison.Ordinal);
+        Assert.Contains("낙찰 99.45600", rows[0].ParticipantCountText, StringComparison.Ordinal);
     }
 
     [Fact]

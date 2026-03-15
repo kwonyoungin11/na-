@@ -18,7 +18,7 @@ description: "나라장터 OpenAPI 월단위 수집 + 마스터(전체_통합_�
   - 1차 기본 키워드
   - 복구용 키워드(`발굴`, `시굴`)
   - 기술용역/일반공사 제외 규칙
-  - 전국/대구/경북 + 허용권역이 섞인 혼합 지역 보존
+  - 전국/경북 + 허용권역이 섞인 혼합 지역(예: 대구/경북) 보존
   - 공고당 참여업체 최소 수(`5`)
   - `문화유산연구원 → 문화재연구원` 업체명 정규화
   - `문화재연구원` 참여 공고만 유지
@@ -38,8 +38,8 @@ description: "나라장터 OpenAPI 월단위 수집 + 마스터(전체_통합_�
   - `취소공고`, `비복수예가` 제외
   - `발굴`, `시굴` 단독 키워드는 복구용으로만 사용하고 도메인 문맥이 맞을 때만 통과
 - 상세수집 후 2차 전처리에서 아래 규칙을 적용
-  - 지역제한: `전국(명시된 전국 입찰), 대구, 경북`만 유지
-  - `대구/경북` 같은 혼합 지역은 보존하고, downstream 분석에서 대구/경북 양쪽 slice에 포함 가능하게 둔다
+  - 지역제한: `전국(명시된 전국 입찰), 경북`만 유지
+  - `대구/경북` 같은 혼합 지역은 경북 참여 가능 공고로 보존한다
   - 공고당 참여업체 수: `5개 이상`
   - 업체명 정규화: `(재)`, `(재단)`, `재단법인`, `()`, `문화유산연구원` 정리
   - 공고 내 `문화재연구원` 참여 1건 이상(정규화 후 판정)
@@ -58,14 +58,14 @@ description: "나라장터 OpenAPI 월단위 수집 + 마스터(전체_통합_�
 - 실행 스크립트:
   - `/mnt/a/c/.agents/skills/API/scripts/run_master_sync_pipeline.py`
   - `/mnt/a/c/.agents/skills/API/scripts/run_nara_openapi_pipeline.py`
-- 기본 마스터: `/mnt/a/c/전체_통합_데이터.xlsx`
-- 기본 출력: `/mnt/a/c/공공데이터포털api/output`
+- 기본 마스터: `/mnt/a/c/nara-workspace/master/전체_통합_데이터.xlsx`
+- 기본 출력: `/mnt/a/c/nara-workspace/output`
 
 ## 콘솔 분리 운영(권장)
-- 콘솔 전용 작업공간: `/mnt/a/c/console-workspace`
-- 콘솔 마스터: `/mnt/a/c/전체_통합_데이터.xlsx`
-- 콘솔 출력: `/mnt/a/c/console-workspace/output`
-- 콘솔 로그: `/mnt/a/c/console-workspace/logs/collection_history.jsonl`
+- 콘솔 전용 작업공간: `/mnt/a/c/nara-workspace`
+- 콘솔 마스터: `/mnt/a/c/nara-workspace/master/전체_통합_데이터.xlsx`
+- 콘솔 출력: `/mnt/a/c/nara-workspace/output`
+- 콘솔 로그: `/mnt/a/c/nara-workspace/logs/collection_history.jsonl`
 
 > 원칙: 사용자 요청에 C# 언급이 없으면 C# 런타임 경로와 혼합하지 않는다.
 
@@ -78,9 +78,9 @@ description: "나라장터 OpenAPI 월단위 수집 + 마스터(전체_통합_�
 ```bash
 cd /mnt/a/c
 python3 .agents/skills/API/scripts/run_incremental_pipeline.py \
-  --baseline-file /mnt/a/c/전체_통합_데이터.xlsx \
-  --first-stage-dir /mnt/a/c/data/공고별_개별데이터_증분 \
-  --final-output /mnt/a/c/전체_통합_데이터.xlsx \
+  --baseline-file /mnt/a/c/nara-workspace/master/전체_통합_데이터.xlsx \
+  --first-stage-dir /mnt/a/c/nara-workspace/first-stage/incremental \
+  --final-output /mnt/a/c/nara-workspace/master/전체_통합_데이터.xlsx \
   --audit-output /mnt/a/c/2차전처리_판정로그_증분.xlsx \
   --end 202602282359 \
   --clean-first-stage
@@ -96,7 +96,7 @@ python3 .agents/skills/API/scripts/run_master_sync_pipeline.py
 
 ## 콘솔 전용 실행(권장)
 ```bash
-/mnt/a/c/console-workspace/scripts/run_console_api_pipeline.sh --months 6
+/mnt/a/c/nara-workspace/scripts/run_api_pipeline.sh --months 6
 ```
 
 ## 1차+2차 파이프라인 실행(통합)
@@ -104,8 +104,8 @@ python3 .agents/skills/API/scripts/run_master_sync_pipeline.py
 python3 .agents/skills/API/scripts/run_pipeline.py \
   --start 202602010000 \
   --end 202602282359 \
-  --first-stage-dir /mnt/a/c/data/공고별_개별데이터_파이프라인 \
-  --final-output /mnt/a/c/전체_통합_데이터.xlsx \
+  --first-stage-dir /mnt/a/c/nara-workspace/first-stage/pipeline \
+  --final-output /mnt/a/c/nara-workspace/master/전체_통합_데이터.xlsx \
   --audit-output /mnt/a/c/2차전처리_판정로그.xlsx \
   --clean-first-stage
 ```
@@ -115,9 +115,9 @@ python3 .agents/skills/API/scripts/run_pipeline.py \
 ## 증분 파이프라인 실행
 ```bash
 python3 .agents/skills/API/scripts/run_incremental_pipeline.py \
-  --baseline-file /mnt/a/c/전체_통합_데이터.xlsx \
-  --first-stage-dir /mnt/a/c/data/공고별_개별데이터_증분 \
-  --final-output /mnt/a/c/전체_통합_데이터.xlsx \
+  --baseline-file /mnt/a/c/nara-workspace/master/전체_통합_데이터.xlsx \
+  --first-stage-dir /mnt/a/c/nara-workspace/first-stage/incremental \
+  --final-output /mnt/a/c/nara-workspace/master/전체_통합_데이터.xlsx \
   --audit-output /mnt/a/c/2차전처리_판정로그_증분.xlsx \
   --end 202602282359 \
   --clean-first-stage
@@ -126,7 +126,7 @@ python3 .agents/skills/API/scripts/run_incremental_pipeline.py \
 ## 최신 export 검증
 ```bash
 python3 .agents/skills/API/scripts/validate_latest_export.py \
-  --master /mnt/a/c/전체_통합_데이터.xlsx
+  --master /mnt/a/c/nara-workspace/master/전체_통합_데이터.xlsx
 ```
 
 ## 기간 지정 실행

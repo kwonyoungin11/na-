@@ -41,8 +41,8 @@ argument-hint: "[--period 1m|3m|6m|1y|2y] [--output json|excel|all] [--data /pat
 
 ```bash
 python3 /mnt/a/c/.agents/skills/shadow-strategy/scripts/analyze.py \
-  --data /mnt/a/c/console-workspace/analysis/input_전국.xlsx \
-  --output-dir /mnt/a/c/console-workspace/analysis/shadow_전국 \
+  --data /mnt/a/c/nara-workspace/analysis/input_전국.xlsx \
+  --output-dir /mnt/a/c/nara-workspace/analysis/shadow_전국 \
   --profile /mnt/a/c/.agents/skills/shadow-strategy/analysis_profile.json \
   --period 6m \
   --my-company 동국문화재연구원 \
@@ -54,12 +54,12 @@ python3 /mnt/a/c/.agents/skills/shadow-strategy/scripts/analyze.py \
 ```bash
 # 최근 3개월만 분석
 python3 /mnt/a/c/.agents/skills/shadow-strategy/scripts/analyze.py \
-  --data /mnt/a/c/console-workspace/analysis/input_전국.xlsx \
+  --data /mnt/a/c/nara-workspace/analysis/input_전국.xlsx \
   --period 3m
 
 # 최근 1년 분석
 python3 /mnt/a/c/.agents/skills/shadow-strategy/scripts/analyze.py \
-  --data /mnt/a/c/console-workspace/analysis/input_전국.xlsx \
+  --data /mnt/a/c/nara-workspace/analysis/input_전국.xlsx \
   --period 1y
 ```
 
@@ -68,12 +68,12 @@ python3 /mnt/a/c/.agents/skills/shadow-strategy/scripts/analyze.py \
 ```bash
 # JSON 출력
 python3 /mnt/a/c/.agents/skills/shadow-strategy/scripts/analyze.py \
-  --data /mnt/a/c/console-workspace/analysis/input_전국.xlsx \
+  --data /mnt/a/c/nara-workspace/analysis/input_전국.xlsx \
   --output json
 
 # Excel 출력
 python3 /mnt/a/c/.agents/skills/shadow-strategy/scripts/analyze.py \
-  --data /mnt/a/c/console-workspace/analysis/input_전국.xlsx \
+  --data /mnt/a/c/nara-workspace/analysis/input_전국.xlsx \
   --output excel
 ```
 
@@ -88,8 +88,8 @@ python3 /mnt/a/c/.agents/skills/shadow-strategy/scripts/analyze.py \
 
 ## 입력 데이터
 
-- 경로(기본 파이프라인): `/mnt/a/c/전체_통합_데이터.xlsx`
-- logic 파이프라인 연계 입력: `/mnt/a/c/console-workspace/analysis/input_{지역}.xlsx`
+- 경로(기본 파이프라인): `/mnt/a/c/nara-workspace/master/전체_통합_데이터.xlsx`
+- logic 파이프라인 연계 입력: `/mnt/a/c/nara-workspace/analysis/input_{지역}.xlsx`
 - 필수 컬럼:
   - `업체명`: 정규화된 업체명
   - `기초대비사정률`: 사정률 비율 (99.5~100% 구간 분석)
@@ -99,7 +99,7 @@ python3 /mnt/a/c/.agents/skills/shadow-strategy/scripts/analyze.py \
   - `순위`: 과거 호환용 보조 컬럼 (현재 경쟁전략 계산에는 사용하지 않음)
 
 ## 콘솔 분리 원칙
-- 콘솔 분석은 `/mnt/a/c/console-workspace` 산출물과 함께 사용
+- 통합 분석은 `/mnt/a/c/nara-workspace` 산출물과 함께 사용
 - C# 언급 없는 요청에서는 C# 런타임 경로와 혼합하지 않음
 
 ## 출력 결과

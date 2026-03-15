@@ -30,10 +30,10 @@ argument-hint: "[--period 1y|6m|3m|1m|2y] [--precision 0.01|0.001]"
 ### 단일 기간 생성
 ```bash
 python .agents/skills/bidder-visualization/scripts/visualize.py \
-  --input /mnt/a/c/console-workspace/analysis/input_전국.xlsx \
+  --input /mnt/a/c/nara-workspace/analysis/input_전국.xlsx \
   --period 3m \
   --precision 0.01 \
-  --output /mnt/a/c/console-workspace/output/charts/전국_3m_시각화_0.01.png
+  --output /mnt/a/c/nara-workspace/output/charts/전국_3m_시각화_0.01.png
 ```
 
 ### 전체 기간 파이프라인 (1y, 6m, 3m, 1m)
@@ -41,10 +41,10 @@ python .agents/skills/bidder-visualization/scripts/visualize.py \
 for period in 1y 6m 3m 1m; do
   for precision in 0.01 0.001; do
     python .agents/skills/bidder-visualization/scripts/visualize.py \
-      --input /mnt/a/c/console-workspace/analysis/input_전국.xlsx \
+      --input /mnt/a/c/nara-workspace/analysis/input_전국.xlsx \
       --period "$period" \
       --precision "$precision" \
-      --output "/mnt/a/c/console-workspace/output/charts/전국_${period}_시각화_${precision}.png"
+      --output "/mnt/a/c/nara-workspace/output/charts/전국_${period}_시각화_${precision}.png"
   done
 done
 ```
@@ -61,14 +61,14 @@ done
 
 ## 출력
 
-- `console-workspace/output/charts/전국_1y_시각화_0.01.png`
-- `console-workspace/output/charts/전국_1y_시각화_0.001.png`
-- `console-workspace/output/charts/전국_6m_시각화_0.01.png`
-- `console-workspace/output/charts/전국_6m_시각화_0.001.png`
-- `console-workspace/output/charts/전국_3m_시각화_0.01.png`
-- `console-workspace/output/charts/전국_3m_시각화_0.001.png`
-- `console-workspace/output/charts/전국_1m_시각화_0.01.png`
-- `console-workspace/output/charts/전국_1m_시각화_0.001.png`
+- `nara-workspace/output/charts/전국_1y_시각화_0.01.png`
+- `nara-workspace/output/charts/전국_1y_시각화_0.001.png`
+- `nara-workspace/output/charts/전국_6m_시각화_0.01.png`
+- `nara-workspace/output/charts/전국_6m_시각화_0.001.png`
+- `nara-workspace/output/charts/전국_3m_시각화_0.01.png`
+- `nara-workspace/output/charts/전국_3m_시각화_0.001.png`
+- `nara-workspace/output/charts/전국_1m_시각화_0.01.png`
+- `nara-workspace/output/charts/전국_1m_시각화_0.001.png`
 
 ## 파이프라인 의존성
 
@@ -77,5 +77,5 @@ done
 
 ## 데이터 소스
 
-- 입력: `/mnt/a/c/전체_통합_데이터.xlsx`
+- 입력: `/mnt/a/c/nara-workspace/master/전체_통합_데이터.xlsx`
 - 색상맵: `.agents/skills/fixed-bidder-map/bidder_colors.json`

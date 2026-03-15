@@ -17,7 +17,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private const string DonggukCompanyName = "동국문화재연구원";
     private const int MaxComparedCompanyCount = 20;
     private static readonly TimeSpan AutoApplyDebounceInterval = TimeSpan.FromMilliseconds(250);
-    private static readonly string[] RetiredCompanyKeywords = ["효림", "한국문화재연구원"];
+    private static readonly string[] RetiredCompanyKeywords = ["효림"];
 
     private readonly IDashboardRepository _repository;
     private readonly ConsolePipelineInsightService _consolePipelineInsightService;
@@ -784,6 +784,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             return;
         }
 
+        SyncPeriodWindowToToday();
         var filter = BuildFilter();
         if (!forceRefresh
             && _snapshotCoordinator.TryGetSnapshot(filter, out var cachedSnapshot)
@@ -815,9 +816,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         IsLoading = true;
         LoadProgress = 0;
-        LoadStatusText = forceRefresh ? "데이터 수집 시작 (API 강제수집)" : "필터 적용 시작 (캐시 없음)";
+        LoadStatusText = forceRefresh ? "파이프라인 결과 다시 불러오는 중" : "필터 적용 시작 (캐시 없음)";
         LoadEvents.Clear();
-        AppendEvent(forceRefresh ? "모드: forceRefresh=true" : "모드: forceRefresh=false");
+        AppendEvent(forceRefresh ? "모드: pipeline-refresh" : "모드: cache-reload");
 
         try
         {
@@ -847,8 +848,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
         catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
-            LoadStatusText = "수집이 중단되었습니다.";
-            AppendEvent("사용자 요청으로 수집이 중단되었습니다.");
+            LoadStatusText = "업데이트가 중단되었습니다.";
+            AppendEvent("사용자 요청으로 업데이트가 중단되었습니다.");
         }
         catch (Exception ex)
         {
@@ -928,19 +929,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private void ApplyPeriodPreset(string value)
     {
+        var (start, end) = ResolvePeriodPresetWindow(value, DateTime.Today);
         _suppressAutoApply = true;
         try
         {
-            EndDate = DateTime.Today;
-            StartDate = value switch
-            {
-                "전체기간" => new DateTime(2000, 1, 1),
-                "최근 1개월" => DateTime.Today.AddMonths(-1),
-                "최근 3개월" => DateTime.Today.AddMonths(-3),
-                "최근 6개월" => DateTime.Today.AddMonths(-6),
-                "최근 1년" => DateTime.Today.AddYears(-1),
-                _ => DateTime.Today.AddMonths(-3),
-            };
+            EndDate = end;
+            StartDate = start;
         }
         finally
         {
@@ -1350,15 +1344,51 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private DashboardFilter BuildFilter()
     {
+        var (effectiveStart, effectiveEnd) = ResolvePeriodPresetWindow(SelectedPeriodPreset, DateTime.Today);
         return _filterState.BuildFilter(
-            StartDate,
-            EndDate,
+            effectiveStart,
+            effectiveEnd,
             SelectedRegion,
             KeywordText,
             OrderingAgencyText,
             SelectedCompany,
             SelectedMinAdjustRate,
             SelectedMaxAdjustRate);
+    }
+
+    private void SyncPeriodWindowToToday()
+    {
+        var (start, end) = ResolvePeriodPresetWindow(SelectedPeriodPreset, DateTime.Today);
+        if (StartDate.Date == start.Date && EndDate.Date == end.Date)
+        {
+            return;
+        }
+
+        _suppressAutoApply = true;
+        try
+        {
+            StartDate = start;
+            EndDate = end;
+        }
+        finally
+        {
+            _suppressAutoApply = false;
+        }
+    }
+
+    private static (DateTime Start, DateTime End) ResolvePeriodPresetWindow(string? value, DateTime today)
+    {
+        var end = today.Date;
+        var start = value switch
+        {
+            "전체기간" => new DateTime(2000, 1, 1),
+            "최근 1개월" => end.AddMonths(-1),
+            "최근 3개월" => end.AddMonths(-3),
+            "최근 6개월" => end.AddMonths(-6),
+            "최근 1년" => end.AddYears(-1),
+            _ => end.AddMonths(-3),
+        };
+        return (start, end);
     }
 
     private void EnsureValidAdjustRange()
@@ -1391,12 +1421,12 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
                     !IsRetiredCompanyName(x.CompanyName)
                     && !IsRetiredCompanyName(x.NormalizedCompanyName))
                 .ToList();
-            var donggukAwardRows = DonggukAdjustRateTrendBuilder.BuildAwardNoticeRows(participants, EndDate);
+            var donggukAwardRows = DonggukAdjustRateTrendBuilder.BuildAwardNoticeRows(participants, appliedFilter.StartDate, appliedFilter.EndDate);
             ReplaceCollection(VisibleAwardNoticeItems, donggukAwardRows);
             IncrementalAwardSummaryText = BuildDonggukAwardNoticeSummary(donggukAwardRows);
-            ReplaceCollection(NoticeAdjustRateTrendPoints, DonggukAdjustRateTrendBuilder.BuildPoints(participants, EndDate));
-            ReplaceCollection(NoticeAwardReferenceTrendPoints, DonggukAdjustRateTrendBuilder.BuildAwardReferencePoints(participants, EndDate));
-            NoticeAdjustRateTrendSummaryText = DonggukAdjustRateTrendBuilder.BuildSummary(participants, EndDate);
+            ReplaceCollection(NoticeAdjustRateTrendPoints, DonggukAdjustRateTrendBuilder.BuildPoints(participants, appliedFilter.StartDate, appliedFilter.EndDate));
+            ReplaceCollection(NoticeAwardReferenceTrendPoints, DonggukAdjustRateTrendBuilder.BuildAwardReferencePoints(participants, appliedFilter.StartDate, appliedFilter.EndDate));
+            NoticeAdjustRateTrendSummaryText = DonggukAdjustRateTrendBuilder.BuildSummary(participants, appliedFilter.StartDate, appliedFilter.EndDate);
             SelectedBidNoticeItem = null;
             SelectedAwardNoticeItem = null;
             RefreshFirstPageBidRecommendation();

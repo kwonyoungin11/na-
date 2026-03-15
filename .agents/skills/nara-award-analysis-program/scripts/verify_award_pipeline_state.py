@@ -19,6 +19,14 @@ from typing import Iterable, Optional
 
 from openpyxl import load_workbook
 
+import sys
+
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from nara_workspace_paths import app_dir, master_path
+
 
 def normalize_token(value: object) -> str:
     if value is None:
@@ -39,21 +47,8 @@ def parse_optional_datetime(text: Optional[str]) -> Optional[datetime]:
 
 
 def find_default_db_path() -> Optional[Path]:
-    candidates: list[Path] = []
-
-    linux_candidate = Path.home() / ".local" / "share" / "NaraCollector" / "nara-dashboard.db"
-    candidates.append(linux_candidate)
-
-    users_root = Path("/mnt/c/Users")
-    if users_root.exists():
-        for user_dir in users_root.iterdir():
-            candidate = user_dir / "AppData" / "Local" / "NaraCollector" / "nara-dashboard.db"
-            candidates.append(candidate)
-
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
-    return None
+    candidate = app_dir() / "nara-dashboard.db"
+    return candidate if candidate.exists() else None
 
 
 @dataclass
@@ -152,7 +147,7 @@ def load_xlsx_award_notices(xlsx_path: Path) -> set[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="낙찰 파이프라인 품질 점검")
     parser.add_argument("--db", default="", help="SQLite DB 경로")
-    parser.add_argument("--xlsx", default="/mnt/a/c/전체_통합_데이터.xlsx", help="시드 엑셀 경로")
+    parser.add_argument("--xlsx", default=str(master_path()), help="시드 엑셀 경로")
     parser.add_argument("--from", dest="from_dt", default="", help="시작일시(YYYY-MM-DD[ HH:MM[:SS]])")
     parser.add_argument("--to", dest="to_dt", default="", help="종료일시(YYYY-MM-DD[ HH:MM[:SS]])")
     parser.add_argument("--regions", default="전국,대구,경북", help="허용 지역 목록(콤마구분)")

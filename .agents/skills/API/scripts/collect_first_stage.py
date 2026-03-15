@@ -11,6 +11,12 @@ from pathlib import Path
 
 import pandas as pd
 
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from nara_workspace_paths import default_env_path
+
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 RULE_PROFILE_PATH = SKILL_ROOT / "rule_profile.json"
 DEFAULT_RULE_PROFILE = json.loads(RULE_PROFILE_PATH.read_text(encoding="utf-8")) if RULE_PROFILE_PATH.exists() else {}
@@ -36,7 +42,7 @@ def main() -> None:
     parser.add_argument("--end", required=True, type=parse_ymdhm)
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--keywords", default="")
-    parser.add_argument("--env-file", default="/mnt/a/c/.env")
+    parser.add_argument("--env-file", default=str(default_env_path()))
     parser.add_argument("--max-notices", type=int, default=None)
     parser.add_argument("--clean", action="store_true", help="실행 전 output-dir 초기화")
     parser.add_argument("--rule-profile", default=str(RULE_PROFILE_PATH), help="정본 규칙 프로필 JSON")
@@ -47,7 +53,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    collector = Path("/mnt/a/c/cc-feature-implementer/src/fetch_keyword_bids_api_per_notice.py")
+    collector = PROJECT_ROOT / "cc-feature-implementer" / "src" / "fetch_keyword_bids_api_per_notice.py"
     if not collector.exists():
         raise FileNotFoundError(f"수집 스크립트가 없습니다: {collector}")
 

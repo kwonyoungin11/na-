@@ -54,3 +54,22 @@ tmp-verify-force-refresh/
 전체_통합_데이터_전처리요약_*.json
 image.png
 nul
+.aider*
+
+# nara workspace generated data
+/nara-workspace/*
+!/nara-workspace/README.md
+!/nara-workspace/scripts/
+!/nara-workspace/scripts/**
+
+# local runtime scratch
+/.omc/
+/규칙.md
+/image copy 2.png
+/image copy 3.png
+/image copy 4.png
+/image copy 5.png
+/image copy 6.png
+
+# cli-anything local session
+**/agent-harness/.session/

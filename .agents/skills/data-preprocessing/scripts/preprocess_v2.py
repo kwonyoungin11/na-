@@ -10,12 +10,18 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 from pathlib import Path
+import sys
 import warnings
 warnings.filterwarnings('ignore')
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
-DEFAULT_SOURCE_DIR = PROJECT_ROOT / 'data'
-DEFAULT_OUTPUT_DIR = PROJECT_ROOT / 'data전처리완료'
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from nara_workspace_paths import master_dir, source_data_dir
+
+DEFAULT_SOURCE_DIR = source_data_dir()
+DEFAULT_OUTPUT_DIR = master_dir()
 
 class BiddingPreprocessor:
     """
@@ -591,16 +597,15 @@ class BiddingPreprocessor:
             removed_region_count = original_region_count - len(master_df)
             self.log_message(f"지역제한 필터링({self.region_scope}): {removed_region_count}건 제거")
 
-        # ✅ 제외 업체 정리: 한국문화재연구원 제외, 효림은 데이터 삭제
+        # ✅ 제외 업체 정리: 효림 데이터 삭제
         if '업체명' in master_df.columns:
             original_retired_count = len(master_df)
             retired_mask = (
-                master_df['업체명'].astype(str).str.contains('한국문화재연구원', na=False)
-                | master_df['업체명'].astype(str).str.contains('효림', na=False)
+                master_df['업체명'].astype(str).str.contains('효림', na=False)
             )
             master_df = master_df[~retired_mask].copy()
             removed_retired_count = original_retired_count - len(master_df)
-            self.log_message(f"제외업체 필터링(한국문화재연구원/효림): {removed_retired_count}건 제거")
+            self.log_message(f"제외업체 필터링(효림): {removed_retired_count}건 제거")
 
         # ✅ 기초대비사정률 필터링 (99~101% 범위만)
         original_count = len(master_df)

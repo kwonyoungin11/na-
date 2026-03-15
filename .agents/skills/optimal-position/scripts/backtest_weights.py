@@ -14,6 +14,7 @@ import json
 from pathlib import Path
 from datetime import datetime, timedelta
 from collections import defaultdict
+import sys
 
 try:
     from scipy.stats import spearmanr, gaussian_kde
@@ -23,8 +24,13 @@ except ImportError:
 
 # 경로 설정
 BASE_DIR = Path(__file__).resolve().parents[4]
-DATA_PATH = BASE_DIR / "전체_통합_데이터.xlsx"
-OUTPUT_DIR = BASE_DIR / "output"
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+
+from nara_workspace_paths import analysis_dir, master_path
+
+DATA_PATH = master_path()
+OUTPUT_DIR = analysis_dir() / "optimal-position"
 
 # 분석 범위: 기초대비사정률 99.5~100.0%
 MIN_RATE = 99.5

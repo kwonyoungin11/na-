@@ -22,14 +22,22 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from nara_workspace_paths import (
+    collection_log_path,
+    daegu_gyeongbuk_master_path,
+    default_env_path,
+    output_dir,
+    master_path,
+)
+
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_ROOT = SKILL_ROOT / "scripts"
 SKILL_KEY_FILE = SKILL_ROOT / ".api_key.env"
-DEFAULT_SOURCE_ENV = PROJECT_ROOT / ".env"
+DEFAULT_SOURCE_ENV = default_env_path()
 DEFAULT_LEGACY_ENV = PROJECT_ROOT / "공공데이터포털api" / ".env"
-DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "공공데이터포털api" / "output"
-DEFAULT_COLLECTION_LOG = DEFAULT_OUTPUT_DIR / "collection_history.jsonl"
-DEFAULT_MASTER_PATH = PROJECT_ROOT / "전체_통합_데이터.xlsx"
+DEFAULT_OUTPUT_DIR = output_dir()
+DEFAULT_COLLECTION_LOG = collection_log_path()
+DEFAULT_MASTER_PATH = master_path()
 RULE_PROFILE_PATH = SKILL_ROOT / "rule_profile.json"
 DEFAULT_RULE_PROFILE = json.loads(RULE_PROFILE_PATH.read_text(encoding="utf-8")) if RULE_PROFILE_PATH.exists() else {}
 DEFAULT_KEYWORDS = [
@@ -273,7 +281,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--operations",
-        default="thng,cnstwk,servc,frgcpt",
+        default="servc",
         help="수집 오퍼레이션(콤마구분)",
     )
     parser.add_argument(
@@ -293,7 +301,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--allowed-regions",
-        default="전국,대구,경북",
+        default=",".join(DEFAULT_RULE_PROFILE.get("allowed_regions", ["전국", "경북"])),
         help="전처리 허용 지역 토큰(콤마구분)",
     )
     parser.add_argument(
@@ -426,13 +434,13 @@ def main() -> int:
         incoming_df = pd.read_excel(raw_master_path) if raw_master_path.exists() else pd.DataFrame()
         if args.skip_master_sync:
             merged_df = incoming_df.copy()
-            dg_gb_path = master_path.parent / "대구경북통합데이터.xlsx"
+            dg_gb_path = daegu_gyeongbuk_master_path()
             if "지역제한" in merged_df.columns:
                 dg_gb_df = merged_df[
                     merged_df["지역제한"].astype(str).apply(
                         lambda x: mod.has_allowed_region(
                             x,
-                            ["대구", "경북"],
+                            ["경북"],
                             include_nationwide_override=False,
                         )
                     )
@@ -450,13 +458,13 @@ def main() -> int:
             master_path.parent.mkdir(parents=True, exist_ok=True)
             merged_df.to_excel(master_path, index=False)
 
-            dg_gb_path = master_path.parent / "대구경북통합데이터.xlsx"
+            dg_gb_path = daegu_gyeongbuk_master_path()
             if "지역제한" in merged_df.columns:
                 dg_gb_df = merged_df[
                     merged_df["지역제한"].astype(str).apply(
                         lambda x: mod.has_allowed_region(
                             x,
-                            ["대구", "경북"],
+                            ["경북"],
                             include_nationwide_override=False,
                         )
                     )
@@ -497,7 +505,7 @@ def main() -> int:
         print(f"- raw_master: {raw_master_path}")
         print(f"- final_master: {master_path}")
         print(f"- final_rows: {len(merged_df):,}")
-        print(f"- daegu_gyeongbuk_only: {dg_gb_path} ({len(dg_gb_df):,}행)")
+        print(f"- gyeongbuk_only: {dg_gb_path} ({len(dg_gb_df):,}행)")
 
     _append_collection_log(
         log_path,
@@ -516,7 +524,7 @@ def main() -> int:
             "skip_master_sync": bool(args.skip_master_sync),
             "raw_master_path": str(raw_master_path),
             "master_path": str(master_path),
-            "daegu_gyeongbuk_path": str(dg_gb_path),
+            "gyeongbuk_path": str(dg_gb_path),
             "raw_rows": int(len(incoming_df)),
             "final_rows": int(len(merged_df)),
             "run_finished_at": datetime.now().isoformat(timespec="seconds"),

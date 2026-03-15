@@ -4,6 +4,11 @@ namespace NaraCollector.Desktop.Services;
 
 public sealed class DefaultAppPathResolver : IAppPathResolver
 {
+    public const string WorkspaceRootEnvironmentVariable = "NARA_WORKSPACE_ROOT";
+    public const string AppRootEnvironmentVariable = "NARA_APP_ROOT";
+
+    private const string WorkspaceLinuxRoot = "/mnt/a/c/nara-workspace";
+    private const string WorkspaceWindowsRoot = @"A:\\c\\nara-workspace";
     private const string SkillScriptLinuxPath = "/mnt/a/c/.agents/skills/API/scripts/run_master_sync_pipeline.py";
     private const string SkillScriptWindowsPath = @"A:\\c\\.agents\\skills\\API\\scripts\\run_master_sync_pipeline.py";
     private const string ProjectEnvLinuxPath = "/mnt/a/c/.env";
@@ -12,12 +17,33 @@ public sealed class DefaultAppPathResolver : IAppPathResolver
     private const string AnalysisProfileWindowsPath = @"A:\\c\\.agents\\skills\\shadow-strategy\\analysis_profile.json";
     private const string ApiRuleProfileLinuxPath = "/mnt/a/c/.agents/skills/API/rule_profile.json";
     private const string ApiRuleProfileWindowsPath = @"A:\\c\\.agents\\skills\\API\\rule_profile.json";
-    private const string ConsoleAnalysisLinuxPath = "/mnt/a/c/console-workspace/analysis";
-    private const string ConsoleAnalysisWindowsPath = @"A:\\c\\console-workspace\\analysis";
-    private const string DefaultMasterLinuxPath = "/mnt/a/c/전체_통합_데이터.xlsx";
-    private const string DefaultMasterWindowsPath = @"A:\\c\\전체_통합_데이터.xlsx";
-    private const string DefaultOutputLinuxPath = "/mnt/a/c/공공데이터포털api/output";
-    private const string DefaultOutputWindowsPath = @"A:\\c\\공공데이터포털api\\output";
+
+    public static string ResolveDefaultWorkspaceRoot()
+    {
+        var fromEnv = Environment.GetEnvironmentVariable(WorkspaceRootEnvironmentVariable);
+        if (!string.IsNullOrWhiteSpace(fromEnv))
+        {
+            return fromEnv.Trim();
+        }
+
+        return OperatingSystem.IsWindows()
+            ? WorkspaceWindowsRoot
+            : WorkspaceLinuxRoot;
+    }
+
+    public static string ResolveDefaultAppRootDirectory()
+    {
+        var fromEnv = Environment.GetEnvironmentVariable(AppRootEnvironmentVariable);
+        if (!string.IsNullOrWhiteSpace(fromEnv))
+        {
+            return fromEnv.Trim();
+        }
+
+        return Path.Combine(ResolveDefaultWorkspaceRoot(), "app");
+    }
+
+    public static string ResolveDefaultAppLogDirectory()
+        => Path.Combine(ResolveDefaultAppRootDirectory(), "logs");
 
     public string ResolveMasterPath(string? providedPath)
     {
@@ -32,9 +58,16 @@ public sealed class DefaultAppPathResolver : IAppPathResolver
             return fromEnv.Trim();
         }
 
-        var runtimeCandidates = OperatingSystem.IsWindows()
-            ? new[] { DefaultMasterWindowsPath, DefaultMasterLinuxPath }
-            : new[] { DefaultMasterLinuxPath, DefaultMasterWindowsPath };
+        var workspaceFromEnv = Environment.GetEnvironmentVariable(WorkspaceRootEnvironmentVariable);
+        if (!string.IsNullOrWhiteSpace(workspaceFromEnv))
+        {
+            return Path.Combine(workspaceFromEnv.Trim(), "master", "전체_통합_데이터.xlsx");
+        }
+
+        var runtimeCandidates = GetWorkspaceRootCandidates()
+            .Select(root => Path.Combine(root, "master", "전체_통합_데이터.xlsx"))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
 
         foreach (var candidate in runtimeCandidates)
         {
@@ -60,9 +93,22 @@ public sealed class DefaultAppPathResolver : IAppPathResolver
             return fromEnv.Trim();
         }
 
-        return OperatingSystem.IsWindows()
-            ? DefaultOutputWindowsPath
-            : DefaultOutputLinuxPath;
+        var workspaceFromEnv = Environment.GetEnvironmentVariable(WorkspaceRootEnvironmentVariable);
+        if (!string.IsNullOrWhiteSpace(workspaceFromEnv))
+        {
+            return Path.Combine(workspaceFromEnv.Trim(), "output");
+        }
+
+        foreach (var candidate in GetWorkspaceRootCandidates()
+                     .Select(root => Path.Combine(root, "output")))
+        {
+            if (Directory.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return Path.Combine(ResolveDefaultWorkspaceRoot(), "output");
     }
 
     public string? ResolveEnvPath()
@@ -73,9 +119,13 @@ public sealed class DefaultAppPathResolver : IAppPathResolver
             return fromEnv.Trim();
         }
 
-        var candidates = OperatingSystem.IsWindows()
-            ? new[] { ProjectEnvWindowsPath, ProjectEnvLinuxPath }
-            : new[] { ProjectEnvLinuxPath, ProjectEnvWindowsPath };
+        var candidates = GetWorkspaceRootCandidates()
+            .Select(root => Path.Combine(root, ".env"))
+            .Concat(OperatingSystem.IsWindows()
+                ? new[] { ProjectEnvWindowsPath, ProjectEnvLinuxPath }
+                : new[] { ProjectEnvLinuxPath, ProjectEnvWindowsPath })
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
 
         return candidates.FirstOrDefault(File.Exists);
     }
@@ -146,9 +196,16 @@ public sealed class DefaultAppPathResolver : IAppPathResolver
             return fromEnv.Trim();
         }
 
-        var candidates = OperatingSystem.IsWindows()
-            ? new[] { ConsoleAnalysisWindowsPath, ConsoleAnalysisLinuxPath }
-            : new[] { ConsoleAnalysisLinuxPath, ConsoleAnalysisWindowsPath };
+        var workspaceFromEnv = Environment.GetEnvironmentVariable(WorkspaceRootEnvironmentVariable);
+        if (!string.IsNullOrWhiteSpace(workspaceFromEnv))
+        {
+            return Path.Combine(workspaceFromEnv.Trim(), "analysis");
+        }
+
+        var candidates = GetWorkspaceRootCandidates()
+            .Select(root => Path.Combine(root, "analysis"))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
 
         foreach (var candidate in candidates)
         {
@@ -159,6 +216,26 @@ public sealed class DefaultAppPathResolver : IAppPathResolver
         }
 
         return candidates[0];
+    }
+
+    private static IEnumerable<string> GetWorkspaceRootCandidates()
+    {
+        var fromEnv = Environment.GetEnvironmentVariable(WorkspaceRootEnvironmentVariable);
+        if (!string.IsNullOrWhiteSpace(fromEnv))
+        {
+            yield return fromEnv.Trim();
+        }
+
+        if (OperatingSystem.IsWindows())
+        {
+            yield return WorkspaceWindowsRoot;
+            yield return WorkspaceLinuxRoot;
+        }
+        else
+        {
+            yield return WorkspaceLinuxRoot;
+            yield return WorkspaceWindowsRoot;
+        }
     }
 
     private static string ResolveOptionalPath(

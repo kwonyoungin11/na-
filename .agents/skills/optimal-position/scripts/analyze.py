@@ -26,6 +26,7 @@ import argparse
 from pathlib import Path
 from datetime import datetime, timedelta
 from collections import defaultdict
+import sys
 
 try:
     from scipy.stats import gaussian_kde
@@ -40,10 +41,15 @@ logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
 
 # 경로 설정
 BASE_DIR = Path(__file__).resolve().parents[4]
-DATA_PATH = BASE_DIR / "전체_통합_데이터.xlsx"
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+
+from nara_workspace_paths import analysis_dir, master_path
+
+DATA_PATH = master_path()
 COLOR_MAP_PATH = BASE_DIR / ".agents" / "skills" / "fixed-bidder-map" / "bidder_colors.json"
 SHADOW_STRATEGY_PATH = BASE_DIR / ".agents" / "skills" / "shadow-strategy" / "output"
-OUTPUT_DIR = BASE_DIR / "console-workspace" / "analysis" / "optimal-position"
+OUTPUT_DIR = analysis_dir() / "optimal-position"
 
 # 분석 기간 정의
 PERIODS = {

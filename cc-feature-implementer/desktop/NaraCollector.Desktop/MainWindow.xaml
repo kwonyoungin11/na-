@@ -153,21 +153,12 @@
                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                         <StackPanel Orientation="Vertical">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="오늘 이후 입찰공고" />
+                                <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="동국 참여 낙찰공고" />
                                 <TextBlock Margin="8,3,0,0"
                                            Foreground="{StaticResource TextMutedBrush}"
                                            FontSize="12"
-                                           Text="{Binding IncrementalBidSummaryText}" />
+                                           Text="{Binding IncrementalAwardSummaryText}" />
                             </StackPanel>
-                            <TextBlock Margin="0,4,0,0"
-                                       Foreground="#8A4B12"
-                                       FontSize="12"
-                                       FontWeight="SemiBold"
-                                       Text="{Binding NextBidRecommendationText}" />
-                            <TextBlock Margin="0,2,0,0"
-                                       Foreground="{StaticResource TextMutedBrush}"
-                                       FontSize="11"
-                                       Text="{Binding BidRecommendationReasonText}" />
                         </StackPanel>
                     </StackPanel>
 
@@ -175,6 +166,22 @@
                                 Orientation="Horizontal"
                                 HorizontalAlignment="Center"
                                 VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal"
+                                    VerticalAlignment="Center"
+                                    Margin="0,0,14,0">
+                            <TextBlock VerticalAlignment="Center"
+                                       Margin="0,0,8,0"
+                                       Foreground="{StaticResource TextMutedBrush}"
+                                       FontSize="12"
+                                       Text="지역" />
+                            <ComboBox Width="148"
+                                      Height="38"
+                                      SelectedValuePath="Tag"
+                                      SelectedValue="{Binding SelectedRegion, Mode=TwoWay}">
+                                <ComboBoxItem Content="전국" Tag="전국" />
+                                <ComboBoxItem Content="경상북도" Tag="경북" />
+                            </ComboBox>
+                        </StackPanel>
                         <Button Width="138"
                                 Height="48"
                                 Margin="0,0,10,0"
@@ -202,46 +209,10 @@
                                 Click="ToggleAutoCollectClick" />
                     </StackPanel>
 
-                    <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                        <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="동국 연동 낙찰공고" />
-                        <TextBlock Margin="8,3,0,0"
-                                   Foreground="{StaticResource TextMutedBrush}"
-                                   FontSize="12"
-                                   Text="{Binding IncrementalAwardSummaryText}" />
-                    </StackPanel>
                 </Grid>
 
                 <Grid Grid.Row="2">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="18" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-
-                    <DataGrid Grid.Column="0"
-                              ItemsSource="{Binding VisibleBidNoticeItems}"
-                              SelectedItem="{Binding SelectedBidNoticeItem, Mode=TwoWay}"
-                              AutoGenerateColumns="False"
-                              CanUserAddRows="False"
-                              IsReadOnly="True"
-                              EnableRowVirtualization="True"
-                              EnableColumnVirtualization="True"
-                              RowHeaderWidth="0"
-                              Background="#96FFFFFF"
-                              RowBackground="#78FFFFFF"
-                              AlternatingRowBackground="#54FFFFFF"
-                              BorderBrush="{StaticResource PreviewFrameBrush}"
-                              BorderThickness="1">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="입찰마감" Binding="{Binding NoticeDate, StringFormat=yyyy-MM-dd HH:mm}" Width="1.05*" />
-                            <DataGridTextColumn Header="공고번호" Binding="{Binding NoticeNumber}" Width="1.0*" />
-                            <DataGridTextColumn Header="공고명" Binding="{Binding NoticeName}" Width="2.4*" />
-                            <DataGridTextColumn Header="발주처" Binding="{Binding OrderingAgency}" Width="1.25*" />
-                            <DataGridTextColumn Header="지역" Binding="{Binding RegionText}" Width="0.7*" />
-                        </DataGrid.Columns>
-                    </DataGrid>
-
-                    <DataGrid Grid.Column="2"
+                    <DataGrid
                               ItemsSource="{Binding VisibleAwardNoticeItems}"
                               SelectedItem="{Binding SelectedAwardNoticeItem, Mode=TwoWay}"
                               AutoGenerateColumns="False"
@@ -260,7 +231,8 @@
                             <DataGridTextColumn Header="공고번호" Binding="{Binding NoticeNumber}" Width="1.0*" />
                             <DataGridTextColumn Header="공고명" Binding="{Binding NoticeName}" Width="2.4*" />
                             <DataGridTextColumn Header="발주처" Binding="{Binding OrderingAgency}" Width="1.25*" />
-                            <DataGridTextColumn Header="참여/사정률" Binding="{Binding ParticipantCountText}" Width="0.85*" />
+                            <DataGridTextColumn Header="지역" Binding="{Binding RegionText}" Width="0.7*" />
+                            <DataGridTextColumn Header="동국순위/낙찰" Binding="{Binding ParticipantCountText}" Width="1.25*" />
                         </DataGrid.Columns>
                     </DataGrid>
                 </Grid>

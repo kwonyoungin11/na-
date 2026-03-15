@@ -17,6 +17,7 @@ import calendar
 import json
 import re
 import time
+import sys
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -30,9 +31,14 @@ from urllib3.util import Retry
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from nara_workspace_paths import default_env_path, output_dir
+
 API_ROOT = PROJECT_ROOT / "공공데이터포털api"
-DEFAULT_ENV_PATH = API_ROOT / ".env"
-DEFAULT_OUTPUT_DIR = API_ROOT / "output"
+DEFAULT_ENV_PATH = default_env_path()
+DEFAULT_OUTPUT_DIR = output_dir()
 
 SCSBID_BASE = "https://apis.data.go.kr/1230000/as/ScsbidInfoService"
 BID_BASE = "https://apis.data.go.kr/1230000/ad/BidPublicInfoService"
@@ -53,6 +59,7 @@ BID_NOTICE_OPS = {
     "servc": "getBidPblancListInfoServcPPSSrch",
     "frgcpt": "getBidPblancListInfoFrgcptPPSSrch",
 }
+PARTICIPANT_REGION_OPERATION = "getBidPblancListInfoPrtcptPsblRgn"
 
 TARGET_SCHEMA_COLUMNS = [
     "공고번호",
@@ -74,9 +81,9 @@ TARGET_SCHEMA_COLUMNS = [
     "투찰일시",
 ]
 
-DEFAULT_ALLOWED_REGIONS = ["전국", "대구", "경북"]
+DEFAULT_ALLOWED_REGIONS = ["전국", "경북"]
 DEFAULT_TARGET_COMPANY_TERMS = ["문화재연구원"]
-RETIRED_COMPANY_TOKENS = ("한국문화재연구원", "효림")
+RETIRED_COMPANY_TOKENS = ("효림",)
 REGION_CANONICAL_ORDER = [
     "전국",
     "서울",
@@ -537,6 +544,48 @@ def normalize_bid_no(bid_ntce_no: str, bid_ntce_ord: Optional[str]) -> str:
     return bid_ntce_no
 
 
+def normalize_ord(value: object) -> str:
+    text = clean_text(value)
+    if not text:
+        return "000"
+    return text.zfill(3) if text.isdigit() else text
+
+
+def fetch_participant_region_names(
+    session: Session,
+    service_key: str,
+    bid_ntce_no: str,
+    bid_ntce_ord: object,
+    *,
+    num_of_rows: int,
+    delay_sec: float,
+) -> str:
+    if not clean_text(bid_ntce_no):
+        return ""
+
+    items = fetch_paged(
+        session=session,
+        base_url=BID_BASE,
+        operation=PARTICIPANT_REGION_OPERATION,
+        service_key=service_key,
+        base_params={
+            "inqryDiv": "2",
+            "bidNtceNo": clean_text(bid_ntce_no),
+            "bidNtceOrd": normalize_ord(bid_ntce_ord),
+            "type": "json",
+        },
+        num_of_rows=num_of_rows,
+        delay_sec=delay_sec,
+    )
+
+    names: list[str] = []
+    for item in items:
+        name = clean_text(item.get("prtcptPsblRgnNm"))
+        if name and name not in names:
+            names.append(name)
+    return ",".join(names)
+
+
 def split_openg_corp_info(openg_corp_info: str) -> List[Dict]:
     """opengCorpInfo 파싱
 
@@ -651,6 +700,8 @@ def collect_raw(config: PipelineConfig, *, session: Optional[Session] = None) ->
         "notice_rows": 0,
     }
 
+    participant_region_cache: dict[tuple[str, str], str] = {}
+
     for month_str, begin, end in months:
         _log(f"[수집] 월={month_str}, 기간={begin}~{end}")
         month_openg: List[Dict] = []
@@ -702,6 +753,29 @@ def collect_raw(config: PipelineConfig, *, session: Optional[Session] = None) ->
                 )
                 for item in notice_items:
                     row = dict(item)
+                    region_key = (
+                        clean_text(row.get("bidNtceNo")),
+                        normalize_ord(row.get("bidNtceOrd")),
+                    )
+                    if region_key[0]:
+                        if region_key not in participant_region_cache:
+                            try:
+                                participant_region_cache[region_key] = fetch_participant_region_names(
+                                    session,
+                                    config.service_key,
+                                    region_key[0],
+                                    region_key[1],
+                                    num_of_rows=config.num_of_rows,
+                                    delay_sec=config.request_delay_sec,
+                                )
+                            except Exception as exc:
+                                participant_region_cache[region_key] = ""
+                                _log(
+                                    f"[WARN] 참가가능지역 조회 실패 "
+                                    f"{normalize_bid_no(region_key[0], region_key[1])}: {exc}"
+                                )
+                        if participant_region_cache[region_key]:
+                            row["prtcptPsblRgnNm"] = participant_region_cache[region_key]
                     row["_src_operation"] = notice_op
                     row["_src_group"] = op
                     row["_src_month"] = month_str
@@ -967,8 +1041,10 @@ def preprocess_to_master(
 
         region_raw = ""
         for region_candidate in (
+            add.get("prtcptPsblRgnNm"),
             add.get("prtcptLmtRgnNm"),
             add.get("rgnLmtBidLocplcJdgmBssNm"),
+            item.get("prtcptPsblRgnNm"),
             item.get("prtcptLmtRgnNm"),
             item.get("regionNames"),
         ):
@@ -985,9 +1061,21 @@ def preprocess_to_master(
             if incentive_regions:
                 region_raw = ",".join(sorted(set(incentive_regions)))
         if not region_raw:
-            # 백업: 공고/수요기관명에서 유추
-            base_org = f"{item.get('ntceInsttNm','')} {item.get('dminsttNm','')}"
-            region_raw = infer_region_from_org_text(base_org)
+            unrestricted_nationwide = any(
+                clean_text(flag).upper() == "N"
+                for flag in (
+                    add.get("rgnLmtYn"),
+                    add.get("bidPrtcptLmtYn"),
+                    add.get("cmmnSpldmdCorpRgnLmtYn"),
+                    add.get("rgnLmtBidLocplcJdgmBssCd"),
+                    item.get("rgnLmtYn"),
+                    item.get("bidPrtcptLmtYn"),
+                    item.get("cmmnSpldmdCorpRgnLmtYn"),
+                    item.get("rgnLmtBidLocplcJdgmBssCd"),
+                )
+            )
+            if unrestricted_nationwide:
+                region_raw = "전국"
 
         participant_count = int(parse_float(item.get("prtcptCnum")) or len(corp_list))
 
@@ -1052,7 +1140,7 @@ def preprocess_to_master(
     df = df.drop_duplicates(subset=["공고번호", "업체명", "순위", "투찰금액"], keep="first")
 
     # 2차 전처리 규칙(기본 적용):
-    # - 지역제한: 전국(명시된 전국), 대구, 경북
+    # - 지역제한: 전국(명시된 전국), 경북
     # - 공고당 업체수: 5개 이상
     # - 공고 내 문화재연구원/문화유산연구원 참여 1건 이상
     # - 폐업/제외업체(한국문화재연구원, 효림) 제외
@@ -1149,7 +1237,7 @@ def save_outputs(df: pd.DataFrame, output_dir: Path) -> Dict:
 
     all_path = clean_dir / "전체통합데이터_api수집.xlsx"
     nationwide_path = clean_dir / "전체통합데이터_api수집_전국.xlsx"
-    dg_gb_path = clean_dir / "전체통합데이터_api수집_대구경북.xlsx"
+    dg_gb_path = clean_dir / "전체통합데이터_api수집_경북.xlsx"
 
     df.to_excel(all_path, index=False)
 
@@ -1166,7 +1254,7 @@ def save_outputs(df: pd.DataFrame, output_dir: Path) -> Dict:
         df["지역제한"].astype(str).apply(
             lambda x: has_allowed_region(
                 x,
-                ["대구", "경북"],
+                ["경북"],
                 include_nationwide_override=False,
             )
         )
@@ -1178,10 +1266,10 @@ def save_outputs(df: pd.DataFrame, output_dir: Path) -> Dict:
     return {
         "all": str(all_path),
         "nationwide": str(nationwide_path),
-        "daegu_gyeongbuk": str(dg_gb_path),
+        "gyeongbuk": str(dg_gb_path),
         "all_rows": int(len(df)),
         "nationwide_rows": int(len(nationwide_df)),
-        "daegu_gyeongbuk_rows": int(len(dg_gb_df)),
+        "gyeongbuk_rows": int(len(dg_gb_df)),
     }
 
 
@@ -1247,7 +1335,7 @@ def run_pipeline(config: PipelineConfig) -> Dict:
     _log(f"report: {report_path}")
     _log(f"전체: {out_stats['all']} ({out_stats['all_rows']:,}건)")
     _log(f"전국: {out_stats['nationwide']} ({out_stats['nationwide_rows']:,}건)")
-    _log(f"대구경북: {out_stats['daegu_gyeongbuk']} ({out_stats['daegu_gyeongbuk_rows']:,}건)")
+    _log(f"경북: {out_stats['gyeongbuk']} ({out_stats['gyeongbuk_rows']:,}건)")
 
     return report
 
@@ -1265,15 +1353,15 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--operations",
-        default="thng,cnstwk,servc,frgcpt",
-        help="조회 오퍼레이션 그룹(콤마구분): thng,cnstwk,servc,frgcpt",
+        default="servc",
+        help="조회 오퍼레이션 그룹(콤마구분, 기본: servc)",
     )
     parser.add_argument("--num-of-rows", type=int, default=100, help="페이지당 조회 건수")
     parser.add_argument("--delay-sec", type=float, default=0.03, help="요청 간 지연(초)")
     parser.add_argument(
         "--allowed-regions",
-        default="전국,대구,경북",
-        help="허용 지역 토큰(콤마구분). 예: 전국,대구,경북",
+        default="전국,경북",
+        help="허용 지역 토큰(콤마구분). 예: 전국,경북",
     )
     parser.add_argument(
         "--min-participants",

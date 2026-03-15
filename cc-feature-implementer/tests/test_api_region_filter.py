@@ -17,14 +17,15 @@ def _load_pipeline_module():
     return module
 
 
-def test_has_allowed_region_only_nationwide_daegu_gyeongbuk():
+def test_has_allowed_region_only_nationwide_and_gyeongbuk():
     mod = _load_pipeline_module()
-    allowed = ["전국", "대구", "경북"]
+    allowed = ["전국", "경북"]
 
     assert mod.has_allowed_region("전국", allowed)
-    assert mod.has_allowed_region("대구광역시", allowed)
     assert mod.has_allowed_region("경상북도", allowed)
+    assert mod.has_allowed_region("대구광역시/경상북도", allowed)
 
+    assert not mod.has_allowed_region("대구광역시", allowed)
     assert not mod.has_allowed_region("전라남도", allowed)
     assert not mod.has_allowed_region("충청북도", allowed)
     assert not mod.has_allowed_region("", allowed)

@@ -214,7 +214,7 @@
                             <StackPanel Grid.Row="0"
                                         Margin="0,0,0,2"
                                         Orientation="Horizontal"
-                                        HorizontalAlignment="Right">
+                                        HorizontalAlignment="Center">
                                 <Button MinWidth="52"
                                         Padding="8,2"
                                         FontSize="11"

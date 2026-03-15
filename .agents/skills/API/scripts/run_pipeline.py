@@ -9,9 +9,15 @@ from pathlib import Path
 
 import pandas as pd
 
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from nara_workspace_paths import default_env_path, first_stage_dir, master_path, reports_dir
+
 API_SKILL_ROOT = Path(__file__).resolve().parents[1]
 FIRST_STAGE_SCRIPT = API_SKILL_ROOT / "scripts" / "collect_first_stage.py"
-SECOND_STAGE_SCRIPT = Path("/mnt/a/c/.agents/skills/data-preprocessing/scripts/preprocess_api_stage2.py")
+SECOND_STAGE_SCRIPT = PROJECT_ROOT / ".agents" / "skills" / "data-preprocessing" / "scripts" / "preprocess_api_stage2.py"
 RULE_PROFILE_PATH = API_SKILL_ROOT / "rule_profile.json"
 
 
@@ -58,23 +64,23 @@ def main() -> None:
     parser.add_argument("--rule-profile", default=str(RULE_PROFILE_PATH), help="정본 규칙 프로필 JSON")
     parser.add_argument(
         "--first-stage-dir",
-        default="/mnt/a/c/data/공고별_개별데이터_파이프라인",
+        default=str(first_stage_dir("pipeline")),
         help="1차 수집 산출 디렉터리",
     )
     parser.add_argument(
         "--final-output",
-        default="/mnt/a/c/전체_통합_데이터.xlsx",
+        default=str(master_path()),
         help="2차 전처리 최종 통합 엑셀",
     )
     parser.add_argument(
         "--audit-output",
-        default="/mnt/a/c/2차전처리_판정로그_파이프라인.xlsx",
+        default=str(reports_dir() / "2차전처리_판정로그_파이프라인.xlsx"),
         help="2차 전처리 판정 로그 엑셀",
     )
     parser.add_argument("--allowed-regions", default="", help="비우면 규칙 프로필 기본값 사용")
     parser.add_argument("--min-participants", type=int, default=None, help="비우면 규칙 프로필 기본값 사용")
     parser.add_argument("--target-company-terms", default="", help="비우면 규칙 프로필 기본값 사용")
-    parser.add_argument("--env-file", default="/mnt/a/c/.env", help="서비스키 .env 경로")
+    parser.add_argument("--env-file", default=str(default_env_path()), help="서비스키 .env 경로")
     parser.add_argument("--max-notices", type=int, default=None, help="테스트용 1차 수집 상한")
     parser.add_argument("--clean-first-stage", action="store_true", help="1차 수집 디렉터리 초기화")
     parser.add_argument("--skip-collect", action="store_true", help="1차 수집 생략")

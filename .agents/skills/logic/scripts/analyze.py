@@ -21,14 +21,19 @@ from pathlib import Path
 import pandas as pd
 
 BASE = Path("/mnt/a/c")
-CONSOLE = BASE / "console-workspace"
-MASTER = BASE / "전체_통합_데이터.xlsx"
-ANALYSIS_DIR = CONSOLE / "analysis"
-OUTPUT_DIR = CONSOLE / "output"
-CHART_DIR = OUTPUT_DIR / "charts"
+if str(BASE) not in sys.path:
+    sys.path.insert(0, str(BASE))
+
+from nara_workspace_paths import analysis_dir, charts_dir, master_path, output_dir, scripts_dir, workspace_root
+
+WORKSPACE = workspace_root()
+MASTER = master_path()
+ANALYSIS_DIR = analysis_dir()
+OUTPUT_DIR = output_dir()
+CHART_DIR = charts_dir()
 VIZ_PERIODS = ("all", "6m", "3m", "1m")
 
-API_WRAPPER = CONSOLE / "scripts" / "run_console_api_pipeline.sh"
+API_WRAPPER = scripts_dir() / "run_api_pipeline.sh"
 CROWDING = BASE / "cc-feature-implementer" / "src" / "analyze_crowding_probability.py"
 COLLISION = BASE / "cc-feature-implementer" / "src" / "analyze_collision_left_space.py"
 SHADOW = BASE / ".agents" / "skills" / "shadow-strategy" / "scripts" / "analyze.py"
@@ -36,8 +41,10 @@ VIZ = BASE / ".agents" / "skills" / "bidder-visualization" / "scripts" / "visual
 FIXED_BIDDER_DETAILED = BASE / ".agents" / "skills" / "fixed-bidder-map" / "scripts" / "detailed_map.py"
 SHADOW_MODULE_DIR = BASE / ".agents" / "skills" / "shadow-strategy" / "modules"
 REPO_SRC_DIR = BASE / "cc-feature-implementer" / "src"
-sys.path.insert(0, str(SHADOW_MODULE_DIR))
-sys.path.insert(0, str(REPO_SRC_DIR))
+if str(SHADOW_MODULE_DIR) not in sys.path:
+    sys.path.insert(0, str(SHADOW_MODULE_DIR))
+if str(REPO_SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(REPO_SRC_DIR))
 
 from conditional_advantage_strategy import build_conditional_advantage_payload
 from profile_loader import DEFAULT_ANALYSIS_PROFILE_PATH, load_analysis_profile, load_api_rule_profile
@@ -223,7 +230,7 @@ def main() -> None:
 
     if args.dry_run:
         print("[DRY-RUN] 콘솔 전체 파이프라인 실행 계획")
-        print(f"- console_root: {CONSOLE}")
+        print(f"- workspace_root: {WORKSPACE}")
         print(f"- source_file: {source_file}")
         print(f"- analysis_input: {analysis_input}")
         print(f"- fixed_bidder_map_output: {fixed_map_out}")
@@ -248,7 +255,7 @@ def main() -> None:
             print("[PLAN]", " ".join(shlex.quote(part) for part in viz_cmd))
         return
 
-    CONSOLE.mkdir(parents=True, exist_ok=True)
+    WORKSPACE.mkdir(parents=True, exist_ok=True)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     CHART_DIR.mkdir(parents=True, exist_ok=True)
 

@@ -6,8 +6,6 @@
     "시굴조사",
     "지표조사",
     "표본조사",
-    "매장유산",
-    "문화재조사",
     "문화재발굴조사"
   ],
   "recovery_keywords": [
@@ -84,7 +82,6 @@
   ],
   "allowed_regions": [
     "전국",
-    "대구",
     "경북"
   ],
   "mixed_region_policy": "exclude_non_nationwide_multi_region",
@@ -93,7 +90,6 @@
     "문화재연구원"
   ],
   "retired_company_tokens": [
-    "한국문화재연구원",
     "효림"
   ]
 }

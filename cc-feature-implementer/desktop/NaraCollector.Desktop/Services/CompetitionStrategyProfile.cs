@@ -32,7 +32,7 @@ public sealed record DesktopCompetitionStrategyProfile(
 {
     public static DesktopCompetitionStrategyProfile Default { get; } = new(
         MyCompanyKeyword: "동국문화재연구원",
-        ExcludedCompanyKeywords: ["한국문화재연구원", "효림"],
+        ExcludedCompanyKeywords: ["효림"],
         Period1YDays: 365,
         Period6MDays: 180,
         Period3MDays: 90,

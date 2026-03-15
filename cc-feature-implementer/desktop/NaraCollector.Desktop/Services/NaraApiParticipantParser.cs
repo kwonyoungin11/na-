@@ -71,7 +71,7 @@ public sealed class NaraApiParticipantParser
                 new ParticipantRecord(
                     NoticeNo: ExtractNoticeNo(noticeNumber),
                     NoticeNumber: noticeNumber.Trim(),
-                    NoticeName: ReadCellText(row, headerMap, "공고명", "입찰공고명"),
+                    NoticeName: ReadCellText(row, headerMap, "공고명", "공사명", "입찰공고명"),
                     OrderingAgency: ReadCellText(row, headerMap, "발주처", "수요기관"),
                     Region: region,
                     Rank: rank,
@@ -80,14 +80,14 @@ public sealed class NaraApiParticipantParser
                     OpenDate: openDate,
                     BidDate: ReadCellDateTime(row, headerMap, "투찰일시", "입찰일시"),
                     BidAmount: ReadCellLong(row, headerMap, "투찰금액"),
-                    BidRateVsEstimate: ReadCellDouble(row, headerMap, "예가대비투찰률"),
-                    BidRateVsBase: ReadCellDouble(row, headerMap, "기초대비투찰률"),
-                    AdjustRate: ReadCellDouble(row, headerMap, "기초대비사정률", "기초대비사정율"),
+                    BidRateVsEstimate: ReadCellDouble(row, headerMap, "예가대비투찰률", "예가대비투찰률(%)"),
+                    BidRateVsBase: ReadCellDouble(row, headerMap, "기초대비투찰률", "기초대비투찰률(%)"),
+                    AdjustRate: ReadCellDouble(row, headerMap, "기초대비사정률", "기초대비사정율", "기초대비사정률(%)"),
                     EstimatePrice: ReadCellLong(row, headerMap, "예정가격"),
                     LowerLimitPrice: ReadCellLong(row, headerMap, "낙찰하한가"),
                     BaseAmount: ReadCellLong(row, headerMap, "기초금액"),
                     PriceAdjustmentRate: ReadCellDouble(row, headerMap, "사정률"),
-                    LowerRate: ReadCellDouble(row, headerMap, "발주처투찰률"),
+                    LowerRate: ReadCellDouble(row, headerMap, "발주처투찰률", "투찰률"),
                     LowerDiff: ReadCellLong(row, headerMap, "낙찰하한가차이"),
                     BizNo: string.Empty,
                     CeoName: string.Empty,
@@ -326,7 +326,7 @@ public sealed class NaraApiParticipantParser
             return string.Empty;
         }
 
-        return Regex.Replace(text, @"\s+", string.Empty, RegexOptions.None).Trim();
+        return Regex.Replace(text, @"[\s%()（）]+", string.Empty, RegexOptions.None).Trim();
     }
 
     private static string NormalizeCompanyName(string? name)
@@ -368,15 +368,13 @@ public sealed class NaraApiParticipantParser
     private static bool IsRetiredCompany(string? normalizedCompanyName, string? rawCompanyName)
     {
         var normalized = NormalizeToken(normalizedCompanyName);
-        if (normalized.Contains("한국문화재연구원", StringComparison.OrdinalIgnoreCase)
-            || normalized.Contains("효림", StringComparison.OrdinalIgnoreCase))
+        if (normalized.Contains("효림", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
 
         var raw = NormalizeToken(rawCompanyName);
-        return raw.Contains("한국문화재연구원", StringComparison.OrdinalIgnoreCase)
-               || raw.Contains("효림", StringComparison.OrdinalIgnoreCase);
+        return raw.Contains("효림", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string BuildParticipantKey(ParticipantRecord row)

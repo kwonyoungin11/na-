@@ -10,18 +10,24 @@ from pathlib import Path
 
 import pandas as pd
 
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from nara_workspace_paths import default_env_path, first_stage_dir, master_path, reports_dir
+
 API_SKILL_ROOT = Path(__file__).resolve().parents[1]
 FIRST_STAGE_SCRIPT = API_SKILL_ROOT / "scripts" / "collect_first_stage.py"
-SECOND_STAGE_SCRIPT = Path("/mnt/a/c/.agents/skills/data-preprocessing/scripts/preprocess_api_stage2.py")
+SECOND_STAGE_SCRIPT = PROJECT_ROOT / ".agents" / "skills" / "data-preprocessing" / "scripts" / "preprocess_api_stage2.py"
 RULE_PROFILE_PATH = API_SKILL_ROOT / "rule_profile.json"
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="기준 마스터 기준 증분 파이프라인")
-    parser.add_argument("--baseline-file", required=True, help="기준 최종 마스터 파일(엑셀)")
-    parser.add_argument("--first-stage-dir", required=True, help="1차 수집 폴더")
-    parser.add_argument("--final-output", required=True, help="최종 병합 출력 파일")
-    parser.add_argument("--audit-output", required=True, help="2차 판정로그")
+    parser.add_argument("--baseline-file", default=str(master_path()), help="기준 최종 마스터 파일(엑셀)")
+    parser.add_argument("--first-stage-dir", default=str(first_stage_dir("incremental")), help="1차 수집 폴더")
+    parser.add_argument("--final-output", default=str(master_path()), help="최종 병합 출력 파일")
+    parser.add_argument("--audit-output", default=str(reports_dir() / "2차전처리_판정로그_증분.xlsx"), help="2차 판정로그")
     parser.add_argument("--end", required=True, help="수집 종료(YYYYMMDDHHMM)")
     parser.add_argument("--start", help="수집 시작(YYYYMMDDHHMM). 미지정시 baseline 최고개찰일 기준 자동 계산")
     parser.add_argument("--overlap-minutes", type=int, default=120, help="최신 데이터 중복 보정 오버랩(분)")
@@ -30,7 +36,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--allowed-regions", default="")
     parser.add_argument("--min-participants", type=int, default=None)
     parser.add_argument("--target-company-terms", default="")
-    parser.add_argument("--env-file", default="/mnt/a/c/.env")
+    parser.add_argument("--env-file", default=str(default_env_path()))
     parser.add_argument("--max-notices", type=int, default=None)
     parser.add_argument("--clean-first-stage", action="store_true", help="1차 수집 폴더 초기화")
     parser.add_argument("--no-append", action="store_true", help="기준 마스터와 병합하지 않고 이번 실행 결과만 저장")

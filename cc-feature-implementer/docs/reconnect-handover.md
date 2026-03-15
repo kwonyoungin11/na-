@@ -13,10 +13,10 @@
 
 ## current implementation
 - API raw source
-  - `%LOCALAPPDATA%/NaraCollector/api-skill-output/raw/YYYY-MM/bid_notice_raw.jsonl`
-  - `%LOCALAPPDATA%/NaraCollector/api-skill-output/raw/YYYY-MM/openg_result_raw.jsonl`
+  - `A:\c\nara-workspace\app/api-skill-output/raw/YYYY-MM/bid_notice_raw.jsonl`
+  - `A:\c\nara-workspace\app/api-skill-output/raw/YYYY-MM/openg_result_raw.jsonl`
 - SQLite storage
-  - `%LOCALAPPDATA%/NaraCollector/nara-dashboard.db`
+  - `A:\c\nara-workspace\app/nara-dashboard.db`
   - tables:
     - `participants`
     - `collector_notices`
@@ -53,8 +53,8 @@
   - desktop app launch confirmed
 
 ## remaining notes
-- WSL `dotnet run` 검증 시 앱 데이터 경로는 Linux 사용자 디렉터리(`~/.local/share/NaraCollector`)를 사용할 수 있음
-- 실제 Windows 데스크톱 앱은 `%LOCALAPPDATA%/NaraCollector` 경로를 사용함
+- WSL `dotnet run` 검증 시 앱 데이터 경로는 Linux 사용자 디렉터리(`/mnt/a/c/nara-workspace/app`)를 사용할 수 있음
+- 실제 Windows 데스크톱 앱은 `A:\c\nara-workspace\app` 경로를 사용함
 - Windows DB에서도 `collector_notices` 123건 적재 확인 완료
 
 ## next recommended action
@@ -82,7 +82,7 @@
 - 불필요 예시(`임차`,`보고서`,`현장인부`,`경제지표`,`측량`,`스캔`) 0건 확인
 
 ## collector scope recalibration from master 2026-03-08 15:55 KST
-- 사용자 피드백에 따라 `/mnt/a/c/전체_통합_데이터.xlsx` 기준으로 collector 범위를 다시 점검함
+- 사용자 피드백에 따라 `/mnt/a/c/nara-workspace/master/전체_통합_데이터.xlsx` 기준으로 collector 범위를 다시 점검함
 - 마스터 공고 281건을 분석한 결과:
   - `용역` 포함 273건이지만, **용역 미포함 정상 공고도 8건 존재**
   - `공사/건설공사/정비` 문자열이 들어간 **정상 공고 18건 존재**
@@ -106,7 +106,7 @@
   - 유지 범위: `today - 15 days` 이후의 bid notice
   - 현재(2026-03-08) 기준 보존 시작: **2026-02-21 00:00:00**
 - 낙찰공고(`award`)
-  - 기준: `/mnt/a/c/전체_통합_데이터.xlsx` 의 마지막 개찰일시 이후부터 누적
+  - 기준: `/mnt/a/c/nara-workspace/master/전체_통합_데이터.xlsx` 의 마지막 개찰일시 이후부터 누적
   - 현재 마스터 최대 개찰일시: **2026-02-23 11:00:00**
   - 따라서 collector award 시작점: **2026-02-23 11:01:00**
 - forceRefresh 검증 결과

@@ -10,10 +10,16 @@ import argparse
 from pathlib import Path
 from datetime import datetime, timedelta
 from collections import defaultdict
+import sys
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
-DATA_PATH = PROJECT_ROOT / "전체_통합_데이터.xlsx"
-OUTPUT_DIR = Path(__file__).parent.parent / "output"
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from nara_workspace_paths import analysis_dir, master_path
+
+DATA_PATH = master_path()
+OUTPUT_DIR = analysis_dir() / "fixed_bidder_map"
 
 PERIODS = {
     '2y': timedelta(days=730),

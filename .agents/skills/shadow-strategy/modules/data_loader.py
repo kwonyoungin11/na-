@@ -11,6 +11,11 @@ import sys
 import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from nara_workspace_paths import master_path
+
 REPO_SRC_DIR = PROJECT_ROOT / "cc-feature-implementer" / "src"
 if str(REPO_SRC_DIR) not in sys.path:
     sys.path.insert(0, str(REPO_SRC_DIR))
@@ -21,7 +26,7 @@ from company_day_cluster import collapse_same_company_day_clusters
 class DataLoader:
     """전처리된 입찰 데이터 로더"""
 
-    DEFAULT_DATA_PATH = PROJECT_ROOT / "전체_통합_데이터.xlsx"
+    DEFAULT_DATA_PATH = master_path()
 
     def __init__(
         self,

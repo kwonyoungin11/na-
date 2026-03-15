@@ -6,26 +6,26 @@ allowed-tools: Bash, Read, Write
 
 # 콘솔 전용 전체 파이프라인
 
-이 스킬은 **/mnt/a/c/console-workspace** 기준으로만 동작합니다.
+이 스킬은 **/mnt/a/c/nara-workspace** 기준으로만 동작합니다.
 
 ## 원칙
 - C# 비언급 요청에서는 C# 경로/코드/실행을 사용하지 않음
-- 분석/수집 산출물은 console-workspace 하위에만 저장
+- 분석/수집 산출물은 nara-workspace 하위에만 저장
 - 수집 기본 규칙(키워드/지역/최소 참여업체/대상업체)은 `/mnt/a/c/.agents/skills/API/rule_profile.json` 정본을 재사용
 - `--keywords` 는 정본 규칙을 덮어쓰는 임시 override 용도로만 사용
 - 경쟁전략 전용 기본값은 `/mnt/a/c/.agents/skills/shadow-strategy/analysis_profile.json` 에서 로드하고, wrapper/CLI에서 주입하며 Python 코드에 업무 규칙을 복제하지 않음
 
 ## 고정 경로
-- 마스터: `/mnt/a/c/전체_통합_데이터.xlsx`
+- 마스터: `/mnt/a/c/nara-workspace/master/전체_통합_데이터.xlsx`
 - 정본 규칙: `/mnt/a/c/.agents/skills/API/rule_profile.json`
 - 분석 프로필: `/mnt/a/c/.agents/skills/shadow-strategy/analysis_profile.json`
-- API 출력: `/mnt/a/c/console-workspace/output`
-- 수집 로그: `/mnt/a/c/console-workspace/logs/collection_history.jsonl`
-- 분석 입력: `/mnt/a/c/console-workspace/analysis/input_{지역}.xlsx`
-- 군집 분석: `/mnt/a/c/console-workspace/analysis/crowding_{지역}`
-- 충돌 분석: `/mnt/a/c/console-workspace/analysis/collision_{지역}`
-- 전략 결과: `/mnt/a/c/console-workspace/analysis/shadow_{지역}` (competition-only 추천 결과)
-- 시각화: `/mnt/a/c/console-workspace/output/charts` (`1y/6m/3m/1m` 각각 `0.01`, `0.001`)
+- API 출력: `/mnt/a/c/nara-workspace/output`
+- 수집 로그: `/mnt/a/c/nara-workspace/logs/collection_history.jsonl`
+- 분석 입력: `/mnt/a/c/nara-workspace/analysis/input_{지역}.xlsx`
+- 군집 분석: `/mnt/a/c/nara-workspace/analysis/crowding_{지역}`
+- 충돌 분석: `/mnt/a/c/nara-workspace/analysis/collision_{지역}`
+- 전략 결과: `/mnt/a/c/nara-workspace/analysis/shadow_{지역}` (competition-only 추천 결과)
+- 시각화: `/mnt/a/c/nara-workspace/output/charts` (`1y/6m/3m/1m` 각각 `0.01`, `0.001`)
 
 ## 전체 실행 (직접)
 ```bash
@@ -34,7 +34,7 @@ python3 /mnt/a/c/.agents/skills/logic/scripts/analyze.py --months 6 --region 전
 
 ## 전체 실행 (래퍼)
 ```bash
-/mnt/a/c/console-workspace/scripts/run_full_pipeline.sh --months 6 --region 전국 --period 6m
+/mnt/a/c/nara-workspace/scripts/run_full_pipeline.sh --months 6 --region 전국 --period 6m
 ```
 
 ## 검증 커맨드
@@ -48,10 +48,10 @@ python3 /mnt/a/c/.agents/skills/logic/scripts/analyze.py --skip-api --dry-run --
 
 ## 기본 흐름
 1. API 증분 동기화
-   - `console-workspace/scripts/run_console_api_pipeline.sh`
+   - `nara-workspace/scripts/run_api_pipeline.sh`
    - 기본 키워드/지역/대상업체 규칙은 API 정본 rule_profile 에서 로드
 2. 분석 입력 생성(지역 필터)
-   - `console-workspace/analysis/input_{지역}.xlsx`
+   - `nara-workspace/analysis/input_{지역}.xlsx`
 3. 군집도·기대확률 분석
    - `cc-feature-implementer/src/analyze_crowding_probability.py`
    - 기대확률(1/n), 붐비는 구간/한산한 구간, band 리프트 산출
@@ -101,4 +101,4 @@ python3 /mnt/a/c/.agents/skills/logic/scripts/analyze.py --skip-api --dry-run --
 ## 연계 메모
 
 - shadow 단계 상세 출력 구조는 `/mnt/a/c/.agents/skills/shadow-strategy/SKILL.md` 를 따릅니다.
-- `console-workspace/scripts/run_console_api_pipeline.sh` 는 API 스킬 래퍼를 그대로 호출하므로 규칙 경로를 별도로 복제하지 않습니다.
+- `nara-workspace/scripts/run_api_pipeline.sh` 는 API 스킬 래퍼를 그대로 호출하므로 규칙 경로를 별도로 복제하지 않습니다.

@@ -30,6 +30,58 @@ public class DefaultAppPathResolverTests
     }
 
     [Fact]
+    public void ResolveMasterPath_DefaultsToWorkspaceRootWhenWorkspaceEnvIsSet()
+    {
+        lock (EnvLock)
+        {
+            var previousWorkspace = Environment.GetEnvironmentVariable(DefaultAppPathResolver.WorkspaceRootEnvironmentVariable);
+            var previousMaster = Environment.GetEnvironmentVariable("NARA_MASTER_XLSX");
+            var tempWorkspace = Path.Combine(Path.GetTempPath(), $"nara-workspace-{Guid.NewGuid():N}");
+            try
+            {
+                Environment.SetEnvironmentVariable(DefaultAppPathResolver.WorkspaceRootEnvironmentVariable, tempWorkspace);
+                Environment.SetEnvironmentVariable("NARA_MASTER_XLSX", null);
+
+                var resolver = new DefaultAppPathResolver();
+                var resolved = resolver.ResolveMasterPath(null);
+
+                Assert.Equal(Path.Combine(tempWorkspace, "master", "전체_통합_데이터.xlsx"), resolved);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable(DefaultAppPathResolver.WorkspaceRootEnvironmentVariable, previousWorkspace);
+                Environment.SetEnvironmentVariable("NARA_MASTER_XLSX", previousMaster);
+            }
+        }
+    }
+
+    [Fact]
+    public void ResolveOutputDirectory_DefaultsToWorkspaceRootWhenWorkspaceEnvIsSet()
+    {
+        lock (EnvLock)
+        {
+            var previousWorkspace = Environment.GetEnvironmentVariable(DefaultAppPathResolver.WorkspaceRootEnvironmentVariable);
+            var previousOutput = Environment.GetEnvironmentVariable("NARA_API_OUTPUT_DIR");
+            var tempWorkspace = Path.Combine(Path.GetTempPath(), $"nara-workspace-{Guid.NewGuid():N}");
+            try
+            {
+                Environment.SetEnvironmentVariable(DefaultAppPathResolver.WorkspaceRootEnvironmentVariable, tempWorkspace);
+                Environment.SetEnvironmentVariable("NARA_API_OUTPUT_DIR", null);
+
+                var resolver = new DefaultAppPathResolver();
+                var resolved = resolver.ResolveOutputDirectory(null);
+
+                Assert.Equal(Path.Combine(tempWorkspace, "output"), resolved);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable(DefaultAppPathResolver.WorkspaceRootEnvironmentVariable, previousWorkspace);
+                Environment.SetEnvironmentVariable("NARA_API_OUTPUT_DIR", previousOutput);
+            }
+        }
+    }
+
+    [Fact]
     public void ResolveSkillScriptPath_PrioritizesEnvironmentScriptWhenFileExists()
     {
         lock (EnvLock)
@@ -80,6 +132,39 @@ public class DefaultAppPathResolverTests
                 if (File.Exists(tempEnv))
                 {
                     File.Delete(tempEnv);
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public void ResolveEnvPath_UsesWorkspaceEnvFileWhenWorkspaceRootIsSet()
+    {
+        lock (EnvLock)
+        {
+            var previousWorkspace = Environment.GetEnvironmentVariable(DefaultAppPathResolver.WorkspaceRootEnvironmentVariable);
+            var previousEnv = Environment.GetEnvironmentVariable("NARA_API_ENV_FILE");
+            var tempWorkspace = Path.Combine(Path.GetTempPath(), $"nara-workspace-{Guid.NewGuid():N}");
+            var tempEnv = Path.Combine(tempWorkspace, ".env");
+            try
+            {
+                Directory.CreateDirectory(tempWorkspace);
+                File.WriteAllText(tempEnv, "SERVICE_KEY=demo");
+                Environment.SetEnvironmentVariable(DefaultAppPathResolver.WorkspaceRootEnvironmentVariable, tempWorkspace);
+                Environment.SetEnvironmentVariable("NARA_API_ENV_FILE", null);
+
+                var resolver = new DefaultAppPathResolver();
+                var resolved = resolver.ResolveEnvPath();
+
+                Assert.Equal(tempEnv, resolved);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable(DefaultAppPathResolver.WorkspaceRootEnvironmentVariable, previousWorkspace);
+                Environment.SetEnvironmentVariable("NARA_API_ENV_FILE", previousEnv);
+                if (Directory.Exists(tempWorkspace))
+                {
+                    Directory.Delete(tempWorkspace, recursive: true);
                 }
             }
         }
@@ -165,6 +250,79 @@ public class DefaultAppPathResolverTests
                 {
                     Directory.Delete(tempDir, recursive: true);
                 }
+            }
+        }
+    }
+
+    [Fact]
+    public void ResolveConsoleAnalysisRootPath_DefaultsToWorkspaceAnalysisWhenWorkspaceEnvIsSet()
+    {
+        lock (EnvLock)
+        {
+            var previousWorkspace = Environment.GetEnvironmentVariable(DefaultAppPathResolver.WorkspaceRootEnvironmentVariable);
+            var previousAnalysis = Environment.GetEnvironmentVariable("NARA_CONSOLE_ANALYSIS_DIR");
+            var tempWorkspace = Path.Combine(Path.GetTempPath(), $"nara-workspace-{Guid.NewGuid():N}");
+            try
+            {
+                Environment.SetEnvironmentVariable(DefaultAppPathResolver.WorkspaceRootEnvironmentVariable, tempWorkspace);
+                Environment.SetEnvironmentVariable("NARA_CONSOLE_ANALYSIS_DIR", null);
+
+                var resolver = new DefaultAppPathResolver();
+                var resolved = resolver.ResolveConsoleAnalysisRootPath();
+
+                Assert.Equal(Path.Combine(tempWorkspace, "analysis"), resolved);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable(DefaultAppPathResolver.WorkspaceRootEnvironmentVariable, previousWorkspace);
+                Environment.SetEnvironmentVariable("NARA_CONSOLE_ANALYSIS_DIR", previousAnalysis);
+            }
+        }
+    }
+
+    [Fact]
+    public void ResolveDefaultAppRootDirectory_PrioritizesAppRootEnvironmentSetting()
+    {
+        lock (EnvLock)
+        {
+            var previous = Environment.GetEnvironmentVariable(DefaultAppPathResolver.AppRootEnvironmentVariable);
+            var tempAppRoot = Path.Combine(Path.GetTempPath(), $"nara-app-{Guid.NewGuid():N}");
+            try
+            {
+                Environment.SetEnvironmentVariable(DefaultAppPathResolver.AppRootEnvironmentVariable, tempAppRoot);
+
+                var resolved = DefaultAppPathResolver.ResolveDefaultAppRootDirectory();
+
+                Assert.Equal(tempAppRoot, resolved);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable(DefaultAppPathResolver.AppRootEnvironmentVariable, previous);
+            }
+        }
+    }
+
+    [Fact]
+    public void ResolveDefaultAppRootDirectory_UsesWorkspaceRootWhenPresent()
+    {
+        lock (EnvLock)
+        {
+            var previousWorkspace = Environment.GetEnvironmentVariable(DefaultAppPathResolver.WorkspaceRootEnvironmentVariable);
+            var previousAppRoot = Environment.GetEnvironmentVariable(DefaultAppPathResolver.AppRootEnvironmentVariable);
+            var tempWorkspace = Path.Combine(Path.GetTempPath(), $"nara-workspace-{Guid.NewGuid():N}");
+            try
+            {
+                Environment.SetEnvironmentVariable(DefaultAppPathResolver.WorkspaceRootEnvironmentVariable, tempWorkspace);
+                Environment.SetEnvironmentVariable(DefaultAppPathResolver.AppRootEnvironmentVariable, null);
+
+                var resolved = DefaultAppPathResolver.ResolveDefaultAppRootDirectory();
+
+                Assert.Equal(Path.Combine(tempWorkspace, "app"), resolved);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable(DefaultAppPathResolver.WorkspaceRootEnvironmentVariable, previousWorkspace);
+                Environment.SetEnvironmentVariable(DefaultAppPathResolver.AppRootEnvironmentVariable, previousAppRoot);
             }
         }
     }

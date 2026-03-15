@@ -75,7 +75,7 @@ public sealed record CompetitionAnalysisProfile(
 {
     public static CompetitionAnalysisProfile Default { get; } = new(
         MyCompanyKeyword: "동국문화재연구원",
-        ExcludedCompanyKeywords: ["한국문화재연구원", "효림"],
+        ExcludedCompanyKeywords: ["효림"],
         RateMin: 99.5,
         RateMax: 100.0,
         ZoneSize: 0.001,

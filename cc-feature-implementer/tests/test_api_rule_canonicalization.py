@@ -69,7 +69,7 @@ def test_mixed_region_detection_preserves_daegu_gyeongbuk_combo() -> None:
     mod = _load_module()
     rules = mod.load_rule_profile()
 
-    assert mod.is_allowed_region("대구광역시", rules.allowed_regions)
+    assert not mod.is_allowed_region("대구광역시", rules.allowed_regions)
     assert mod.is_allowed_region("대구광역시/경상북도", rules.allowed_regions)
-    assert mod.is_mixed_region("대구광역시/경상북도", rules.allowed_regions)
+    assert not mod.is_mixed_region("대구광역시/경상북도", rules.allowed_regions)
     assert not mod.is_mixed_region("전국/경상북도", rules.allowed_regions)

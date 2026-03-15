@@ -54,7 +54,7 @@ argument-hint: "[--mode system|market|relation|decision|full] [--region 전국|�
 ## 선행 입력
 - 정제된 입력은 `/mnt/a/c/.agents/skills/API/rule_profile.json` 규칙을 따른다.
 - 경쟁분석 기본값은 `/mnt/a/c/.agents/skills/shadow-strategy/analysis_profile.json` 을 따른다.
-- 콘솔 전용 작업이면 `/mnt/a/c/console-workspace` 산출물을 우선 사용한다.
+- 통합 작업공간 작업이면 `/mnt/a/c/nara-workspace` 산출물을 우선 사용한다.
 - C# 언급 없는 요청에서는 데스크톱 경로와 혼합하지 않는다.
 
 ## 실행 순서

@@ -6,11 +6,17 @@ import argparse
 import json
 import re
 from pathlib import Path
+import sys
 from typing import Iterable, Sequence
 
 import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from nara_workspace_paths import master_path
+
 DEFAULT_RULE_PROFILE_PATH = PROJECT_ROOT / ".agents" / "skills" / "API" / "rule_profile.json"
 
 BASE_COLUMNS = [
@@ -143,10 +149,10 @@ def main() -> None:
     default_rules = load_rule_profile(DEFAULT_RULE_PROFILE_PATH)
     parser = argparse.ArgumentParser(description="API 1차 수집 결과 2차 전처리")
     parser.add_argument("--first-stage-dir", required=True, help="공고별 xlsx 폴더")
-    parser.add_argument("--final-output", default="/mnt/a/c/전체_통합_데이터.xlsx")
+    parser.add_argument("--final-output", default=str(master_path()))
     parser.add_argument("--audit-output", default="", help="판정로그 xlsx 경로")
     parser.add_argument("--rule-profile", default=str(DEFAULT_RULE_PROFILE_PATH), help="정본 규칙 프로필 JSON")
-    parser.add_argument("--allowed-regions", default=",".join(default_rules.get("allowed_regions", ["전국", "대구", "경북"])))
+    parser.add_argument("--allowed-regions", default=",".join(default_rules.get("allowed_regions", ["전국", "경북"])))
     parser.add_argument("--min-participants", type=int, default=int(default_rules.get("min_participants", 5) or 5))
     parser.add_argument("--target-company-terms", default=",".join(default_rules.get("target_company_terms", ["문화재연구원"])))
     parser.add_argument("--append-existing", default="", help="기존 최종 마스터와 병합")

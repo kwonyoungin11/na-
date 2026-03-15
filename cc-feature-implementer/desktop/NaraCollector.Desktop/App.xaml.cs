@@ -84,10 +84,7 @@ public partial class App : Application
 
     private static string GetCrashLogPath()
     {
-        var root = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "NaraCollector",
-            "logs");
+        var root = DefaultAppPathResolver.ResolveDefaultAppLogDirectory();
         return Path.Combine(root, "app-crash.log");
     }
 }

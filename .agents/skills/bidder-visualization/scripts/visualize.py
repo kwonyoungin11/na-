@@ -19,6 +19,11 @@ import pandas as pd
 
 
 ROOT = Path("/mnt/a/c")
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from nara_workspace_paths import master_path
+
 REPO_SRC_DIR = ROOT / "cc-feature-implementer" / "src"
 SHADOW_MODULE_DIR = ROOT / ".agents" / "skills" / "shadow-strategy" / "modules"
 for extra_path in (REPO_SRC_DIR, SHADOW_MODULE_DIR):
@@ -28,7 +33,7 @@ for extra_path in (REPO_SRC_DIR, SHADOW_MODULE_DIR):
 from company_day_cluster import collapse_same_company_day_clusters
 from profile_loader import load_analysis_profile
 
-DEFAULT_INPUT = ROOT / "전체_통합_데이터.xlsx"
+DEFAULT_INPUT = master_path()
 DEFAULT_COLOR_MAP = ROOT / ".agents" / "skills" / "fixed-bidder-map" / "bidder_colors.json"
 PERIOD_DAYS = {
     "all": 0,
@@ -38,7 +43,7 @@ PERIOD_DAYS = {
     "1y": 365,
     "2y": 730,
 }
-RETIRED_COMPANY_TOKENS = ("한국문화재연구원", "효림")
+RETIRED_COMPANY_TOKENS = ("효림",)
 
 
 def load_same_day_collapse_config() -> dict[str, object]:

@@ -6,9 +6,18 @@ import argparse
 import csv
 import glob
 import os
+import sys
 from datetime import datetime
 
 from openpyxl import load_workbook
+
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from nara_workspace_paths import app_dir, master_path
 
 REQUIRED_18 = [
     "공고번호",
@@ -85,8 +94,8 @@ def read_master(master_path: str):
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--master", default="/mnt/a/c/전체_통합_데이터.xlsx")
-    parser.add_argument("--export-dir", default="/mnt/c/Users/kyi25/AppData/Local/NaraCollector/exports")
+    parser.add_argument("--master", default=str(master_path()))
+    parser.add_argument("--export-dir", default=str(app_dir() / "exports"))
     args = parser.parse_args()
 
     exp = read_latest_export(args.export_dir)

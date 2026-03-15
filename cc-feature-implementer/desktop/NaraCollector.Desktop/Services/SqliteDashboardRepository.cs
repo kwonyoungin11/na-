@@ -75,32 +75,31 @@ public sealed class SqliteDashboardRepository : IDashboardRepository
                     cachedSnapshot.IncrementalAwardNoticeRows);
             }
 
-            progress?.Report(new LoadingProgress("cache", 8, "재사용 가능한 캐시가 없어 실시간 API 수집으로 전환합니다."));
-        }
-
-        var initMessage = forceRefresh
-            ? "강제 새로고침(forceRefresh=true): 실시간 API 수집을 시작합니다."
-            : "실시간 API 수집을 시작합니다.";
-        progress?.Report(new LoadingProgress("init", 12, initMessage));
-        var collectFilter = forceRefresh
-            ? await BuildIncrementalCollectFilterAsync(effectiveFilter, progress, incrementalStartOverride, cancellationToken)
-            : effectiveFilter;
-        var liveSnapshot = await TryLoadLiveSnapshotAsync(collectFilter, effectiveFilter, progress, cancellationToken);
-        if (liveSnapshot is not null)
-        {
-            return liveSnapshot;
+            progress?.Report(new LoadingProgress("cache", 8, "재사용 가능한 캐시가 없어 외부 파이프라인 결과를 로딩합니다."));
+            var pipelineSnapshot = await ReloadFromPipelineOutputsAsync(effectiveFilter, progress, cancellationToken);
+            if (pipelineSnapshot is not null)
+            {
+                return pipelineSnapshot;
+            }
         }
 
         if (forceRefresh)
         {
-            progress?.Report(new LoadingProgress("fallback", 92, "실시간 API 수집 실패 → 기존 캐시/내장 데이터를 재사용합니다."));
+            progress?.Report(new LoadingProgress("init", 12, "외부 파이프라인 결과를 다시 불러옵니다."));
+            var pipelineSnapshot = await ReloadFromPipelineOutputsAsync(effectiveFilter, progress, cancellationToken);
+            if (pipelineSnapshot is not null)
+            {
+                return pipelineSnapshot;
+            }
+
+            progress?.Report(new LoadingProgress("fallback", 92, "파이프라인 결과 재로딩 실패 → 기존 캐시/내장 데이터를 재사용합니다."));
             var fallbackSnapshot = await TryLoadSnapshotFromSqliteAsync(effectiveFilter, cancellationToken);
             if (fallbackSnapshot is not null)
             {
                 return new DashboardSnapshot(
                     fallbackSnapshot.Kpis,
                     fallbackSnapshot.NoticeRows,
-                    $"{fallbackSnapshot.DataSource} · API 실패로 캐시 재사용",
+                    $"{fallbackSnapshot.DataSource} · 파이프라인 재로딩 실패로 캐시 재사용",
                     fallbackSnapshot.SavedFilePath,
                     fallbackSnapshot.PositionMapPath,
                     fallbackSnapshot.RecommendationPath,
@@ -112,9 +111,37 @@ public sealed class SqliteDashboardRepository : IDashboardRepository
         }
 
         var errorMessage = forceRefresh
-            ? "강제 새로고침(forceRefresh=true) 실시간 API 수집에 실패했습니다. API 키(.env), 네트워크, 조회 기간을 확인하세요."
-            : "캐시 재사용 및 API 실시간 수집에 모두 실패했습니다. API 키(.env), 네트워크, 조회 기간을 확인하세요.";
+            ? "외부 파이프라인 결과 다시 불러오기에 실패했습니다. master/output/raw 파일과 DB를 확인하세요."
+            : "캐시 재사용에 실패했습니다. master/output/raw 파일과 DB를 확인하세요.";
         throw new InvalidOperationException(errorMessage);
+    }
+
+    private async Task<DashboardSnapshot?> ReloadFromPipelineOutputsAsync(
+        DashboardFilter filter,
+        IProgress<LoadingProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        progress?.Report(new LoadingProgress("seed", 18, $"파이프라인 마스터 다시 로딩: {_masterExcelPath}"));
+        await ReloadBaselineFromMasterAsync(progress, cancellationToken);
+
+        var snapshot = await TryLoadSnapshotFromSqliteAsync(filter, cancellationToken);
+        if (snapshot is null)
+        {
+            return null;
+        }
+
+        var pipelineOutputRoot = _pathResolver.ResolveOutputDirectory(null);
+        return new DashboardSnapshot(
+            snapshot.Kpis,
+            snapshot.NoticeRows,
+            $"외부 파이프라인 결과: master={_masterExcelPath} / raw={pipelineOutputRoot}",
+            snapshot.SavedFilePath,
+            snapshot.PositionMapPath,
+            snapshot.RecommendationPath,
+            snapshot.CompanyOptions,
+            snapshot.Participants,
+            snapshot.IncrementalBidNoticeRows,
+            snapshot.IncrementalAwardNoticeRows);
     }
 
     private async Task<DashboardSnapshot?> TryLoadLiveSnapshotAsync(
@@ -281,14 +308,45 @@ public sealed class SqliteDashboardRepository : IDashboardRepository
             incrementalAwardNotices);
     }
 
+    private async Task ReloadBaselineFromMasterAsync(
+        IProgress<LoadingProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        if (!File.Exists(_masterExcelPath))
+        {
+            progress?.Report(new LoadingProgress("seed", 22, $"마스터 파일이 없습니다: {_masterExcelPath}"));
+            SetParticipantsCache([]);
+            await _outputService.ReplaceParticipantsInDatabaseAsync([], cancellationToken);
+            _baselineEnsured = true;
+            return;
+        }
+
+        var seededRows = await Task.Run(
+            () => LoadParticipantsFromMasterExcel(_masterExcelPath),
+            cancellationToken);
+        var enrichedRows = await Task.Run(
+            () => EnrichAdjustRatesByNotice(seededRows),
+            cancellationToken);
+
+        _masterLatestOpenDateCache = seededRows
+            .Where(x => x.OpenDate > DateTime.MinValue)
+            .Select(x => (DateTime?)x.OpenDate)
+            .Max();
+
+        await _outputService.ReplaceParticipantsInDatabaseAsync(enrichedRows, cancellationToken);
+        await ClearLegacyCollectorNoticeStorageAsync(cancellationToken);
+        SetParticipantsCache(enrichedRows);
+        SetCollectorNoticeCache([], []);
+        _baselineEnsured = true;
+        progress?.Report(new LoadingProgress("seed", 34, $"파이프라인 master 반영 완료: {enrichedRows.Count:N0}행"));
+    }
+
     private async Task<DashboardSnapshot?> TryLoadSnapshotFromSqliteAsync(DashboardFilter filter, CancellationToken cancellationToken)
     {
         if (TryGetSnapshotFromFilterCache(filter, out var cachedByFilter) && cachedByFilter is not null)
         {
             return cachedByFilter;
         }
-
-        await EnsureCollectorNoticeCacheAsync(cancellationToken);
 
         if (_participantsCache is { Count: > 0 } cacheRows)
         {
@@ -339,8 +397,8 @@ public sealed class SqliteDashboardRepository : IDashboardRepository
                 RecommendationPath: string.Empty,
                 CompanyOptions: companyOptions,
                 Participants: chartParticipants,
-                IncrementalBidNoticeRows: FilterBidCollectorNoticeRows(_collectorBidCache ?? [], filter),
-                IncrementalAwardNoticeRows: FilterAwardCollectorNoticeRows(_collectorAwardCache ?? [], filter));
+                IncrementalBidNoticeRows: [],
+                IncrementalAwardNoticeRows: []);
             StoreSnapshotInFilterCache(filter, snapshot);
             return snapshot;
         }
@@ -476,30 +534,10 @@ public sealed class SqliteDashboardRepository : IDashboardRepository
         }
     }
 
-    private async Task EnsureCollectorNoticeCacheAsync(CancellationToken cancellationToken)
+    private Task EnsureCollectorNoticeCacheAsync(CancellationToken cancellationToken)
     {
-        if (_collectorBidCache is not null && _collectorAwardCache is not null)
-        {
-            return;
-        }
-
-        if (!File.Exists(_dbPath))
-        {
-            SetCollectorNoticeCache([], []);
-            return;
-        }
-
-        try
-        {
-            await using var connection = new SqliteConnection($"Data Source={_dbPath}");
-            await connection.OpenAsync(cancellationToken);
-            var (bidRows, awardRows) = await LoadCollectorNoticeCacheAsync(connection, cancellationToken);
-            SetCollectorNoticeCache(bidRows, awardRows);
-        }
-        catch
-        {
-            SetCollectorNoticeCache([], []);
-        }
+        SetCollectorNoticeCache([], []);
+        return Task.CompletedTask;
     }
 
     private void SetCollectorNoticeCache(
@@ -661,8 +699,18 @@ public sealed class SqliteDashboardRepository : IDashboardRepository
             built.RecommendationPath,
             companyOptions,
             filteredRows,
-            FilterBidCollectorNoticeRows(_collectorBidCache ?? [], filter),
-            FilterAwardCollectorNoticeRows(_collectorAwardCache ?? [], filter));
+            [],
+            []);
+    }
+
+    private async Task ClearLegacyCollectorNoticeStorageAsync(CancellationToken cancellationToken)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(_dbPath) ?? ".");
+        await using var connection = new SqliteConnection($"Data Source={_dbPath}");
+        await connection.OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "DROP TABLE IF EXISTS collector_notices;";
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private static HashSet<string> ParseSelectedRegions(string? regionText)
@@ -892,37 +940,37 @@ public sealed class SqliteDashboardRepository : IDashboardRepository
                 continue;
             }
 
-            var companyName = ReadCellText(row, headerMap, "업체명");
+            var companyName = ReadCellText(row, headerMap, "업체명", "업체명(원본)");
             var normalizedCompanyName = NormalizeCompanyName(companyName);
             if (IsRetiredCompany(normalizedCompanyName, companyName))
             {
                 continue;
             }
-            var rank = ReadCellInt(row, headerMap, "순위");
-            var openDate = ReadCellDateTime(row, headerMap, "개찰일시") ?? DateTime.MinValue;
-            var bidDate = ReadCellDateTime(row, headerMap, "투찰일시");
+            var rank = ReadCellInt(row, headerMap, "순위", "낙찰순위");
+            var openDate = ReadCellDateTime(row, headerMap, "개찰일시", "개찰일자") ?? DateTime.MinValue;
+            var bidDate = ReadCellDateTime(row, headerMap, "투찰일시", "입찰일시");
 
             rows.Add(
                 new ParticipantRecord(
                     NoticeNo: ExtractNoticeNo(noticeNumber),
                     NoticeNumber: noticeNumber.Trim(),
-                    NoticeName: ReadCellText(row, headerMap, "공고명"),
-                    OrderingAgency: ReadCellText(row, headerMap, "발주처"),
-                    Region: NormalizeRegionValue(ReadCellText(row, headerMap, "지역제한")),
+                    NoticeName: ReadCellText(row, headerMap, "공고명", "공사명", "입찰공고명"),
+                    OrderingAgency: ReadCellText(row, headerMap, "발주처", "수요기관"),
+                    Region: NormalizeRegionValue(ReadCellText(row, headerMap, "지역제한", "지역")),
                     Rank: rank,
                     CompanyName: companyName,
                     NormalizedCompanyName: normalizedCompanyName,
                     OpenDate: openDate,
                     BidDate: bidDate,
                     BidAmount: ReadCellLong(row, headerMap, "투찰금액"),
-                    BidRateVsEstimate: ReadCellDouble(row, headerMap, "예가대비투찰률"),
-                    BidRateVsBase: ReadCellDouble(row, headerMap, "기초대비투찰률"),
-                    AdjustRate: ReadCellDouble(row, headerMap, "기초대비사정률"),
+                    BidRateVsEstimate: ReadCellDouble(row, headerMap, "예가대비투찰률", "예가대비투찰률(%)"),
+                    BidRateVsBase: ReadCellDouble(row, headerMap, "기초대비투찰률", "기초대비투찰률(%)"),
+                    AdjustRate: ReadCellDouble(row, headerMap, "기초대비사정률", "기초대비사정률(%)", "기초대비사정율"),
                     EstimatePrice: ReadCellLong(row, headerMap, "예정가격"),
                     LowerLimitPrice: ReadCellLong(row, headerMap, "낙찰하한가"),
                     BaseAmount: ReadCellLong(row, headerMap, "기초금액"),
                     PriceAdjustmentRate: ReadCellDouble(row, headerMap, "사정률"),
-                    LowerRate: ReadCellDouble(row, headerMap, "발주처투찰률"),
+                    LowerRate: ReadCellDouble(row, headerMap, "발주처투찰률", "투찰률"),
                     LowerDiff: ReadCellLong(row, headerMap, "낙찰하한가차이"),
                     BizNo: string.Empty,
                     CeoName: string.Empty,
@@ -945,63 +993,69 @@ public sealed class SqliteDashboardRepository : IDashboardRepository
                 continue;
             }
 
-            if (!map.ContainsKey(text))
+            var key = NormalizeHeader(text);
+            if (!map.ContainsKey(key))
             {
-                map[text] = cell.Address.ColumnNumber;
+                map[key] = cell.Address.ColumnNumber;
             }
         }
 
         return map;
     }
 
-    private static string ReadCellText(IXLRow row, IReadOnlyDictionary<string, int> headerMap, string column)
+    private static string ReadCellText(IXLRow row, IReadOnlyDictionary<string, int> headerMap, params string[] columnCandidates)
     {
-        if (!headerMap.TryGetValue(column, out var columnIndex))
+        var columnIndex = ResolveColumnIndex(headerMap, columnCandidates);
+        if (columnIndex is null)
         {
             return string.Empty;
         }
 
-        return row.Cell(columnIndex).GetValue<string>().Trim();
+        return row.Cell(columnIndex.Value).GetValue<string>().Trim();
     }
 
-    private static double? ReadCellDouble(IXLRow row, IReadOnlyDictionary<string, int> headerMap, string column)
+    private static double? ReadCellDouble(IXLRow row, IReadOnlyDictionary<string, int> headerMap, params string[] columnCandidates)
     {
-        var text = ReadCellText(row, headerMap, column);
+        var text = ReadCellText(row, headerMap, columnCandidates);
         if (string.IsNullOrWhiteSpace(text))
         {
             return null;
         }
 
-        var cleaned = text.Replace(",", "", StringComparison.Ordinal).Trim();
+        var cleaned = text
+            .Replace(",", "", StringComparison.Ordinal)
+            .Replace("%", "", StringComparison.Ordinal)
+            .Trim();
         return double.TryParse(cleaned, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed)
             ? parsed
             : null;
     }
 
-    private static long? ReadCellLong(IXLRow row, IReadOnlyDictionary<string, int> headerMap, string column)
+    private static long? ReadCellLong(IXLRow row, IReadOnlyDictionary<string, int> headerMap, params string[] columnCandidates)
     {
-        var number = ReadCellDouble(row, headerMap, column);
+        var number = ReadCellDouble(row, headerMap, columnCandidates);
         return number.HasValue
             ? (long)Math.Round(number.Value, 0, MidpointRounding.AwayFromZero)
             : null;
     }
 
-    private static int ReadCellInt(IXLRow row, IReadOnlyDictionary<string, int> headerMap, string column)
+    private static int ReadCellInt(IXLRow row, IReadOnlyDictionary<string, int> headerMap, params string[] columnCandidates)
     {
-        var number = ReadCellDouble(row, headerMap, column);
+        var number = ReadCellDouble(row, headerMap, columnCandidates);
         return number.HasValue
             ? (int)Math.Round(number.Value, 0, MidpointRounding.AwayFromZero)
             : -1;
     }
 
-    private static DateTime? ReadCellDateTime(IXLRow row, IReadOnlyDictionary<string, int> headerMap, string column)
+    private static DateTime? ReadCellDateTime(IXLRow row, IReadOnlyDictionary<string, int> headerMap, params string[] columnCandidates)
     {
-        if (!headerMap.TryGetValue(column, out var columnIndex))
+        var columnIndex = ResolveColumnIndex(headerMap, columnCandidates);
+        if (columnIndex is null)
         {
             return null;
         }
 
-        var cell = row.Cell(columnIndex);
+        var cell = row.Cell(columnIndex.Value);
         if (cell.IsEmpty())
         {
             return null;
@@ -1016,6 +1070,30 @@ public sealed class SqliteDashboardRepository : IDashboardRepository
         return DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed)
             ? parsed
             : null;
+    }
+
+    private static int? ResolveColumnIndex(IReadOnlyDictionary<string, int> headerMap, IEnumerable<string> candidates)
+    {
+        foreach (var candidate in candidates)
+        {
+            var key = NormalizeHeader(candidate);
+            if (headerMap.TryGetValue(key, out var idx))
+            {
+                return idx;
+            }
+        }
+
+        return null;
+    }
+
+    private static string NormalizeHeader(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        return Regex.Replace(text, @"[\s%()（）]+", string.Empty, RegexOptions.None).Trim();
     }
 
     private static List<ParticipantRecord> MergeParticipants(
@@ -1260,15 +1338,13 @@ public sealed class SqliteDashboardRepository : IDashboardRepository
     private static bool IsRetiredCompany(string? normalizedCompanyName, string? rawCompanyName)
     {
         var normalized = NormalizeToken(normalizedCompanyName);
-        if (normalized.Contains("한국문화재연구원", StringComparison.OrdinalIgnoreCase)
-            || normalized.Contains("효림", StringComparison.OrdinalIgnoreCase))
+        if (normalized.Contains("효림", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
 
         var raw = NormalizeToken(rawCompanyName);
-        return raw.Contains("한국문화재연구원", StringComparison.OrdinalIgnoreCase)
-               || raw.Contains("효림", StringComparison.OrdinalIgnoreCase);
+        return raw.Contains("효림", StringComparison.OrdinalIgnoreCase);
     }
 
     private static async Task<List<KpiCardModel>> LoadKpisAsync(SqliteConnection connection, DashboardFilter filter, CancellationToken cancellationToken)
@@ -1584,7 +1660,6 @@ public sealed class SqliteDashboardRepository : IDashboardRepository
 
         var normalized = NormalizeRegionValue(region);
         return normalized.Contains("전국", StringComparison.Ordinal)
-            || normalized.Contains("대구", StringComparison.Ordinal)
             || normalized.Contains("경북", StringComparison.Ordinal);
     }
 
@@ -1877,9 +1952,13 @@ public sealed class SqliteDashboardRepository : IDashboardRepository
             .Where(x => x.NoticeDate >= start && x.NoticeDate < endExclusive)
             .Where(x =>
                 string.IsNullOrWhiteSpace(region)
-                || string.Equals(region, "전국", StringComparison.OrdinalIgnoreCase)
-                || (!string.IsNullOrWhiteSpace(x.RegionText)
-                    && x.RegionText.Contains(region, StringComparison.OrdinalIgnoreCase)))
+                || string.Equals(region, "전체", StringComparison.OrdinalIgnoreCase)
+                || (string.Equals(region, "전국", StringComparison.OrdinalIgnoreCase)
+                    && !string.IsNullOrWhiteSpace(x.RegionText)
+                    && x.RegionText.Contains("전국", StringComparison.OrdinalIgnoreCase))
+                || (string.Equals(region, "경북", StringComparison.OrdinalIgnoreCase)
+                    && !string.IsNullOrWhiteSpace(x.RegionText)
+                    && x.RegionText.Contains("경북", StringComparison.OrdinalIgnoreCase)))
             .OrderBy(x => x.NoticeDate)
             .ThenBy(x => x.NoticeNumber, StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -1901,9 +1980,13 @@ public sealed class SqliteDashboardRepository : IDashboardRepository
             .Where(x => x.NoticeDate >= start && x.NoticeDate < end)
             .Where(x =>
                 string.IsNullOrWhiteSpace(region)
-                || string.Equals(region, "전국", StringComparison.OrdinalIgnoreCase)
-                || (!string.IsNullOrWhiteSpace(x.RegionText)
-                    && x.RegionText.Contains(region, StringComparison.OrdinalIgnoreCase)))
+                || string.Equals(region, "전체", StringComparison.OrdinalIgnoreCase)
+                || (string.Equals(region, "전국", StringComparison.OrdinalIgnoreCase)
+                    && !string.IsNullOrWhiteSpace(x.RegionText)
+                    && x.RegionText.Contains("전국", StringComparison.OrdinalIgnoreCase))
+                || (string.Equals(region, "경북", StringComparison.OrdinalIgnoreCase)
+                    && !string.IsNullOrWhiteSpace(x.RegionText)
+                    && x.RegionText.Contains("경북", StringComparison.OrdinalIgnoreCase)))
             .OrderByDescending(x => x.NoticeDate)
             .ThenBy(x => x.NoticeNumber, StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -2319,9 +2402,7 @@ public sealed class SqliteDashboardRepository : IDashboardRepository
 
         return $"""
                 (
-                  {normalizedCompanyExpr} NOT LIKE '%한국문화재연구원%'
-                  AND {normalizedRawCompanyExpr} NOT LIKE '%한국문화재연구원%'
-                  AND {normalizedCompanyExpr} NOT LIKE '%효림%'
+                  {normalizedCompanyExpr} NOT LIKE '%효림%'
                   AND {normalizedRawCompanyExpr} NOT LIKE '%효림%'
                 )
                 """;
