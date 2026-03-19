@@ -12,6 +12,7 @@ concurrency:
 
 jobs:
   python-tests:
+    name: Python tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -59,25 +60,6 @@ jobs:
           PY
 
   desktop-tests-build:
-    runs-on: windows-latest
+    name: Desktop tests + build
     needs: python-tests
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup .NET 10
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.x
-
-      - name: Restore desktop tests
-        run: dotnet restore cc-feature-implementer/desktop/NaraCollector.Desktop.Tests/NaraCollector.Desktop.Tests.csproj
-
-      - name: Run desktop tests
-        run: dotnet test cc-feature-implementer/desktop/NaraCollector.Desktop.Tests/NaraCollector.Desktop.Tests.csproj --configuration Release --no-restore --verbosity minimal
-
-      - name: Build desktop app
-        run: dotnet build cc-feature-implementer/desktop/NaraCollector.Desktop/NaraCollector.Desktop.csproj --configuration Release --verbosity minimal
-
-      - name: Build analytics CLI
-        run: dotnet build cc-feature-implementer/desktop/NaraCollector.Analytics.Cli/NaraCollector.Analytics.Cli.csproj --configuration Release --verbosity minimal
+    uses: ./.github/workflows/desktop-build.yml
