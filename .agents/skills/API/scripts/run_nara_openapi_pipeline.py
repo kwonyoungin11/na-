@@ -363,7 +363,7 @@ def fetch_paged(
         params.setdefault("type", "json")
 
         url = f"{base_url}/{operation}"
-        resp = session.get(url, params=params, timeout=(4, 30))
+        resp = session.get(url, params=params, timeout=(5, 20))
         resp.raise_for_status()
 
         # JSON 우선
@@ -889,7 +889,13 @@ def preprocess_to_master(
 
     rows: List[Dict] = []
 
-    for _, item in openg.iterrows():
+    total_openg = int(len(openg))
+    for row_i, (_, item) in enumerate(openg.iterrows(), start=1):
+        if row_i == 1 or row_i % 25 == 0 or row_i == total_openg:
+            _log(
+                f"[전처리] 개찰완료상세 {row_i}/{total_openg} "
+                f"성공={detail_fetch_success} 실패={detail_fetch_failed}"
+            )
         bid_no = str(item.get("bidNtceNo", "")).strip()
         bid_ord = str(item.get("bidNtceOrd", "")).strip()
         bid_key = f"{bid_no}|{bid_ord}"

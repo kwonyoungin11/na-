@@ -88,7 +88,7 @@ public static class ChartImageExporter
             throw new FileNotFoundException($"입력 파일을 찾을 수 없습니다: {input}");
         }
 
-        var participants = LoadParticipantsFromExcel(input);
+        var participants = CollectorNoticeRules.ApplyChartRules(LoadParticipantsFromExcel(input)).ToList();
         if (participants.Count == 0)
         {
             throw new InvalidOperationException($"시각화 가능한 데이터가 없습니다: {input}");

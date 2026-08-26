@@ -40,5 +40,24 @@
     <Compile Include="../NaraCollector.Desktop/ViewModels/MainWindowFilterState.cs" Link="Source/MainWindowFilterState.cs" />
     <Compile Include="../NaraCollector.Desktop/ViewModels/MainWindowSnapshotCoordinator.cs" Link="Source/MainWindowSnapshotCoordinator.cs" />
     <Compile Include="../NaraCollector.Desktop/ViewModels/MainWindowAlertPublisher.cs" Link="Source/MainWindowAlertPublisher.cs" />
+    <Compile Include="../NaraCollector.Desktop/Services/IgunsulExcelConverter.cs" Link="Source/IgunsulExcelConverter.cs" />
+    <Compile Include="../NaraCollector.Desktop/Services/IgunsulAwardGapFiller.cs" Link="Source/IgunsulAwardGapFiller.cs" />
+    <Compile Include="../NaraCollector.Desktop/Services/ScatterChartRules.cs" Link="Source/ScatterChartRules.cs" />
+    <Compile Include="../NaraCollector.Desktop/Services/ScatterRenderCache.cs" Link="Source/ScatterRenderCache.cs" />
+    <Compile Include="../NaraCollector.Desktop/Services/CrowdingHeatMapBuilder.cs" Link="Source/CrowdingHeatMapBuilder.cs" />
+    <Compile Include="../NaraCollector.Desktop/Services/LeftOccupyBoardBuilder.cs" Link="Source/LeftOccupyBoardBuilder.cs" />
+    <Compile Include="../NaraCollector.Desktop/Services/CppAwardJsonlParser.cs" Link="Source/CppAwardJsonlParser.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Fixtures/igunsul/*.xlsx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="../NaraCollector.Desktop/ChartPopupWindow.xaml" Link="Ui/ChartPopupWindow.xaml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="../NaraCollector.Desktop/Theme/DesignTokens.xaml" Link="Ui/Theme/DesignTokens.xaml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 </Project>

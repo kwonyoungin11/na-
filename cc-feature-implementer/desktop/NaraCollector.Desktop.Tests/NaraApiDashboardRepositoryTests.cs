@@ -200,6 +200,9 @@ public class NaraApiDashboardRepositoryTests
                     {"bidNtceNo":"R26BK20000002","bidNtceNm":"대구 미래스마트기술 국가산업단지 국가유산영향진단 용역","dminsttNm":"한국토지주택공사 대구경북지역본부","bidClseDt":"2026-03-19 11:00:00","rgstDt":"2026-03-08 13:27:10","_src_group":"servc","rgnLmtBidLocplcJdgmBssNm":"전국"}
                     """,
                     """
+                    {"bidNtceNo":"R26BK20000006","bidNtceNm":"전국 매장유산 정밀발굴조사 용역","dminsttNm":"국가유산청","bidClseDt":"2026-03-19 11:00:00","rgstDt":"2026-03-08 13:27:12","_src_group":"servc","rgnLmtBidLocplcJdgmBssNm":"전국"}
+                    """,
+                    """
                     {"bidNtceNo":"R26BK20000003","bidNtceNm":"익산망기 공공지원민간임대주택 공급촉진지구 매장유산 발굴(표본,시굴)조사 용역","dminsttNm":"전북특별자치도 익산시","bidClseDt":"2026-03-20 11:00:00","rgstDt":"2026-03-08 13:27:20","_src_group":"servc","rgnLmtBidLocplcJdgmBssNm":"전북"}
                     """,
                     """
@@ -218,6 +221,9 @@ public class NaraApiDashboardRepositoryTests
                     """,
                     """
                     {"bidNtceNo":"R26BK20000002","bidNtceNm":"대구 미래스마트기술 국가산업단지 국가유산영향진단 용역","dminsttNm":"한국토지주택공사 대구경북지역본부","opengDt":"2026-03-08 13:28:10","prtcptCnum":"8","_src_group":"servc"}
+                    """,
+                    """
+                    {"bidNtceNo":"R26BK20000006","bidNtceNm":"전국 매장유산 정밀발굴조사 용역","dminsttNm":"국가유산청","opengDt":"2026-03-08 13:28:12","prtcptCnum":"12","_src_group":"servc"}
                     """,
                     """
                     {"bidNtceNo":"R26BK20000003","bidNtceNm":"익산망기 공공지원민간임대주택 공급촉진지구 매장유산 발굴(표본,시굴)조사 용역","dminsttNm":"전북특별자치도 익산시","opengDt":"2026-03-08 13:28:20","prtcptCnum":"11","_src_group":"servc"}
@@ -241,11 +247,13 @@ public class NaraApiDashboardRepositoryTests
             var result = NaraApiDashboardRepository.TestHook_LoadCollectorNoticeFeed(root, filter);
 
             Assert.Equal(
-                ["R26BK20000002"],
+                ["R26BK20000006"],
                 result.BidRows.Select(x => x.NoticeNumber).OrderBy(x => x).ToArray());
             Assert.Equal(
-                ["R26BK20000002"],
+                ["R26BK20000006"],
                 result.AwardRows.Select(x => x.NoticeNumber).OrderBy(x => x).ToArray());
+            Assert.DoesNotContain(result.BidRows, x => x.NoticeName.Contains("영향진단", StringComparison.Ordinal));
+            Assert.DoesNotContain(result.AwardRows, x => x.NoticeName.Contains("영향진단", StringComparison.Ordinal));
         }
         finally
         {

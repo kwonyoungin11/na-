@@ -5,6 +5,7 @@ using System.Threading;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using NaraCollector.Desktop.Models;
 using NaraCollector.Desktop.Services;
@@ -103,6 +104,7 @@ public sealed class NativeBidChartControl : FrameworkElement
     private static readonly Brush SubtleTextBrush = CreateBrush("#5A6473");
     private static readonly Brush RankBadgeBrush = CreateBrush("#C62828");
     private static readonly Brush RankBadgeTextBrush = Brushes.White;
+    private static readonly Pen ChipLabelOutlinePen = CreateRoundPen("#59000000", 0.4);
     private static readonly Pen TrendMarkerPen = CreatePen("#FFFFFF", 1.1);
 
     public static readonly DependencyProperty PinnedRecommendationBandMinProperty = DependencyProperty.Register(
@@ -123,9 +125,23 @@ public sealed class NativeBidChartControl : FrameworkElement
         typeof(NativeBidChartControl),
         new FrameworkPropertyMetadata(string.Empty, FrameworkPropertyMetadataOptions.AffectsRender));
 
+    private static readonly Typeface ScatterLabelTypeface = new(
+        new FontFamily("Malgun Gothic"),
+        FontStyles.Normal,
+        FontWeights.Bold,
+        FontStretches.Normal);
+
     private readonly Dictionary<(int RowIndex, int ColumnIndex), List<ParticipantRecord>> _cellLookup = [];
     private readonly Dictionary<string, Color> _companyColorCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, SolidColorBrush> _companyBrushCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<(string Text, int SizeBucket, int DpiBucket), FormattedText> _shortLabelCache = [];
+    private DrawingGroup? _chipLayerCache;
+    private int _chipLayerCacheVersion = -1;
+    private double _chipLayerCellSize;
+    private ImageSource? _viewLayer;
+    private ScatterViewCacheKey _viewLayerKey;
+    private double? _lastRaisedHoverRate;
+    private readonly Dictionary<(string Text, int SizeBucket, int Weight, int MaxWidth, int DpiBucket, int Color), FormattedText> _axisLabelCache = [];
     private readonly List<RowInfo> _rows = [];
     private readonly List<ParticipantRecord> _filteredPoints = [];
     private readonly List<ParticipantRecord> _recommendationPoints = [];
@@ -224,10 +240,29 @@ public sealed class NativeBidChartControl : FrameworkElement
     public NativeBidChartControl()
     {
         Focusable = true;
+        SnapsToDevicePixels = true;
+        UseLayoutRounding = true;
+        RenderOptions.SetBitmapScalingMode(this, BitmapScalingMode.NearestNeighbor);
+        RenderOptions.SetCachingHint(this, CachingHint.Cache);
         _pulseTimer.Tick += HandlePulseTick;
-        Loaded += (_, _) => UpdatePulseTimer();
+        Loaded += (_, _) =>
+        {
+            UpdatePulseTimer();
+            if (IsVisible && _indexDirty)
+            {
+                QueueDataPreparation();
+            }
+        };
         Unloaded += (_, _) => _pulseTimer.Stop();
-        IsVisibleChanged += (_, _) => UpdatePulseTimer();
+        IsVisibleChanged += (_, _) =>
+        {
+            UpdatePulseTimer();
+            if (IsVisible && _indexDirty)
+            {
+                QueueDataPreparation();
+                InvalidateVisual();
+            }
+        };
     }
 
     public static readonly DependencyProperty ParticipantsProperty =
@@ -267,6 +302,26 @@ public sealed class NativeBidChartControl : FrameworkElement
             typeof(NativeBidChartControl),
             new FrameworkPropertyMetadata(
                 "101.00000",
+                FrameworkPropertyMetadataOptions.AffectsRender,
+                OnDataPropertyChanged));
+
+    public static readonly DependencyProperty StartDateProperty =
+        DependencyProperty.Register(
+            nameof(StartDate),
+            typeof(DateTime),
+            typeof(NativeBidChartControl),
+            new FrameworkPropertyMetadata(
+                DateTime.MinValue,
+                FrameworkPropertyMetadataOptions.AffectsRender,
+                OnDataPropertyChanged));
+
+    public static readonly DependencyProperty EndDateProperty =
+        DependencyProperty.Register(
+            nameof(EndDate),
+            typeof(DateTime),
+            typeof(NativeBidChartControl),
+            new FrameworkPropertyMetadata(
+                DateTime.MaxValue,
                 FrameworkPropertyMetadataOptions.AffectsRender,
                 OnDataPropertyChanged));
 
@@ -321,6 +376,18 @@ public sealed class NativeBidChartControl : FrameworkElement
     {
         get => (string)GetValue(MaxAdjustRateProperty);
         set => SetValue(MaxAdjustRateProperty, value);
+    }
+
+    public DateTime StartDate
+    {
+        get => (DateTime)GetValue(StartDateProperty);
+        set => SetValue(StartDateProperty, value);
+    }
+
+    public DateTime EndDate
+    {
+        get => (DateTime)GetValue(EndDateProperty);
+        set => SetValue(EndDateProperty, value);
     }
 
     public string Precision
@@ -666,6 +733,12 @@ public sealed class NativeBidChartControl : FrameworkElement
         }
 
         control._indexDirty = true;
+        control.InvalidateCachedLayers();
+        if (!control.IsVisible)
+        {
+            return;
+        }
+
         control.UpdatePulseTimer();
         control.QueueDataPreparation();
         control.InvalidateVisual();
@@ -689,11 +762,13 @@ public sealed class NativeBidChartControl : FrameworkElement
         var precision = Precision;
         var minAdjustRate = MinAdjustRate;
         var maxAdjustRate = MaxAdjustRate;
+        var startDate = StartDate;
+        var endDate = EndDate;
         var mode = Mode;
         var version = Interlocked.Increment(ref _prepareVersion);
         _isPreparingData = true;
 
-        _ = Task.Run(() => BuildPreparedState(participants, selectedCompany, precision, minAdjustRate, maxAdjustRate, mode))
+        _ = Task.Run(() => BuildPreparedState(participants, selectedCompany, precision, minAdjustRate, maxAdjustRate, startDate, endDate, mode))
             .ContinueWith(
                 task =>
                 {
@@ -732,8 +807,14 @@ public sealed class NativeBidChartControl : FrameworkElement
         string precision,
         string minAdjustRate,
         string maxAdjustRate,
+        DateTime startDate,
+        DateTime endDate,
         NativeBidChartMode mode)
     {
+        participants = ScatterChartRules.InPeriod(
+            CollectorNoticeRules.ApplyChartRules(participants ?? Array.Empty<ParticipantRecord>()),
+            startDate == default ? DateTime.MinValue : startDate,
+            endDate == default ? DateTime.MaxValue : endDate);
         var precisionStep = ParsePrecision(precision);
         var minRate = ParseRate(minAdjustRate, 99.0);
         var maxRate = ParseRate(maxAdjustRate, 101.0);
@@ -823,7 +904,10 @@ public sealed class NativeBidChartControl : FrameworkElement
                 .GroupBy(
                     x => string.IsNullOrWhiteSpace(x.NoticeNumber) ? x.NoticeNo : x.NoticeNumber,
                     StringComparer.OrdinalIgnoreCase)
-                .Select(g => new RowInfo(
+                .Select(g =>
+                {
+                    var scatter = ScatterChartRules.BuildNotice(participants, g.Key, minRate, maxRate);
+                    return new RowInfo(
                     g.Key,
                     g.Max(x => x.OpenDate),
                     participants
@@ -836,9 +920,8 @@ public sealed class NativeBidChartControl : FrameworkElement
                         .OrderByDescending(x => x.OpenDate)
                         .ThenBy(x => x.Rank > 0 ? x.Rank : int.MaxValue)
                         .FirstOrDefault(),
-                    g.OrderBy(x => x.Rank > 0 ? x.Rank : int.MaxValue)
-                        .ThenBy(x => x.CompanyName, StringComparer.OrdinalIgnoreCase)
-                        .ToList()))
+                    scatter.Chips.ToList());
+                })
                 .OrderBy(x => x.OpenDate)
                 .ToList();
 
@@ -864,7 +947,7 @@ public sealed class NativeBidChartControl : FrameworkElement
 
             foreach (var key in cellLookup.Keys.ToList())
             {
-                cellLookup[key] = SortCellBucketForDisplay(cellLookup[key]);
+                cellLookup[key] = ScatterChartRules.SortOverlappingChips(cellLookup[key]);
             }
         }
 
@@ -879,7 +962,7 @@ public sealed class NativeBidChartControl : FrameworkElement
             MaxRate: maxRate,
             ColumnCount: columnCount,
             LabelEvery: labelEvery,
-            AnimateDiff: mode == NativeBidChartMode.Scatter);
+            AnimateDiff: false);
     }
 
     private void ApplyPreparedState(PreparedChartState state)
@@ -909,6 +992,7 @@ public sealed class NativeBidChartControl : FrameworkElement
         _lastRecommendation = state.Recommendation;
         _recommendationHotRect = Rect.Empty;
         _isRecommendationHovered = false;
+        InvalidateCachedLayers();
 
         if (_animateDiff && _rows.Count > 0)
         {
@@ -923,6 +1007,12 @@ public sealed class NativeBidChartControl : FrameworkElement
         InvalidateVisual();
     }
 
+    private void InvalidateCachedLayers()
+    {
+        _chipLayerCache = null;
+        _viewLayer = null;
+    }
+
     private void DrawScatter(DrawingContext dc, Rect area)
     {
         var left = 220.0;
@@ -935,17 +1025,55 @@ public sealed class NativeBidChartControl : FrameworkElement
             Math.Max(120, area.Width - left - right),
             Math.Max(120, area.Height - top - bottom));
 
-        dc.DrawRectangle(PlotBackgroundBrush, AxisPen, _plotRect);
-
         if (_rows.Count == 0 || _columnCount <= 0)
         {
-            DrawMessage(dc, area, "표시할 차트 데이터가 없습니다.");
+            dc.DrawRectangle(PlotBackgroundBrush, AxisPen, _plotRect);
+            DrawMessage(dc, area, "동국 참여 낙찰공고가 없습니다. 기간·지역을 조정하세요.");
             return;
         }
 
-        var (cellWidth, cellHeight) = GetScatterCellSize();
-        var worldWidth = _columnCount * cellWidth;
+        var layout = MeasureScatterLayout();
+        var viewKey = BuildViewCacheKey(area);
+        var overlayOnly = _interactionState == ChartInteractionState.None
+            && !_isPanActive
+            && ScatterRenderCache.IsOverlayOnlyFrame(_viewLayer is not null, _viewLayerKey, viewKey);
 
+        if (overlayOnly)
+        {
+            dc.DrawImage(_viewLayer, area);
+        }
+        else if (_isPanActive || _interactionState == ChartInteractionState.Panning)
+        {
+            DrawScatterStatic(dc, area, layout);
+            _viewLayer = null;
+        }
+        else
+        {
+            try
+            {
+                _viewLayer = RasterizeScatterStatic(area, layout);
+                _viewLayerKey = viewKey;
+                dc.DrawImage(_viewLayer, area);
+            }
+            catch
+            {
+                DrawScatterStatic(dc, area, layout);
+                _viewLayer = null;
+            }
+        }
+
+        DrawScatterOverlay(dc, layout);
+
+        if (_animationFrameHooked)
+        {
+            CompositionTarget.Rendering -= HandleAnimationFrame;
+            _animationFrameHooked = false;
+        }
+    }
+
+    private ScatterLayout MeasureScatterLayout()
+    {
+        var (cellWidth, cellHeight) = GetScatterCellSize();
         var invScale = 1.0 / Math.Max(0.0001, _scale);
         var visibleWorld = new Rect(
             (-_offset.X) * invScale,
@@ -960,16 +1088,15 @@ public sealed class NativeBidChartControl : FrameworkElement
         var gridRowStart = (int)Math.Floor(visibleWorld.Top / cellHeight) - 1;
         var unclampedGridRowEnd = (int)Math.Ceiling(visibleWorld.Bottom / cellHeight) + 1;
         var worldRowCount = Math.Max(_rows.Count, unclampedGridRowEnd + 1);
+        var worldWidth = _columnCount * cellWidth;
         var worldHeight = worldRowCount * cellHeight;
         var rowStart = Math.Clamp(gridRowStart, 0, Math.Max(0, _rows.Count - 1));
         var rowEnd = Math.Clamp(unclampedGridRowEnd, 0, Math.Max(0, _rows.Count - 1));
         var visibleRows = Math.Max(1, rowEnd - rowStart + 1);
         var visibleCols = Math.Max(1, colEnd - colStart + 1);
         var visibleCellEstimate = visibleRows * visibleCols;
-        var nameCharLimit = ResolveNameCharLimit(cellWidth, cellHeight, visibleCellEstimate);
         var drawRowLabels = !HighPerformanceMode
             || (_scale >= 1.0 && visibleRows <= 140 && visibleCellEstimate <= 18000);
-
         var recommendation = ResolveDisplayRecommendation();
         var bandStartColumn = recommendation is null
             ? 0
@@ -978,102 +1105,160 @@ public sealed class NativeBidChartControl : FrameworkElement
             ? 0
             : ToColumnIndex(Math.Max(recommendation.BandMin, recommendation.BandMax));
 
+        return new ScatterLayout(
+            cellWidth,
+            cellHeight,
+            worldWidth,
+            worldHeight,
+            colStart,
+            colEnd,
+            rowStart,
+            rowEnd,
+            gridColStart,
+            gridColEnd,
+            gridRowStart,
+            unclampedGridRowEnd,
+            drawRowLabels,
+            recommendation,
+            bandStartColumn,
+            bandEndColumn);
+    }
+
+    private ScatterViewCacheKey BuildViewCacheKey(Rect area)
+    {
+        var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        return new ScatterViewCacheKey(
+            _prepareVersion,
+            Math.Max(1, (int)Math.Round(area.Width * dpi)),
+            Math.Max(1, (int)Math.Round(area.Height * dpi)),
+            (int)Math.Round(_scale * 1000.0),
+            (int)Math.Round(_offset.X * 10.0),
+            (int)Math.Round(_offset.Y * 10.0),
+            (int)Math.Round(_plotRect.Width),
+            (int)Math.Round(_plotRect.Height),
+            _columnCount,
+            _rows.Count);
+    }
+
+    private ImageSource RasterizeScatterStatic(Rect area, ScatterLayout layout)
+    {
+        var dpi = VisualTreeHelper.GetDpi(this);
+        var dpiX = 96.0 * dpi.DpiScaleX;
+        var dpiY = 96.0 * dpi.DpiScaleY;
+        var pixelWidth = Math.Max(1, (int)Math.Ceiling(area.Width * dpi.DpiScaleX));
+        var pixelHeight = Math.Max(1, (int)Math.Ceiling(area.Height * dpi.DpiScaleY));
+        var visual = new DrawingVisual();
+        using (var ctx = visual.RenderOpen())
+        {
+            DrawScatterStatic(ctx, area, layout);
+        }
+
+        var bitmap = new RenderTargetBitmap(pixelWidth, pixelHeight, dpiX, dpiY, PixelFormats.Pbgra32);
+        bitmap.Render(visual);
+        bitmap.Freeze();
+        return bitmap;
+    }
+
+    private void DrawScatterStatic(DrawingContext dc, Rect area, ScatterLayout layout)
+    {
+        dc.DrawRectangle(BackgroundBrush, null, area);
+        dc.DrawRectangle(PlotBackgroundBrush, AxisPen, _plotRect);
+
         dc.PushClip(new RectangleGeometry(_plotRect));
         dc.PushTransform(new TranslateTransform(_plotRect.Left + _offset.X, _plotRect.Top + _offset.Y));
         dc.PushTransform(new ScaleTransform(_scale, _scale));
 
-        if (recommendation is not null)
+        if (layout.Recommendation is not null)
         {
             var recommendationBand = new Rect(
-                bandStartColumn * cellWidth,
+                layout.BandStartColumn * layout.CellWidth,
                 0,
-                Math.Max(1, ((bandEndColumn - bandStartColumn) + 1) * cellWidth),
-                worldHeight);
+                Math.Max(1, ((layout.BandEndColumn - layout.BandStartColumn) + 1) * layout.CellWidth),
+                layout.WorldHeight);
             dc.DrawRectangle(RecommendationBandBrush, RecommendationBandPen, recommendationBand);
         }
 
-        var gridTop = gridRowStart * cellHeight;
-        var gridBottom = (unclampedGridRowEnd + 1) * cellHeight;
-        var gridLeft = gridColStart * cellWidth;
-        var gridRight = (gridColEnd + 1) * cellWidth;
-
-        for (var col = gridColStart; col <= gridColEnd; col++)
+        var gridTop = layout.GridRowStart * layout.CellHeight;
+        var gridBottom = (layout.UnclampedGridRowEnd + 1) * layout.CellHeight;
+        var gridLeft = layout.GridColStart * layout.CellWidth;
+        var gridRight = (layout.GridColEnd + 1) * layout.CellWidth;
+        var gridColStep = HighPerformanceMode && (layout.GridColEnd - layout.GridColStart) > 90 ? 2 : 1;
+        var gridRowStep = HighPerformanceMode && (layout.UnclampedGridRowEnd - layout.GridRowStart) > 90 ? 2 : 1;
+        for (var col = layout.GridColStart; col <= layout.GridColEnd; col += gridColStep)
         {
-            var x = col * cellWidth;
+            var x = col * layout.CellWidth;
             var pen = col % _labelEvery == 0 ? MajorGridPen : GridPen;
             dc.DrawLine(pen, new Point(x, gridTop), new Point(x, gridBottom));
         }
 
-        for (var row = gridRowStart; row <= unclampedGridRowEnd; row++)
+        for (var row = layout.GridRowStart; row <= layout.UnclampedGridRowEnd; row += gridRowStep)
         {
-            var y = row * cellHeight;
+            var y = row * layout.CellHeight;
             dc.DrawLine(GridPen, new Point(gridLeft, y), new Point(gridRight, y));
         }
 
-        var progress = _animateDiff
-            ? Math.Clamp((DateTime.UtcNow - _animationStartedAtUtc).TotalMilliseconds / 320.0, 0.0, 1.0)
-            : 1.0;
+        EnsureChipLayerCache(layout.CellWidth, layout.CellHeight);
+        if (_chipLayerCache is not null)
+        {
+            dc.DrawDrawing(_chipLayerCache);
+        }
+
+        dc.Pop();
+        dc.Pop();
+        dc.Pop();
+
+        DrawScatterAxes(
+            dc,
+            layout.CellWidth,
+            layout.CellHeight,
+            layout.ColStart,
+            layout.ColEnd,
+            layout.RowStart,
+            layout.RowEnd,
+            layout.DrawRowLabels);
+
+        if (layout.Recommendation is not null)
+        {
+            DrawRecommendationArrow(dc, layout.Recommendation, layout.CellWidth);
+            DrawRecommendedLabel(dc, layout.Recommendation);
+        }
+        else
+        {
+            _recommendationHotRect = Rect.Empty;
+        }
+    }
+
+    private void DrawScatterOverlay(DrawingContext dc, ScatterLayout layout)
+    {
+        dc.PushClip(new RectangleGeometry(_plotRect));
+        dc.PushTransform(new TranslateTransform(_plotRect.Left + _offset.X, _plotRect.Top + _offset.Y));
+        dc.PushTransform(new ScaleTransform(_scale, _scale));
 
         var hoverCompany = _hoverCompany;
-        for (var row = rowStart; row <= rowEnd; row++)
+        for (var row = layout.RowStart; row <= layout.RowEnd; row++)
         {
             var rowInfo = _rows[row];
-            for (var col = colStart; col <= colEnd; col++)
+            if (!string.IsNullOrWhiteSpace(hoverCompany))
             {
-                if (!_cellLookup.TryGetValue((row, col), out var bucket))
+                for (var col = layout.ColStart; col <= layout.ColEnd; col++)
                 {
-                    continue;
-                }
-
-                for (var i = 0; i < bucket.Count; i++)
-                {
-                    var point = bucket[i];
-                    var rect = BuildPointRect(row, col, i, cellWidth, cellHeight, progress);
-
-                    var blockBrush = ResolveCompanyBrush(point.NormalizedCompanyName, point.CompanyName);
-                    dc.DrawRectangle(blockBrush, BlockBorderPen, rect);
-
-                    if (point.Rank == 1)
+                    if (!_cellLookup.TryGetValue((row, col), out var bucket))
                     {
-                        var pulse = (Math.Sin(_pulsePhase * 0.18) + 1.0) / 2.0;
-                        var pulseScale = 1.08 + (pulse * 0.34);
-                        var pulseRect = new Rect(
-                            rect.Left - ((rect.Width * (pulseScale - 1.0)) / 2.0),
-                            rect.Top - ((rect.Height * (pulseScale - 1.0)) / 2.0),
-                            rect.Width * pulseScale,
-                            rect.Height * pulseScale);
-                        var outerPen = CreateTransientPen(Color.FromArgb((byte)(145 + (pulse * 95)), 0xFA, 0xCC, 0x15), 3.0 + (pulse * 2.1));
-                        dc.DrawRoundedRectangle(null, outerPen, pulseRect, 3, 3);
-                        dc.DrawRectangle(null, RankHighlightPen, rect);
-                        var badgeRect = new Rect(
-                            rect.Right - Math.Max(6, rect.Width * 0.45),
-                            rect.Top + 1,
-                            Math.Max(6, rect.Width * 0.42),
-                            Math.Max(6, rect.Height * 0.38));
-                        dc.DrawRoundedRectangle(
-                            RankBadgeBrush,
-                            null,
-                            badgeRect,
-                            2,
-                            2);
-                        DrawText(
-                            dc,
-                            "1",
-                            new Point(badgeRect.Left + 1.2, badgeRect.Top - 0.6),
-                            Math.Max(5.5, badgeRect.Height - 1.5),
-                            FontWeights.Bold,
-                            RankBadgeTextBrush,
-                            badgeRect.Width - 2);
+                        continue;
                     }
 
-                    if (!string.IsNullOrWhiteSpace(hoverCompany)
-                        && (ContainsToken(point.CompanyName, hoverCompany) || ContainsToken(point.NormalizedCompanyName, hoverCompany)))
+                    for (var i = 0; i < bucket.Count; i++)
                     {
+                        var point = bucket[i];
+                        if (!ContainsToken(point.CompanyName, hoverCompany)
+                            && !ContainsToken(point.NormalizedCompanyName, hoverCompany))
+                        {
+                            continue;
+                        }
+
+                        var rect = BuildPointRect(row, col, i, layout.CellWidth, layout.CellHeight, 1.0);
                         dc.DrawRectangle(null, HoverHighlightPen, rect);
                     }
-
-                    var shortName = BuildShortName(point.NormalizedCompanyName, point.CompanyName, nameCharLimit);
-                    DrawShortText(dc, shortName, rect);
                 }
             }
 
@@ -1081,53 +1266,35 @@ public sealed class NativeBidChartControl : FrameworkElement
                 && (awardedRate < _minRate || awardedRate > _maxRate))
             {
                 var markerRect = awardedRate < _minRate
-                    ? new Rect(2, (row * cellHeight) + 2, Math.Max(7, cellWidth * 0.55), Math.Max(7, cellHeight * 0.42))
-                    : new Rect(worldWidth - Math.Max(11, cellWidth * 0.7), (row * cellHeight) + 2, Math.Max(7, cellWidth * 0.55), Math.Max(7, cellHeight * 0.42));
+                    ? new Rect(2, (row * layout.CellHeight) + 2, Math.Max(7, layout.CellWidth * 0.55), Math.Max(7, layout.CellHeight * 0.42))
+                    : new Rect(layout.WorldWidth - Math.Max(11, layout.CellWidth * 0.7), (row * layout.CellHeight) + 2, Math.Max(7, layout.CellWidth * 0.55), Math.Max(7, layout.CellHeight * 0.42));
                 dc.DrawRoundedRectangle(RankBadgeBrush, RankHighlightOuterPen, markerRect, 2, 2);
-                DrawText(
-                    dc,
-                    "1",
-                    new Point(markerRect.Left + 1.0, markerRect.Top - 0.6),
-                    Math.Max(5.3, markerRect.Height - 1.2),
-                    FontWeights.Bold,
-                    RankBadgeTextBrush,
-                    markerRect.Width - 1.5);
             }
         }
 
         dc.Pop();
         dc.Pop();
         dc.Pop();
-
-        DrawScatterAxes(dc, cellWidth, cellHeight, colStart, colEnd, rowStart, rowEnd, drawRowLabels);
         DrawHoveredRateGuide(dc);
-        if (recommendation is not null)
-        {
-            DrawRecommendationArrow(dc, recommendation, cellWidth);
-            DrawRecommendedLabel(dc, recommendation);
-        }
-        else
-        {
-            _recommendationHotRect = Rect.Empty;
-        }
-
-        if (progress < 1.0)
-        {
-            if (!_animationFrameHooked)
-            {
-                CompositionTarget.Rendering += HandleAnimationFrame;
-                _animationFrameHooked = true;
-            }
-        }
-        else
-        {
-            if (_animationFrameHooked)
-            {
-                CompositionTarget.Rendering -= HandleAnimationFrame;
-                _animationFrameHooked = false;
-            }
-        }
     }
+
+    private readonly record struct ScatterLayout(
+        double CellWidth,
+        double CellHeight,
+        double WorldWidth,
+        double WorldHeight,
+        int ColStart,
+        int ColEnd,
+        int RowStart,
+        int RowEnd,
+        int GridColStart,
+        int GridColEnd,
+        int GridRowStart,
+        int UnclampedGridRowEnd,
+        bool DrawRowLabels,
+        RecommendationSnapshot? Recommendation,
+        int BandStartColumn,
+        int BandEndColumn);
 
     private void DrawTrend(DrawingContext dc, Rect area)
     {
@@ -1780,11 +1947,68 @@ public sealed class NativeBidChartControl : FrameworkElement
         _recommendationHotRect = Rect.Union(arrowHotRect, labelRect);
     }
 
+    private void EnsureChipLayerCache(double cellWidth, double cellHeight)
+    {
+        if (_chipLayerCache is not null
+            && _chipLayerCacheVersion == _prepareVersion
+            && Math.Abs(_chipLayerCellSize - cellWidth) < 0.001)
+        {
+            return;
+        }
+
+        var group = new DrawingGroup();
+        using (var ctx = group.Open())
+        {
+            foreach (var entry in _cellLookup)
+            {
+                var (row, col) = entry.Key;
+                var bucket = entry.Value;
+                for (var i = 0; i < bucket.Count; i++)
+                {
+                    var point = bucket[i];
+                    var rect = BuildPointRect(row, col, i, cellWidth, cellHeight, 1.0);
+                    ctx.DrawRectangle(
+                        ResolveCompanyBrush(point.NormalizedCompanyName, point.CompanyName),
+                        BlockBorderPen,
+                        rect);
+                    DrawShortText(
+                        ctx,
+                        BuildShortName(point.NormalizedCompanyName, point.CompanyName, 2),
+                        rect);
+                    if (point.Rank != 1)
+                    {
+                        continue;
+                    }
+
+                    ctx.DrawRectangle(null, RankHighlightPen, rect);
+                    var badgeRect = new Rect(
+                        rect.Right - Math.Max(6, rect.Width * 0.45),
+                        rect.Top + 1,
+                        Math.Max(6, rect.Width * 0.42),
+                        Math.Max(6, rect.Height * 0.38));
+                    ctx.DrawRoundedRectangle(RankBadgeBrush, null, badgeRect, 2, 2);
+                }
+            }
+        }
+
+        if (group.CanFreeze)
+        {
+            group.Freeze();
+        }
+
+        _chipLayerCache = group;
+        _chipLayerCacheVersion = _prepareVersion;
+        _chipLayerCellSize = cellWidth;
+    }
+
     private void DrawShortText(DrawingContext dc, string text, Rect rect)
     {
-        var displayText = string.IsNullOrWhiteSpace(text)
-            ? string.Empty
-            : text.Trim();
+        var displayText = CompanyNamePresentation.BuildShortLabel(text);
+        if (string.IsNullOrWhiteSpace(displayText))
+        {
+            displayText = string.IsNullOrWhiteSpace(text) ? string.Empty : text.Trim();
+        }
+
         if (displayText.Length > 2)
         {
             displayText = displayText[..2];
@@ -1795,52 +2019,44 @@ public sealed class NativeBidChartControl : FrameworkElement
             || !IsFinite(rect.Height)
             || !IsFinite(rect.Left)
             || !IsFinite(rect.Top)
-            || rect.Width < 4
-            || rect.Height < 4)
+            || rect.Width < 6
+            || rect.Height < 6)
         {
             return;
         }
 
         var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        var maxW = Math.Max(2.0, rect.Width - 2.0);
+        var maxH = Math.Max(2.0, rect.Height - 2.0);
         var fontSize = Math.Clamp(
-            Math.Min(
-                rect.Height * 0.94,
-                rect.Width / Math.Max(1.0, displayText.Length * 0.74)),
+            Math.Min(maxW / Math.Max(1.05, displayText.Length), maxH * 0.62),
             4.0,
-            14.0);
-        var typeface = new Typeface(
-            new FontFamily("Malgun Gothic"),
-            FontStyles.Normal,
-            FontWeights.Bold,
-            FontStretches.Normal);
-        var maxTextWidth = Math.Max(2.0, rect.Width - 0.2);
-        var maxTextHeight = Math.Max(2.0, rect.Height - 0.2);
-
-        static FormattedText CreateLabel(
-            string label,
-            Typeface face,
-            double size,
-            Brush brush,
-            double pixelsPerDip)
+            11.0);
+        var sizeBucket = Math.Max(4, (int)Math.Round(fontSize * 2.0));
+        var dpiBucket = Math.Max(1, (int)Math.Round(dpi * 100));
+        var key = (displayText, sizeBucket, dpiBucket);
+        if (!_shortLabelCache.TryGetValue(key, out var formatted))
         {
-            return new FormattedText(
-                label,
+            if (_shortLabelCache.Count > 256)
+            {
+                _shortLabelCache.Clear();
+            }
+
+            formatted = new FormattedText(
+                displayText,
                 CultureInfo.CurrentUICulture,
                 FlowDirection.LeftToRight,
-                face,
-                size,
-                brush,
-                pixelsPerDip);
+                ScatterLabelTypeface,
+                fontSize,
+                Brushes.White,
+                dpi)
+            {
+                MaxTextWidth = maxW,
+                MaxTextHeight = maxH,
+                Trimming = TextTrimming.CharacterEllipsis,
+            };
+            _shortLabelCache[key] = formatted;
         }
-
-        var formatted = CreateLabel(displayText, typeface, fontSize, Brushes.White, dpi);
-        while ((formatted.Width > maxTextWidth || formatted.Height > maxTextHeight) && fontSize > 3.8)
-        {
-            fontSize -= 0.4;
-            formatted = CreateLabel(displayText, typeface, fontSize, Brushes.White, dpi);
-        }
-
-        var shadow = CreateLabel(displayText, typeface, fontSize, Brushes.Black, dpi);
 
         var x = rect.Left + Math.Max(0, (rect.Width - formatted.Width) / 2.0);
         var y = rect.Top + Math.Max(0, (rect.Height - formatted.Height) / 2.0);
@@ -1850,8 +2066,17 @@ public sealed class NativeBidChartControl : FrameworkElement
         }
 
         dc.PushClip(new RectangleGeometry(rect));
-        dc.DrawText(shadow, new Point(x + 0.55, y + 0.55));
-        dc.DrawText(formatted, new Point(x, y));
+        var origin = new Point(x, y);
+        var outline = formatted.BuildGeometry(origin);
+        if (outline is not null && !outline.IsEmpty())
+        {
+            dc.DrawGeometry(Brushes.White, ChipLabelOutlinePen, outline);
+        }
+        else
+        {
+            dc.DrawText(formatted, origin);
+        }
+
         dc.Pop();
     }
 
@@ -1902,18 +2127,38 @@ public sealed class NativeBidChartControl : FrameworkElement
         }
 
         var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
-        var formatted = new FormattedText(
+        var color = brush is SolidColorBrush solid
+            ? (solid.Color.A << 24) | (solid.Color.R << 16) | (solid.Color.G << 8) | solid.Color.B
+            : 0;
+        var key = (
             text ?? string.Empty,
-            CultureInfo.CurrentUICulture,
-            FlowDirection.LeftToRight,
-            new Typeface(new FontFamily("Malgun Gothic"), FontStyles.Normal, weight, FontStretches.Normal),
-            size,
-            brush,
-            dpi)
+            Math.Max(1, (int)Math.Round(size * 10.0)),
+            weight.ToOpenTypeWeight(),
+            Math.Max(1, (int)Math.Min(resolvedMaxWidth, 50000)),
+            Math.Max(1, (int)Math.Round(dpi * 100.0)),
+            color);
+        if (!_axisLabelCache.TryGetValue(key, out var formatted))
         {
-            MaxTextWidth = resolvedMaxWidth,
-            Trimming = TextTrimming.CharacterEllipsis,
-        };
+            if (_axisLabelCache.Count > 512)
+            {
+                _axisLabelCache.Clear();
+            }
+
+            formatted = new FormattedText(
+                text ?? string.Empty,
+                CultureInfo.CurrentUICulture,
+                FlowDirection.LeftToRight,
+                new Typeface(new FontFamily("Malgun Gothic"), FontStyles.Normal, weight, FontStretches.Normal),
+                size,
+                brush,
+                dpi)
+            {
+                MaxTextWidth = resolvedMaxWidth,
+                Trimming = TextTrimming.CharacterEllipsis,
+            };
+            _axisLabelCache[key] = formatted;
+        }
+
         dc.DrawText(formatted, point);
     }
 
@@ -2067,7 +2312,12 @@ public sealed class NativeBidChartControl : FrameworkElement
 
         if (changed)
         {
-            HoveredRateChanged?.Invoke(this, new HoveredRateChangedEventArgs(Math.Round(rate.Value, 5)));
+            if (ScatterRenderCache.ShouldRaiseHoveredRate(_lastRaisedHoverRate, rate.Value, _precisionStep))
+            {
+                _lastRaisedHoverRate = rate.Value;
+                HoveredRateChanged?.Invoke(this, new HoveredRateChangedEventArgs(Math.Round(rate.Value, 5)));
+            }
+
             InvalidateVisual();
         }
     }
@@ -2081,6 +2331,7 @@ public sealed class NativeBidChartControl : FrameworkElement
 
         _hoverRate = null;
         _hoverPlotPosition = null;
+        _lastRaisedHoverRate = null;
         _hoverOverlayLines = [];
         HoveredRateChanged?.Invoke(this, new HoveredRateChangedEventArgs(null));
     }
@@ -2144,16 +2395,8 @@ public sealed class NativeBidChartControl : FrameworkElement
             ? Math.Clamp((DateTime.UtcNow - _animationStartedAtUtc).TotalMilliseconds / 320.0, 0.0, 1.0)
             : 1.0;
         var worldPoint = ToWorldPoint(_hoverPlotPosition ?? new Point());
-        for (var i = 0; i < bucket.Count; i++)
-        {
-            var rect = BuildPointRect(row, col, i, cellWidth, cellHeight, progress);
-            if (rect.Contains(worldPoint))
-            {
-                return bucket[i];
-            }
-        }
-
-        return bucket[0];
+        return HitFrontmostChip(bucket, row, col, cellWidth, cellHeight, progress, worldPoint)
+            ?? bucket[^1];
     }
 
     private double? ResolveScatterHoveredRate(Point worldPoint)
@@ -2231,34 +2474,37 @@ public sealed class NativeBidChartControl : FrameworkElement
             var progress = _animateDiff
                 ? Math.Clamp((DateTime.UtcNow - _animationStartedAtUtc).TotalMilliseconds / 320.0, 0.0, 1.0)
                 : 1.0;
-            for (var i = 0; i < bucket.Count; i++)
+            var hit = HitFrontmostChip(bucket, row, col, cellWidth, cellHeight, progress, worldPoint)
+                ?? bucket[^1];
+            var hitName = !string.IsNullOrWhiteSpace(hit.CompanyName)
+                ? hit.CompanyName
+                : hit.NormalizedCompanyName;
+            if (!string.IsNullOrWhiteSpace(hitName))
             {
-                var rect = BuildPointRect(row, col, i, cellWidth, cellHeight, progress);
-                if (!rect.Contains(worldPoint))
-                {
-                    continue;
-                }
-
-                var hitName = !string.IsNullOrWhiteSpace(bucket[i].CompanyName)
-                    ? bucket[i].CompanyName
-                    : bucket[i].NormalizedCompanyName;
-                if (string.IsNullOrWhiteSpace(hitName))
-                {
-                    return;
-                }
-
                 CompanyPicked?.Invoke(this, new CompanyPickedEventArgs(hitName.Trim()));
-                return;
-            }
-
-            var name = !string.IsNullOrWhiteSpace(bucket[0].CompanyName)
-                ? bucket[0].CompanyName
-                : bucket[0].NormalizedCompanyName;
-            if (!string.IsNullOrWhiteSpace(name))
-            {
-                CompanyPicked?.Invoke(this, new CompanyPickedEventArgs(name.Trim()));
             }
         }
+    }
+
+    private static ParticipantRecord? HitFrontmostChip(
+        IReadOnlyList<ParticipantRecord> bucket,
+        int row,
+        int col,
+        double cellWidth,
+        double cellHeight,
+        double progress,
+        Point worldPoint)
+    {
+        for (var i = bucket.Count - 1; i >= 0; i--)
+        {
+            var rect = BuildPointRect(row, col, i, cellWidth, cellHeight, progress);
+            if (rect.Contains(worldPoint))
+            {
+                return bucket[i];
+            }
+        }
+
+        return null;
     }
 
     private void EmitRangeSelection(Rect selection)
@@ -2499,58 +2745,18 @@ public sealed class NativeBidChartControl : FrameworkElement
     private static string BuildShortName(string? normalizedName, string? rawName, int maxChars)
     {
         var source = string.IsNullOrWhiteSpace(normalizedName) ? rawName : normalizedName;
-        if (string.IsNullOrWhiteSpace(source))
-        {
-            return "--";
-        }
-
-        var compact = source.Trim();
-        if (IsDonggukCompany(compact))
+        if (IsDonggukCompany(source))
         {
             return "동국";
         }
 
-        compact = compact
-            .Replace("(재)", string.Empty, StringComparison.OrdinalIgnoreCase)
-            .Replace("(주)", string.Empty, StringComparison.OrdinalIgnoreCase)
-            .Replace("(사)", string.Empty, StringComparison.OrdinalIgnoreCase)
-            .Replace("재단법인", string.Empty, StringComparison.OrdinalIgnoreCase)
-            .Replace("사단법인", string.Empty, StringComparison.OrdinalIgnoreCase)
-            .Replace("주식회사", string.Empty, StringComparison.OrdinalIgnoreCase)
-            .Replace(" ", string.Empty, StringComparison.OrdinalIgnoreCase)
-            .Trim();
-        if (compact.Length == 0)
+        var label = CompanyNamePresentation.BuildShortLabel(source);
+        if (!string.IsNullOrWhiteSpace(label))
         {
-            return "--";
+            return maxChars > 0 && label.Length > maxChars ? label[..maxChars] : label;
         }
 
-        var hangul = new List<char>(compact.Length);
-        foreach (var ch in compact)
-        {
-            if (ch >= '\uAC00' && ch <= '\uD7A3')
-            {
-                hangul.Add(ch);
-            }
-        }
-
-        if (hangul.Count >= 2)
-        {
-            return new string([hangul[0], hangul[1]]);
-        }
-
-        if (hangul.Count == 1)
-        {
-            var first = hangul[0];
-            var second = compact.FirstOrDefault(ch => ch != first && !char.IsWhiteSpace(ch));
-            return second == default ? $"{first}" : $"{first}{second}";
-        }
-
-        if (compact.Length >= 2)
-        {
-            return compact[..2];
-        }
-
-        return compact;
+        return "--";
     }
 
     private static double ParsePrecision(string? value)
@@ -2870,11 +3076,32 @@ public sealed class NativeBidChartControl : FrameworkElement
 
     internal static List<ParticipantRecord> SortCellBucketForDisplay(IEnumerable<ParticipantRecord> bucket)
     {
-        return bucket
-            .OrderBy(x => x.IsAwarded || x.Rank == 1 ? 1 : 0)
-            .ThenBy(x => x.Rank > 0 ? x.Rank : int.MaxValue)
-            .ThenBy(x => x.CompanyName, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        return ScatterChartRules.SortOverlappingChips(bucket);
+    }
+
+    public void ResetMapToCenter()
+    {
+        EndInteraction(invalidateVisual: false);
+        _hoverCompany = null;
+        _isRecommendationHovered = false;
+        ClearHoveredRate();
+        ToolTip = null;
+        _scale = 1.0;
+        if (_plotRect.Width > 1 && _rows.Count > 0 && _columnCount > 0)
+        {
+            var (cellWidth, cellHeight) = GetScatterCellSize();
+            var worldWidth = _columnCount * cellWidth;
+            var worldHeight = _rows.Count * cellHeight;
+            _offset = new Vector(
+                (_plotRect.Width - worldWidth) / 2.0,
+                (_plotRect.Height - worldHeight) / 2.0);
+        }
+        else
+        {
+            _offset = new Vector(12, 12);
+        }
+
+        InvalidateVisual();
     }
 
     private static bool HasActionableRecommendation(RecommendationSnapshot recommendation)
@@ -2927,6 +3154,20 @@ public sealed class NativeBidChartControl : FrameworkElement
         return pen;
     }
 
+    private static Pen CreateRoundPen(string hex, double thickness)
+    {
+        var brush = CreateBrush(hex);
+        var pen = new Pen(brush, thickness)
+        {
+            LineJoin = PenLineJoin.Round,
+            StartLineCap = PenLineCap.Round,
+            EndLineCap = PenLineCap.Round,
+            MiterLimit = 2.0,
+        };
+        pen.Freeze();
+        return pen;
+    }
+
     private static Pen CreateDashedPen(string hex, double thickness, double dash, double gap)
     {
         var brush = CreateBrush(hex);
@@ -2970,7 +3211,7 @@ public sealed class NativeBidChartControl : FrameworkElement
 
     private void HandlePulseTick(object? sender, EventArgs e)
     {
-        if (!IsVisible)
+        if (!IsVisible || HighPerformanceMode || Mode != NativeBidChartMode.Scatter)
         {
             _pulseTimer.Stop();
             return;
@@ -2987,7 +3228,7 @@ public sealed class NativeBidChartControl : FrameworkElement
 
     private void UpdatePulseTimer()
     {
-        if (IsVisible && Mode == NativeBidChartMode.Scatter)
+        if (IsVisible && Mode == NativeBidChartMode.Scatter && !HighPerformanceMode)
         {
             if (!_pulseTimer.IsEnabled)
             {

@@ -10,7 +10,7 @@ namespace NaraCollector.Desktop.Services;
 
 internal sealed class NaraApiScriptRunner
 {
-    private const int DefaultScriptTimeoutSeconds = 900;
+    private const int DefaultScriptTimeoutSeconds = 3600;
     private const int MinScriptTimeoutSeconds = 60;
 
     public async Task<ApiSkillRunResult> RunAsync(
@@ -27,8 +27,28 @@ internal sealed class NaraApiScriptRunner
         IProgress<LoadingProgress>? progress,
         CancellationToken cancellationToken)
     {
-        var launchers = ResolvePythonLaunchers();
         var timeout = ResolveScriptTimeout();
+        var cppExe = ResolveCppCollectorPath();
+        if (!string.IsNullOrWhiteSpace(cppExe) && File.Exists(cppExe))
+        {
+            var cppArgs = new List<string>
+            {
+                "--start-month", startMonth,
+                "--end-month", endMonth,
+                "--env", envPath ?? string.Empty,
+                "--out", Path.Combine(outputDirectory, "cpp_award_collect.jsonl"),
+            };
+            progress?.Report(new LoadingProgress("collect", 22, $"C++ 낙찰 수집: {Path.GetFileName(cppExe)} {startMonth}~{endMonth}"));
+            var cppResult = await ExecuteProcessAsync(cppExe, cppArgs, timeout, progress, cancellationToken);
+            if (cppResult.Success)
+            {
+                return cppResult with { SourceLabel = $"C++ 낙찰 {startMonth}~{endMonth} 수집" };
+            }
+
+            return cppResult;
+        }
+
+        var launchers = ResolvePythonLaunchers();
         ApiSkillRunResult? lastResult = null;
 
         foreach (var launcher in launchers)
@@ -44,7 +64,8 @@ internal sealed class NaraApiScriptRunner
                 "--master-path", masterPath,
                 "--output-dir", outputDirectory,
                 "--collection-log", collectionLogPath,
-                "--skip-master-sync",
+                "--months", CollectorNoticeRules.CollectLookbackMonths.ToString(CultureInfo.InvariantCulture),
+                "--min-participants", CollectorNoticeRules.MinParticipatingCompanies.ToString(CultureInfo.InvariantCulture),
             };
 
             if (!string.IsNullOrWhiteSpace(envPath))
@@ -95,6 +116,22 @@ internal sealed class NaraApiScriptRunner
         }
 
         return launchers;
+    }
+
+    private static string? ResolveCppCollectorPath()
+    {
+        var fromEnv = Environment.GetEnvironmentVariable("NARA_CPP_COLLECT");
+        if (!string.IsNullOrWhiteSpace(fromEnv) && File.Exists(fromEnv.Trim()))
+        {
+            return fromEnv.Trim();
+        }
+
+        var candidates = new[]
+        {
+            @"A:\c\cc-feature-implementer\desktop\nara_collect_cpp\build\Release\nara_award_collect.exe",
+            Path.Combine(AppContext.BaseDirectory, "nara_award_collect.exe"),
+        };
+        return candidates.FirstOrDefault(File.Exists);
     }
 
     private static async Task<ApiSkillRunResult> ExecuteProcessAsync(

@@ -30,4 +30,18 @@ public sealed class CompanyNamePresentationTests
         Assert.Equal("동세", map["동아세아문화재연구원"]);
         Assert.Equal("동문", map["동아문화재연구원"]);
     }
+
+    [Theory]
+    [InlineData("한울문화재연구원", "한울")]
+    [InlineData("동국문화재연구원", "동국")]
+    [InlineData("가람문화재연구원", "가람")]
+    [InlineData("화서문화재연구원", "화서")]
+    public void BuildShortLabel_StaysInsideTwoHangul(string fullName, string expected)
+    {
+        var label = CompanyNamePresentation.BuildShortLabel(fullName);
+
+        Assert.Equal(expected, label);
+        Assert.InRange(label.Length, 1, 2);
+        Assert.DoesNotContain("연구원", label, StringComparison.Ordinal);
+    }
 }

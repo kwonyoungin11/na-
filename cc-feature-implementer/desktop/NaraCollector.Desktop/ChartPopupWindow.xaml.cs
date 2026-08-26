@@ -19,6 +19,16 @@ public partial class ChartPopupWindow : Window
         Closing += ChartPopupWindowClosing;
     }
 
+    public void RefreshFrom(MainWindowViewModel source)
+    {
+        _viewModel.CopyPopupFilterStateFrom(source);
+    }
+
+    private void ResetMapClick(object sender, RoutedEventArgs e)
+    {
+        ScatterMap.ResetMapToCenter();
+    }
+
     public void CloseFromOwner()
     {
         _allowClose = true;

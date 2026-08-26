@@ -1,5 +1,7 @@
 # secrets
 .env
+**/igunsul.local.env
+nara-workspace/app/igunsul.local.env
 
 # local codex/bkit tooling
 .bkit-codex/
@@ -34,6 +36,9 @@
 # .NET build outputs
 **/bin/
 **/obj/
+
+# C++ ingest (nara_collect_cpp) cmake output
+cc-feature-implementer/desktop/nara_collect_cpp/build/
 
 # local generated work/data
 console-workspace/

@@ -22,6 +22,8 @@ public partial class MainWindow : Window
 
         _viewModel = new MainWindowViewModel();
         _viewModel.RankAlertsDetected += ViewModelRankAlertsDetected;
+        _viewModel.SnapshotApplied += ViewModelSnapshotApplied;
+        _viewModel.AwardCollectApplied += ViewModelAwardCollectApplied;
         _autoCollectTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
             Interval = AutoCollectInterval,
@@ -51,6 +53,8 @@ public partial class MainWindow : Window
         _autoCollectTimer.Stop();
         _autoCollectTimer.Tick -= AutoCollectTimerTick;
         _viewModel.RankAlertsDetected -= ViewModelRankAlertsDetected;
+        _viewModel.SnapshotApplied -= ViewModelSnapshotApplied;
+        _viewModel.AwardCollectApplied -= ViewModelAwardCollectApplied;
 
         if (_chartPopupWindow is null)
         {
@@ -135,6 +139,16 @@ public partial class MainWindow : Window
         _viewModel.UpdateHoveredRate(e.Rate);
     }
 
+    private void ViewModelSnapshotApplied(object? sender, EventArgs e)
+    {
+        _chartPopupWindow?.RefreshFrom(_viewModel);
+    }
+
+    private void ViewModelAwardCollectApplied(object? sender, EventArgs e)
+    {
+        EnsureChartWindowVisible();
+    }
+
     private void OpenOrActivateChartWindow()
     {
         EnsureChartWindowVisible();
@@ -204,6 +218,10 @@ public partial class MainWindow : Window
                 Owner = this,
             };
             _chartPopupWindow.Closed += (_, _) => _chartPopupWindow = null;
+        }
+        else
+        {
+            _chartPopupWindow.RefreshFrom(_viewModel);
         }
 
         if (!_chartPopupWindow.IsVisible)

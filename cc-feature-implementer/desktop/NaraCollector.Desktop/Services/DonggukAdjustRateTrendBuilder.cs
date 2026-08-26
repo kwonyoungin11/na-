@@ -20,7 +20,7 @@ internal static class DonggukAdjustRateTrendBuilder
     public static IReadOnlyList<TrendPointModel> BuildPoints(IReadOnlyList<ParticipantRecord> participants, DateTime? endDateOverride = null)
     {
         var endDate = (endDateOverride ?? DateTime.Today).Date;
-        return BuildPoints(participants, endDate.AddMonths(-3), endDate);
+        return BuildPoints(participants, endDate.AddMonths(-CollectorNoticeRules.CollectLookbackMonths), endDate);
     }
 
     public static IReadOnlyList<TrendPointModel> BuildAwardReferencePoints(IReadOnlyList<ParticipantRecord> participants, DateTime startDate, DateTime endDate)
@@ -36,7 +36,7 @@ internal static class DonggukAdjustRateTrendBuilder
     public static IReadOnlyList<TrendPointModel> BuildAwardReferencePoints(IReadOnlyList<ParticipantRecord> participants, DateTime? endDateOverride = null)
     {
         var endDate = (endDateOverride ?? DateTime.Today).Date;
-        return BuildAwardReferencePoints(participants, endDate.AddMonths(-3), endDate);
+        return BuildAwardReferencePoints(participants, endDate.AddMonths(-CollectorNoticeRules.CollectLookbackMonths), endDate);
     }
 
     public static IReadOnlyList<CollectorNoticeRowModel> BuildAwardNoticeRows(IReadOnlyList<ParticipantRecord> participants, DateTime startDate, DateTime endDate)
@@ -50,14 +50,17 @@ internal static class DonggukAdjustRateTrendBuilder
                 NoticeName: x.NoticeName,
                 OrderingAgency: x.OrderingAgency,
                 RegionText: x.Region,
-                ParticipantCountText: $"동국 {x.DonggukAdjustRate:F5} / {x.DonggukRank}위 · 낙찰 {x.AwardAdjustRate!.Value:F5}"))
+                ParticipantCountText: ScatterChartRules.FormatDonggukRankLabel(
+                    new ScatterNotice(x.NoticeNumber, x.ChipCount, x.DonggukRank, x.ChipCount, []),
+                    x.DonggukAdjustRate,
+                    x.AwardAdjustRate!.Value)))
             .ToList();
     }
 
     public static IReadOnlyList<CollectorNoticeRowModel> BuildAwardNoticeRows(IReadOnlyList<ParticipantRecord> participants, DateTime? endDateOverride = null)
     {
         var endDate = (endDateOverride ?? DateTime.Today).Date;
-        return BuildAwardNoticeRows(participants, endDate.AddMonths(-3), endDate);
+        return BuildAwardNoticeRows(participants, endDate.AddMonths(-CollectorNoticeRules.CollectLookbackMonths), endDate);
     }
 
     public static string BuildSummary(IReadOnlyList<ParticipantRecord> participants, DateTime startDate, DateTime endDate)
@@ -74,7 +77,7 @@ internal static class DonggukAdjustRateTrendBuilder
     public static string BuildSummary(IReadOnlyList<ParticipantRecord> participants, DateTime? endDateOverride = null)
     {
         var endDate = (endDateOverride ?? DateTime.Today).Date;
-        return BuildSummary(participants, endDate.AddMonths(-3), endDate);
+        return BuildSummary(participants, endDate.AddMonths(-CollectorNoticeRules.CollectLookbackMonths), endDate);
     }
 
     private static List<DonggukTrendRow> BuildRowsInWindow(IReadOnlyList<ParticipantRecord> participants, DateTime startDate, DateTime endDate)
@@ -111,15 +114,18 @@ internal static class DonggukAdjustRateTrendBuilder
                     .OrderByDescending(x => x.OpenDate)
                     .ThenBy(x => x.Rank > 0 ? x.Rank : int.MaxValue)
                     .FirstOrDefault();
+                var noticeKey = string.IsNullOrWhiteSpace(donggukRow.NoticeNumber) ? donggukRow.NoticeNo : donggukRow.NoticeNumber;
+                var scatter = ScatterChartRules.BuildNotice(participants, noticeKey, 99.0, 101.0);
                 return new DonggukTrendRow(
-                    string.IsNullOrWhiteSpace(donggukRow.NoticeNumber) ? donggukRow.NoticeNo : donggukRow.NoticeNumber,
+                    noticeKey,
                     donggukRow.NoticeName,
                     donggukRow.OrderingAgency,
                     string.IsNullOrWhiteSpace(donggukRow.Region) ? (awardRow?.Region ?? string.Empty) : donggukRow.Region,
                     donggukRow.OpenDate,
-                    donggukRow.Rank,
+                    scatter.DonggukRank,
                     donggukRow.AdjustRate!.Value,
-                    awardRow?.AdjustRate);
+                    awardRow?.AdjustRate,
+                    scatter.ChipCount);
             })
             .OrderBy(x => x.OpenDate)
             .ToList();
@@ -140,5 +146,6 @@ internal static class DonggukAdjustRateTrendBuilder
         DateTime OpenDate,
         int DonggukRank,
         double DonggukAdjustRate,
-        double? AwardAdjustRate);
+        double? AwardAdjustRate,
+        int ChipCount);
 }

@@ -60,8 +60,6 @@ public sealed class NaraApiDashboardRepository
     private static readonly string[] DefaultCollectorDomainContextTokens =
     [
         .. DefaultDomainContextTokens,
-        "국가유산영향진단",
-        "영향진단",
         "유해발굴",
     ];
 
@@ -86,6 +84,8 @@ public sealed class NaraApiDashboardRepository
         "단가계약",
         "중장비",
         "방안 연구",
+        "영향진단",
+        "국가유산영향진단",
     ];
 
     private static readonly string[] DefaultCollectorAllowedGroups =
@@ -236,6 +236,26 @@ public sealed class NaraApiDashboardRepository
             return null;
         }
 
+        var cppJsonl = Path.Combine(_outputDirectory, "cpp_award_collect.jsonl");
+        if (File.Exists(cppJsonl))
+        {
+            progress?.Report(new LoadingProgress("parse", 64, $"C++ 낙찰 jsonl 로딩: {cppJsonl}"));
+            var cppRows = CollectorNoticeRules.ApplyPersistRules(
+                await Task.Run(() => CppAwardJsonlParser.Load(cppJsonl), cancellationToken));
+            var collectorFeedFromCpp = await Task.Run(
+                () => LoadCollectorNoticeFeed(_outputDirectory, filter, _pathResolver.ResolveApiRuleProfilePath(), cancellationToken),
+                cancellationToken);
+            var cppSnapshot = _snapshotBuilder.BuildSnapshot(cppRows, filter, $"C++ 낙찰 {startMonth}~{endMonth} 수집");
+            progress?.Report(
+                new LoadingProgress("collect", 74, $"C++ 낙찰 수집 완료: {cppRows.Count:N0}행"));
+            return new ApiCollectResult(
+                Snapshot: cppSnapshot,
+                Participants: cppRows,
+                RawRowCount: cppRows.Count,
+                IncrementalBidNoticeRows: collectorFeedFromCpp.BidRows,
+                IncrementalAwardNoticeRows: collectorFeedFromCpp.AwardRows);
+        }
+
         var collectionSourcePath = ResolveCollectionSourcePath(runResult);
         if (string.IsNullOrWhiteSpace(collectionSourcePath) || !File.Exists(collectionSourcePath))
         {
@@ -249,9 +269,10 @@ public sealed class NaraApiDashboardRepository
 
         progress?.Report(new LoadingProgress("parse", 64, $"증분 결과 엑셀 로딩: {collectionSourcePath}"));
 
-        var participants = await Task.Run(
-            () => _parser.LoadParticipantsFromMasterExcel(collectionSourcePath, filter, cancellationToken),
-            cancellationToken);
+        var participants = CollectorNoticeRules.ApplyPersistRules(
+            await Task.Run(
+                () => _parser.LoadParticipantsFromMasterExcel(collectionSourcePath, filter, cancellationToken),
+                cancellationToken));
         var collectorFeed = await Task.Run(
             () => LoadCollectorNoticeFeed(_outputDirectory, filter, _pathResolver.ResolveApiRuleProfilePath(), cancellationToken),
             cancellationToken);
@@ -628,6 +649,11 @@ public sealed class NaraApiDashboardRepository
         }
 
         var text = noticeName.Trim();
+        if (CollectorNoticeRules.IsExcludedNoticeName(text))
+        {
+            return false;
+        }
+
         if (profile.CollectorAllowedGroups.Count > 0
             && !profile.CollectorAllowedGroups.Any(token => string.Equals(token, sourceGroup, StringComparison.OrdinalIgnoreCase)))
         {

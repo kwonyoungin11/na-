@@ -10,6 +10,19 @@ This file contains durable repository instructions only.
 - Put repeatable multi-step workflows in `.agents/skills/`.
 - Use `.agents/PLANS.md` (or a task-specific plan file) for complex or long-running work.
 
+## Development Gate
+
+Canonical text: `.grok/rules/00-dev-engineering.md`. The hook injects that file. Do not replace it with a 15-agent / every-MCP ritual.
+
+Follow that file. Short form: loop (failing check → smallest fix → same check), graph (표 스냅샷 = 전장 맵), region is `전국`|`경북` only, C++ collect, read `.agents/MISTAKES.md` before chart/collect/table edits.
+
+Live C++ desktop: `cc-feature-implementer/desktop/nara_collect_cpp/build/Release/nara_desktop.exe` via explorer. C# Debug exe only when the user asked for the C# app.
+
+## Mistake log
+
+- Before coding, read `.agents/MISTAKES.md`. Do not repeat a listed mistake.
+- When a new mistake is confirmed, append one item there (what went wrong + the rule). Do not only mention it in chat.
+
 ## Core Rules
 
 - Do not guess. Inspect relevant files, tests, configs, and logs before editing.

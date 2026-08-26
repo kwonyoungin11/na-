@@ -89,10 +89,11 @@ public class MainWindowViewModelComponentsTests
     }
 
     [Fact]
-    public void DonggukAdjustRateTrendPoints_UseLatestThreeMonthNoticeWindow()
+    public void DonggukAdjustRateTrendPoints_UseLatestSixMonthNoticeWindow()
     {
         var participants = new List<ParticipantRecord>
         {
+            CreateParticipant("N-0", 1, new DateTime(2024, 12, 15), 1000) with { AdjustRate = 99.001, CompanyName = "(재)동국문화재연구원", NormalizedCompanyName = "동국문화재연구원" },
             CreateParticipant("N-1", 1, new DateTime(2025, 4, 15), 1000) with { AdjustRate = 99.111, CompanyName = "(재)동국문화재연구원", NormalizedCompanyName = "동국문화재연구원" },
             CreateParticipant("N-2", 1, new DateTime(2025, 5, 15), 1000) with { AdjustRate = 99.222, CompanyName = "(재)동국문화재연구원", NormalizedCompanyName = "동국문화재연구원" },
             CreateParticipant("N-3", 1, new DateTime(2025, 7, 15), 1000) with { AdjustRate = 99.333, CompanyName = "(재)동국문화재연구원", NormalizedCompanyName = "동국문화재연구원" },
@@ -103,15 +104,16 @@ public class MainWindowViewModelComponentsTests
         var trendPoints = DonggukAdjustRateTrendBuilder.BuildPoints(participants, endDate);
         var summary = DonggukAdjustRateTrendBuilder.BuildSummary(participants, endDate);
 
-        Assert.Equal(2, trendPoints.Count);
-        Assert.Equal("05-15", trendPoints[0].Label);
+        Assert.Equal(3, trendPoints.Count);
+        Assert.Equal("04-15", trendPoints[0].Label);
         Assert.Equal("07-15", trendPoints[^1].Label);
-        Assert.Equal(99.222, trendPoints[0].Value, 3);
+        Assert.Equal(99.111, trendPoints[0].Value, 3);
         Assert.Equal(99.333, trendPoints[^1].Value, 3);
-        Assert.Equal("N-2", trendPoints[0].Key);
+        Assert.Equal("N-1", trendPoints[0].Key);
         Assert.Equal("N-3", trendPoints[^1].Key);
-        Assert.Contains("2025-05-15~2025-07-15", summary, StringComparison.Ordinal);
-        Assert.Contains("공고 2건", summary, StringComparison.Ordinal);
+        Assert.DoesNotContain(trendPoints, x => x.Key == "N-0");
+        Assert.Contains("2025-04-15~2025-07-15", summary, StringComparison.Ordinal);
+        Assert.Contains("공고 3건", summary, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -156,12 +158,26 @@ public class MainWindowViewModelComponentsTests
         Assert.Equal("기관A", rows[0].OrderingAgency);
         Assert.Equal("경북", rows[0].RegionText);
         Assert.Contains("동국 99.22200", rows[0].ParticipantCountText, StringComparison.Ordinal);
-        Assert.Contains("3위", rows[0].ParticipantCountText, StringComparison.Ordinal);
+        Assert.Contains("2위", rows[0].ParticipantCountText, StringComparison.Ordinal);
+        Assert.Contains("2개사", rows[0].ParticipantCountText, StringComparison.Ordinal);
         Assert.Contains("낙찰 99.45600", rows[0].ParticipantCountText, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void ResolveVisibleAwardNoticeRows_UsesOnlyLastMonthWindow()
+    public void CollectWindowStart_DefaultsToOneYear_AndFollowsLookback()
+    {
+        var now = new DateTime(2026, 8, 25, 10, 0, 0);
+        Assert.Equal(12, CollectorNoticeRules.CollectLookbackMonths);
+        Assert.Equal(new DateTime(2025, 8, 25, 10, 0, 0), CollectorNoticeRules.CollectWindowStart(now));
+        Assert.Equal(new DateTime(2025, 8, 25), CollectorNoticeRules.AwardRetentionStart(now));
+        Assert.Equal(6, CollectorNoticeRules.CollectLookbackMonthsFor(now.AddMonths(-6), now));
+        Assert.Equal(12, CollectorNoticeRules.CollectLookbackMonthsFor(now.AddYears(-1), now));
+        Assert.Equal(12, CollectorNoticeRules.CollectLookbackMonthsFor(new DateTime(2000, 1, 1), now));
+        Assert.Equal(new DateTime(2026, 2, 25, 10, 0, 0), CollectorNoticeRules.CollectWindowStart(now, 6));
+    }
+
+    [Fact]
+    public void ResolveVisibleAwardNoticeRows_UsesCollectWindow()
     {
         var rows = Enumerable.Range(0, 15)
             .Select(index => new CollectorNoticeRowModel(
@@ -173,7 +189,8 @@ public class MainWindowViewModelComponentsTests
                 ParticipantCountText: $"{index + 1}개사"))
             .Concat(
             [
-                new CollectorNoticeRowModel(new DateTime(2026, 1, 20), "AW-OLD", "낙찰-과거", "기관", "전국", "2개사"),
+                new CollectorNoticeRowModel(new DateTime(2026, 1, 20), "AW-SIX-MONTHS", "낙찰-6개월안", "기관", "전국", "2개사"),
+                new CollectorNoticeRowModel(new DateTime(2024, 8, 1), "AW-OLD", "낙찰-과거", "기관", "전국", "2개사"),
                 new CollectorNoticeRowModel(new DateTime(2026, 4, 2), "AW-FUTURE", "낙찰-미래", "기관", "전국", "2개사"),
             ])
             .ToList();
@@ -183,9 +200,8 @@ public class MainWindowViewModelComponentsTests
             [],
             new DateTime(2026, 3, 31, 12, 0, 0));
 
-        Assert.Equal(15, visible.Count);
-        Assert.Equal("AW-14", visible[0].NoticeNumber);
-        Assert.Equal("AW-00", visible[^1].NoticeNumber);
+        Assert.Equal(16, visible.Count);
+        Assert.Contains(visible, x => x.NoticeNumber == "AW-SIX-MONTHS");
         Assert.DoesNotContain(visible, x => x.NoticeNumber == "AW-OLD");
         Assert.DoesNotContain(visible, x => x.NoticeNumber == "AW-FUTURE");
     }

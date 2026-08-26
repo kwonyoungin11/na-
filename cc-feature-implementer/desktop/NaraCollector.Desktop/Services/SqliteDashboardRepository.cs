@@ -85,11 +85,27 @@ public sealed class SqliteDashboardRepository : IDashboardRepository
 
         if (forceRefresh)
         {
-            progress?.Report(new LoadingProgress("init", 12, "외부 파이프라인 결과를 다시 불러옵니다."));
+            progress?.Report(new LoadingProgress("init", 12, $"나라장터 낙찰 {CollectorNoticeRules.CollectLookbackMonthsFor(effectiveFilter.StartDate, effectiveFilter.EndDate)}개월 수집을 시작합니다."));
+            var collectFilter = BuildAwardCollectFilter(effectiveFilter);
+            var liveSnapshot = await TryLoadLiveSnapshotAsync(
+                collectFilter,
+                effectiveFilter,
+                progress,
+                cancellationToken);
+            if (liveSnapshot is not null)
+            {
+                return liveSnapshot;
+            }
+
+            progress?.Report(new LoadingProgress("fallback", 70, "나라장터 실시간 수집 실패 → 파이프라인 결과를 불러옵니다."));
             var pipelineSnapshot = await ReloadFromPipelineOutputsAsync(effectiveFilter, progress, cancellationToken);
             if (pipelineSnapshot is not null)
             {
-                return pipelineSnapshot;
+                return await MergeIgunsulGapsIntoStoreAsync(
+                    pipelineSnapshot,
+                    effectiveFilter,
+                    progress,
+                    cancellationToken);
             }
 
             progress?.Report(new LoadingProgress("fallback", 92, "파이프라인 결과 재로딩 실패 → 기존 캐시/내장 데이터를 재사용합니다."));
@@ -131,17 +147,31 @@ public sealed class SqliteDashboardRepository : IDashboardRepository
         }
 
         var pipelineOutputRoot = _pathResolver.ResolveOutputDirectory(null);
-        return new DashboardSnapshot(
-            snapshot.Kpis,
-            snapshot.NoticeRows,
-            $"외부 파이프라인 결과: master={_masterExcelPath} / raw={pipelineOutputRoot}",
-            snapshot.SavedFilePath,
-            snapshot.PositionMapPath,
-            snapshot.RecommendationPath,
-            snapshot.CompanyOptions,
-            snapshot.Participants,
-            snapshot.IncrementalBidNoticeRows,
-            snapshot.IncrementalAwardNoticeRows);
+        return AttachCollectorRows(
+            new DashboardSnapshot(
+                snapshot.Kpis,
+                snapshot.NoticeRows,
+                $"외부 파이프라인 결과: master={_masterExcelPath} / raw={pipelineOutputRoot}",
+                snapshot.SavedFilePath,
+                snapshot.PositionMapPath,
+                snapshot.RecommendationPath,
+                snapshot.CompanyOptions,
+                snapshot.Participants,
+                snapshot.IncrementalBidNoticeRows,
+                snapshot.IncrementalAwardNoticeRows),
+            filter);
+    }
+
+    private DashboardSnapshot AttachCollectorRows(DashboardSnapshot snapshot, DashboardFilter filter)
+    {
+        var collectorFilter = CollectorNoticeRules.ToCollectorViewFilter(filter);
+        var bidRows = FilterBidCollectorNoticeRows(_collectorBidCache ?? [], collectorFilter);
+        var awardRows = FilterAwardCollectorNoticeRows(_collectorAwardCache ?? [], collectorFilter);
+        return snapshot with
+        {
+            IncrementalBidNoticeRows = bidRows,
+            IncrementalAwardNoticeRows = awardRows,
+        };
     }
 
     private async Task<DashboardSnapshot?> TryLoadLiveSnapshotAsync(
@@ -187,7 +217,9 @@ public sealed class SqliteDashboardRepository : IDashboardRepository
             Path.Combine(_outputService.AppRootDirectory, "api-skill-output"),
             collectorReloadFilter,
             _pathResolver.ResolveApiRuleProfilePath());
-        var mergedCollectorBidRows = MergeCollectorNoticeRows([], refreshedCollectorFeed.BidRows, bidRetentionStart, bidRetentionEndExclusive);
+        var mergedCollectorBidRows = AwardOnlyMode
+            ? []
+            : MergeCollectorNoticeRows([], refreshedCollectorFeed.BidRows, bidRetentionStart, bidRetentionEndExclusive);
         var mergedCollectorAwardRows = MergeCollectorNoticeRows([], refreshedCollectorFeed.AwardRows, awardRetentionStart);
         await SaveCollectorNoticeCacheAsync(mergedCollectorBidRows, mergedCollectorAwardRows, bidRetentionStart, bidRetentionEndExclusive, awardRetentionStart, cancellationToken);
         SetCollectorNoticeCache(mergedCollectorBidRows, mergedCollectorAwardRows);
@@ -237,6 +269,19 @@ public sealed class SqliteDashboardRepository : IDashboardRepository
         var mergedParticipants = MergeParticipants(existingParticipants, live.Participants);
         mergedParticipants = EnrichAdjustRatesByNotice(mergedParticipants);
         mergedParticipants = KeepAwardOnlyData(mergedParticipants);
+        var igunsulRows = LoadIgunsulGapRows(mergedParticipants, mergedCollectorAwardRows);
+        if (igunsulRows.Count > 0)
+        {
+            progress?.Report(
+                new LoadingProgress(
+                    "igunsul",
+                    76,
+                    $"나라장터에 없는 낙찰 {igunsulRows.Select(x => string.IsNullOrWhiteSpace(x.NoticeNumber) ? x.NoticeNo : x.NoticeNumber).Distinct().Count():N0}공고를 아이건설넷 캐시에서 보강"));
+            mergedParticipants = MergeParticipants(mergedParticipants, igunsulRows);
+            mergedParticipants = KeepAwardOnlyData(mergedParticipants);
+            mergedParticipants = CollectorNoticeRules.ApplyPersistRules(mergedParticipants).ToList();
+        }
+
         SetParticipantsCache(mergedParticipants);
 
         var invalidNonAwardRows = live.Participants
@@ -334,23 +379,24 @@ public sealed class SqliteDashboardRepository : IDashboardRepository
             .Max();
 
         await _outputService.ReplaceParticipantsInDatabaseAsync(enrichedRows, cancellationToken);
-        await ClearLegacyCollectorNoticeStorageAsync(cancellationToken);
         SetParticipantsCache(enrichedRows);
-        SetCollectorNoticeCache([], []);
+        await RefreshCollectorNoticeCacheFromFeedAsync(cancellationToken);
         _baselineEnsured = true;
         progress?.Report(new LoadingProgress("seed", 34, $"파이프라인 master 반영 완료: {enrichedRows.Count:N0}행"));
     }
 
     private async Task<DashboardSnapshot?> TryLoadSnapshotFromSqliteAsync(DashboardFilter filter, CancellationToken cancellationToken)
     {
+        await EnsureCollectorNoticeCacheAsync(cancellationToken);
         if (TryGetSnapshotFromFilterCache(filter, out var cachedByFilter) && cachedByFilter is not null)
         {
-            return cachedByFilter;
+            return AttachCollectorRows(cachedByFilter, filter);
         }
 
         if (_participantsCache is { Count: > 0 } cacheRows)
         {
             var memorySnapshot = await BuildSnapshotFromMemoryCacheAsync(cacheRows, filter, cancellationToken);
+            memorySnapshot = AttachCollectorRows(memorySnapshot, filter);
             StoreSnapshotInFilterCache(filter, memorySnapshot);
             return memorySnapshot;
         }
@@ -383,22 +429,25 @@ public sealed class SqliteDashboardRepository : IDashboardRepository
                 ];
             }
 
-            var chartParticipants = await LoadParticipantsAsync(connection, filter, cancellationToken);
+            var chartParticipants = CollectorNoticeRules.ApplyPersistRules(
+                await LoadParticipantsAsync(connection, filter, cancellationToken));
             var companyOptions = await LoadCompanyOptionsAsync(
                 connection,
                 filter with { Company = string.Empty },
                 cancellationToken);
 
-            var snapshot = new DashboardSnapshot(
-                kpis,
-                notices,
-                $"SQLite 로컬DB: {_dbPath}",
-                PositionMapPath: string.Empty,
-                RecommendationPath: string.Empty,
-                CompanyOptions: companyOptions,
-                Participants: chartParticipants,
-                IncrementalBidNoticeRows: [],
-                IncrementalAwardNoticeRows: []);
+            var snapshot = AttachCollectorRows(
+                new DashboardSnapshot(
+                    kpis,
+                    notices,
+                    $"SQLite 로컬DB: {_dbPath}",
+                    PositionMapPath: string.Empty,
+                    RecommendationPath: string.Empty,
+                    CompanyOptions: companyOptions,
+                    Participants: chartParticipants,
+                    IncrementalBidNoticeRows: [],
+                    IncrementalAwardNoticeRows: []),
+                filter);
             StoreSnapshotInFilterCache(filter, snapshot);
             return snapshot;
         }
@@ -534,10 +583,75 @@ public sealed class SqliteDashboardRepository : IDashboardRepository
         }
     }
 
-    private Task EnsureCollectorNoticeCacheAsync(CancellationToken cancellationToken)
+    private async Task EnsureCollectorNoticeCacheAsync(CancellationToken cancellationToken)
     {
+        if (_collectorBidCache is not null && _collectorAwardCache is not null)
+        {
+            return;
+        }
+
+        if (File.Exists(_dbPath))
+        {
+            await using var connection = new SqliteConnection($"Data Source={_dbPath}");
+            await connection.OpenAsync(cancellationToken);
+            var cached = await LoadCollectorNoticeCacheAsync(connection, cancellationToken);
+            if (cached.BidRows.Count > 0 || cached.AwardRows.Count > 0)
+            {
+                SetCollectorNoticeCache(cached.BidRows, cached.AwardRows);
+                return;
+            }
+        }
+
+        await RefreshCollectorNoticeCacheFromFeedAsync(cancellationToken);
+    }
+
+    private async Task RefreshCollectorNoticeCacheFromFeedAsync(CancellationToken cancellationToken)
+    {
+        var now = DateTime.Now;
+        var feed = NaraApiDashboardRepository.TestHook_LoadCollectorNoticeFeed(
+            Path.Combine(_outputService.AppRootDirectory, "api-skill-output"),
+            CreateCollectorFeedFilter(now),
+            _pathResolver.ResolveApiRuleProfilePath());
+        if (feed.BidRows.Count > 0 || feed.AwardRows.Count > 0)
+        {
+            SetCollectorNoticeCache(feed.BidRows, feed.AwardRows);
+            await SaveCollectorNoticeCacheAsync(
+                feed.BidRows,
+                feed.AwardRows,
+                GetBidCollectorRetentionStart(now),
+                GetBidCollectorRetentionEndExclusive(now),
+                await GetAwardCollectorRetentionStartAsync(now, cancellationToken),
+                cancellationToken);
+            return;
+        }
+
+        if (File.Exists(_dbPath))
+        {
+            await using var connection = new SqliteConnection($"Data Source={_dbPath}");
+            await connection.OpenAsync(cancellationToken);
+            var cached = await LoadCollectorNoticeCacheAsync(connection, cancellationToken);
+            if (cached.BidRows.Count > 0 || cached.AwardRows.Count > 0)
+            {
+                SetCollectorNoticeCache(cached.BidRows, cached.AwardRows);
+                return;
+            }
+        }
+
         SetCollectorNoticeCache([], []);
-        return Task.CompletedTask;
+    }
+
+    private static DashboardFilter CreateCollectorFeedFilter(DateTime now)
+    {
+        return new DashboardFilter(
+            StartDate: CollectorNoticeRules.CollectWindowStart(now),
+            EndDate: now.Date.AddDays(1),
+            Region: "전체",
+            Keyword: string.Empty,
+            OrderingAgency: string.Empty,
+            DataType: "낙찰",
+            Company: string.Empty,
+            MinAdjustRate: null,
+            MaxAdjustRate: null);
     }
 
     private void SetCollectorNoticeCache(
@@ -624,12 +738,11 @@ public sealed class SqliteDashboardRepository : IDashboardRepository
 
         var start = filter.StartDate.Date;
         var endExclusive = filter.EndDate.Date.AddDays(1);
-        var awardedNoticeKeys = _awardedNoticeKeysCache
-            ?? cacheRows
-                .Where(x => x.IsAwarded)
-                .Select(GetNoticeKey)
-                .Where(x => !string.IsNullOrWhiteSpace(x))
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var awardedNoticeKeys = cacheRows
+            .Where(x => x.IsAwarded || x.Rank == 1)
+            .Select(GetNoticeKey)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         bool MatchesBaseFilter(ParticipantRecord row)
         {
@@ -661,7 +774,16 @@ public sealed class SqliteDashboardRepository : IDashboardRepository
             return MatchesDataType(row, filter.DataType, awardedNoticeKeys);
         }
 
-        var baseRows = cacheRows.Where(MatchesBaseFilter).ToList();
+        var noticesWithEnoughCompanies = CollectorNoticeRules
+            .ApplyPersistRules(cacheRows)
+            .Select(x => string.IsNullOrWhiteSpace(x.NoticeNumber) ? x.NoticeNo : x.NoticeNumber)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var baseRows = cacheRows
+            .Where(MatchesBaseFilter)
+            .Where(x => noticesWithEnoughCompanies.Contains(
+                string.IsNullOrWhiteSpace(x.NoticeNumber) ? x.NoticeNo : x.NoticeNumber))
+            .ToList();
 
         bool MatchesCompanyAndAdjust(ParticipantRecord row)
         {
@@ -1427,67 +1549,82 @@ public sealed class SqliteDashboardRepository : IDashboardRepository
         CancellationToken cancellationToken)
     {
         await EnsureCollectorNoticeCacheAsync(cancellationToken);
-        var hasCollectorHistory = (_collectorBidCache?.Count ?? 0) > 0 || (_collectorAwardCache?.Count ?? 0) > 0;
         var now = DateTime.Now;
-        if (!hasCollectorHistory)
-        {
-            var backfillStart = now.AddMonths(-3);
-            if (backfillStart < baseFilter.StartDate)
-            {
-                backfillStart = baseFilter.StartDate;
-            }
-
-            progress?.Report(
-                new LoadingProgress(
-                    "checkpoint",
-                    11,
-                    $"공고 캐시 초기화: 최근 3개월({backfillStart:yyyy-MM-dd HH:mm:ss}~{now:yyyy-MM-dd HH:mm:ss}) 백필 수집"));
-
-            return baseFilter with
-            {
-                StartDate = backfillStart,
-                EndDate = now,
-            };
-        }
-
-        var checkpoint = ReadCollectCheckpoint();
-        var start = baseFilter.StartDate;
-        var latestKnownOpenDate = await TryGetLatestKnownOpenDateAsync(cancellationToken);
-        if (latestKnownOpenDate.HasValue)
-        {
-            var nextStart = latestKnownOpenDate.Value.AddMinutes(1);
-            if (nextStart > start)
-            {
-                start = nextStart;
-            }
-        }
-
-        if (checkpoint.HasValue && checkpoint.Value > start)
-        {
-            start = checkpoint.Value;
-        }
-        if (incrementalStartOverride.HasValue && incrementalStartOverride.Value > start)
-        {
-            start = incrementalStartOverride.Value;
-        }
-
-        if (start > now)
-        {
-            start = now;
-        }
-
+        var collectStart = CollectorNoticeRules.CollectWindowStart(now);
         progress?.Report(
             new LoadingProgress(
                 "checkpoint",
                 11,
-                checkpoint.HasValue || incrementalStartOverride.HasValue || latestKnownOpenDate.HasValue
-                    ? $"증분수집 기준: 기존최신개찰 {latestKnownOpenDate?.ToString("yyyy-MM-dd HH:mm:ss") ?? "-"} / 마지막완료 {checkpoint?.ToString("yyyy-MM-dd HH:mm:ss") ?? "-"} / 세션시작 {incrementalStartOverride?.ToString("yyyy-MM-dd HH:mm:ss") ?? "-"} 이후"
-                    : "증분수집 기준 없음: 선택 기간 시작부터 수집"));
-
+                $"최근 6개월 수집({collectStart:yyyy-MM-dd HH:mm:ss}~{now:yyyy-MM-dd HH:mm:ss})"));
         return baseFilter with
         {
-            StartDate = start,
-            EndDate = now,
+            StartDate = collectStart,
+            EndDate = now.Date.AddDays(1),
+            DataType = "낙찰",
+        };
+    }
+
+    private static DashboardFilter BuildAwardCollectFilter(DashboardFilter viewFilter)
+    {
+        var now = DateTime.Now;
+        var months = CollectorNoticeRules.CollectLookbackMonthsFor(viewFilter.StartDate, viewFilter.EndDate);
+        return viewFilter with
+        {
+            StartDate = CollectorNoticeRules.CollectWindowStart(now, months),
+            EndDate = now.Date.AddDays(1),
+            DataType = "낙찰",
+        };
+    }
+
+    private IReadOnlyList<ParticipantRecord> LoadIgunsulGapRows(
+        IReadOnlyList<ParticipantRecord> naraRows,
+        IReadOnlyList<CollectorNoticeRowModel> awardRows)
+    {
+        var cacheDirectory = Path.Combine(_outputService.AppRootDirectory, "igunsul-cache");
+        var cachedRows = IgunsulExcelConverter.ConvertDirectory(cacheDirectory);
+        var candidates = awardRows
+            .Select(x => x.NoticeNumber)
+            .Concat(cachedRows.Select(x => x.NoticeNumber))
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var missing = CollectorNoticeRules.FindMissingAwardNoticeNumbers(naraRows, candidates);
+        return IgunsulAwardGapFiller.FillFromCache(missing, cacheDirectory);
+    }
+
+    private async Task<DashboardSnapshot> MergeIgunsulGapsIntoStoreAsync(
+        DashboardSnapshot snapshot,
+        DashboardFilter filter,
+        IProgress<LoadingProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        var filled = LoadIgunsulGapRows(
+            snapshot.Participants ?? [],
+            snapshot.IncrementalAwardNoticeRows ?? []);
+        if (filled.Count == 0)
+        {
+            return snapshot;
+        }
+
+        progress?.Report(
+            new LoadingProgress(
+                "igunsul",
+                88,
+                $"나라장터에 없는 낙찰 {filled.Select(x => x.NoticeNumber).Distinct().Count():N0}공고를 아이건설넷 엑셀로 보강"));
+        var existing = await TryLoadAllParticipantsAsync(cancellationToken);
+        var merged = CollectorNoticeRules.ApplyPersistRules(
+            KeepAwardOnlyData(MergeParticipants(existing, filled))).ToList();
+        SetParticipantsCache(merged);
+        await _outputService.ReplaceParticipantsInDatabaseAsync(merged, cancellationToken);
+        var reloaded = await TryLoadSnapshotFromSqliteAsync(filter, cancellationToken);
+        if (reloaded is null)
+        {
+            return snapshot;
+        }
+
+        return reloaded with
+        {
+            DataSource = $"{reloaded.DataSource} · 아이건설넷 누락보강 {filled.Select(x => x.NoticeNumber).Distinct().Count():N0}공고",
         };
     }
 
@@ -1565,7 +1702,7 @@ public sealed class SqliteDashboardRepository : IDashboardRepository
 
     private static DateTime GetAwardCollectorRetentionStart(DateTime? masterLatestOpenDate, DateTime now)
     {
-        return now.Date.AddMonths(-1);
+        return CollectorNoticeRules.AwardRetentionStart(now);
     }
 
     internal static DateTime TestHook_GetAwardCollectorRetentionStart(DateTime? masterLatestOpenDate, DateTime now)

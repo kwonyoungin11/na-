@@ -26,8 +26,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private readonly MainWindowAlertPublisher _alertPublisher = new();
     private readonly DispatcherTimer _autoApplyDebounceTimer;
 
-    private string _selectedPeriodPreset = "최근 3개월";
-    private DateTime _startDate = DateTime.Today.AddMonths(-3);
+    private string _selectedPeriodPreset = "최근 1년";
+    private DateTime _startDate = DateTime.Today.AddYears(-1);
     private DateTime _endDate = DateTime.Today;
     private string _selectedRegion = "전국";
     private bool _includeNationwide = true;
@@ -71,7 +71,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private string _interactivePointerHintText = "후보 밴드 내부/외부 여부와 거리를 실시간으로 확인할 수 있습니다.";
     private string _incrementalBidSummaryText = "업데이트 대기";
     private string _incrementalAwardSummaryText = "업데이트 대기";
-    private string _noticeAdjustRateTrendSummaryText = "날짜순 최근 6개월 이내 · 데이터 대기";
+    private string _noticeAdjustRateTrendSummaryText = "날짜순 최근 1년 이내 · 데이터 대기";
     private string _nextBidRecommendationText = "다음 입찰공고 추천자리 대기";
     private string _bidRecommendationReasonText = "입찰공고를 선택하면 추천 근거가 표시됩니다.";
     private string _highlightedTrendNoticeNumber = string.Empty;
@@ -136,6 +136,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public ObservableCollection<TacticalCompanyRowModel> TacticalRightAnchorRows { get; } = [];
     public ObservableCollection<TacticalNoticeRowModel> TacticalNoticeRows { get; } = [];
     public ObservableCollection<string> LoadEvents { get; } = [];
+    public ObservableCollection<LeftOccupyZoneItem> LeftOccupyZones { get; } = [];
 
     public ICommand CollectDataCommand { get; }
     public ICommand ApplyFilterCommand { get; }
@@ -144,6 +145,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public event PropertyChangedEventHandler? PropertyChanged;
     public event EventHandler<IReadOnlyList<RankAlertModel>>? RankAlertsDetected;
+    public event EventHandler? SnapshotApplied;
+    public event EventHandler? AwardCollectApplied;
+
     public string SelectedPeriodPreset
     {
         get => _selectedPeriodPreset;
@@ -404,7 +408,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public double LoadProgress
     {
         get => _loadProgress;
-        private set => SetProperty(ref _loadProgress, value);
+        set => SetProperty(ref _loadProgress, value);
     }
 
     public bool IsLoading
@@ -616,7 +620,13 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public IReadOnlyList<ParticipantRecord> CurrentParticipants
     {
         get => _currentParticipants;
-        private set => SetProperty(ref _currentParticipants, value);
+        private set
+        {
+            if (SetProperty(ref _currentParticipants, value))
+            {
+                RefreshLeftOccupyZones();
+            }
+        }
     }
 
     public IReadOnlyList<ParticipantRecord> TacticalBattlefieldParticipants
@@ -798,6 +808,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             try
             {
                 ApplySnapshot(cachedSnapshot, filter);
+                SnapshotApplied?.Invoke(this, EventArgs.Empty);
                 LastSyncText = $"데이터소스: {cachedSnapshot.DataSource} (캐시 재사용) · 마지막 동기화: {DateTime.Now:yyyy-MM-dd HH:mm:ss}";
                 LoadProgress = 100;
                 LoadStatusText = $"완료(캐시) · 공고 {cachedSnapshot.NoticeRows.Count:N0}건";
@@ -816,9 +827,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
         IsLoading = true;
         LoadProgress = 0;
-        LoadStatusText = forceRefresh ? "파이프라인 결과 다시 불러오는 중" : "필터 적용 시작 (캐시 없음)";
+        var collectMonths = CollectorNoticeRules.CollectLookbackMonthsFor(StartDate, EndDate);
+        LoadStatusText = forceRefresh ? $"나라장터 낙찰 {collectMonths}개월 수집 중" : "필터 적용 시작 (캐시 없음)";
         LoadEvents.Clear();
-        AppendEvent(forceRefresh ? "모드: pipeline-refresh" : "모드: cache-reload");
+        AppendEvent(forceRefresh ? $"모드: award-collect-{collectMonths}m" : "모드: cache-reload");
 
         try
         {
@@ -838,6 +850,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             _snapshotCoordinator.StoreSnapshot(filter, snapshot);
 
             ApplySnapshot(snapshot, filter);
+            SnapshotApplied?.Invoke(this, EventArgs.Empty);
+            if (forceRefresh)
+            {
+                AwardCollectApplied?.Invoke(this, EventArgs.Empty);
+            }
             LastSyncText = $"데이터소스: {snapshot.DataSource} · 마지막 동기화: {DateTime.Now:yyyy-MM-dd HH:mm:ss}";
             LoadProgress = 100;
             LoadStatusText = $"완료 · 공고 {snapshot.NoticeRows.Count:N0}건";
@@ -882,8 +899,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         _suppressAutoApply = true;
         try
         {
-            SelectedPeriodPreset = "최근 3개월";
-            ApplyPeriodPreset("최근 3개월");
+            SelectedPeriodPreset = "최근 1년";
+            ApplyPeriodPreset("최근 1년");
             SelectedRegion = "전국";
             SelectedDataType = "낙찰";
             SelectedCompany = AllCompanyOption;
@@ -903,9 +920,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private void SeedStaticOptions()
     {
-        PeriodPresets.Add("최근 3개월");
-        PeriodPresets.Add("최근 1개월");
         PeriodPresets.Add("최근 6개월");
+        PeriodPresets.Add("최근 1개월");
+        PeriodPresets.Add("최근 3개월");
         PeriodPresets.Add("최근 1년");
         PeriodPresets.Add("전체기간");
 
@@ -1172,9 +1189,10 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         return popupViewModel;
     }
 
-    private void CopyPopupFilterStateFrom(MainWindowViewModel source)
+    public void CopyPopupFilterStateFrom(MainWindowViewModel source)
     {
         _suppressAutoApply = true;
+        IsApplyingSnapshot = true;
         try
         {
             SelectedPeriodPreset = source.SelectedPeriodPreset;
@@ -1189,17 +1207,32 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             KeywordText = source.KeywordText;
             OrderingAgencyText = source.OrderingAgencyText;
             CompanySearchText = source.CompanySearchText;
+            CurrentParticipants = source.CurrentParticipants;
+            ReplaceCollection(VisibleAwardNoticeItems, source.VisibleAwardNoticeItems);
+            ReplaceCollection(NoticeItems, source.NoticeItems);
+            ReplaceCollection(LoadEvents, source.LoadEvents);
+            IncrementalAwardSummaryText = source.IncrementalAwardSummaryText;
+            ReplaceCompanyCheckItems(source.CompanyCheckItems.Select(x => x.Name));
+            RefreshLeftOccupyZones();
         }
         finally
         {
+            IsApplyingSnapshot = false;
             _suppressAutoApply = false;
         }
+    }
 
-        _pendingAutoApplyFilter = BuildFilter();
-        if (ApplyFilterCommand.CanExecute(null))
-        {
-            ApplyFilterCommand.Execute(null);
-        }
+    private void RefreshLeftOccupyZones()
+    {
+        var minRate = _filterState.ParseAdjustRate(SelectedMinAdjustRate) ?? 99.0;
+        var maxRate = _filterState.ParseAdjustRate(SelectedMaxAdjustRate) ?? 101.0;
+        var items = LeftOccupyBoardBuilder.Build(
+            CurrentParticipants,
+            StartDate,
+            EndDate,
+            minRate,
+            maxRate);
+        ReplaceCollection(LeftOccupyZones, items);
     }
 
     private static bool IsAllCompanyToken(string? value)
@@ -1284,15 +1317,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             return true;
         }
 
-        var tokens = SplitCompanyTokens(targetFilter.Company);
-        var filtered = tokens.Count == 0
-            ? _companyBaselineParticipants.ToList()
-            : _companyBaselineParticipants
-                .Where(x => tokens.Any(token =>
-                    ContainsCompanyToken(x.CompanyName, token)
-                    || ContainsCompanyToken(x.NormalizedCompanyName, token)))
-                .ToList();
-        filtered = filtered
+        var filtered = _companyBaselineParticipants
             .Where(x => !IsRetiredCompanyName(x.CompanyName) && !IsRetiredCompanyName(x.NormalizedCompanyName))
             .ToList();
 
@@ -1386,7 +1411,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             "최근 3개월" => end.AddMonths(-3),
             "최근 6개월" => end.AddMonths(-6),
             "최근 1년" => end.AddYears(-1),
-            _ => end.AddMonths(-3),
+            _ => end.AddMonths(-6),
         };
         return (start, end);
     }
@@ -1416,17 +1441,30 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             ReplaceCollection(VisibleBidNoticeItems, visibleBidRows);
             IncrementalBidSummaryText = BuildBidNoticeSummary(IncrementalBidNoticeItems, visibleBidRows.Count);
             SavedFilePath = snapshot.SavedFilePath;
-            var participants = (snapshot.Participants ?? Array.Empty<ParticipantRecord>())
-                .Where(x =>
-                    !IsRetiredCompanyName(x.CompanyName)
-                    && !IsRetiredCompanyName(x.NormalizedCompanyName))
+            var chartUniverse = CollectorNoticeRules.ApplyChartRules(
+                    (snapshot.Participants ?? Array.Empty<ParticipantRecord>())
+                        .Where(x =>
+                            !IsRetiredCompanyName(x.CompanyName)
+                            && !IsRetiredCompanyName(x.NormalizedCompanyName))
+                        .ToList())
                 .ToList();
-            var donggukAwardRows = DonggukAdjustRateTrendBuilder.BuildAwardNoticeRows(participants, appliedFilter.StartDate, appliedFilter.EndDate);
+            var companyTokens = SplitCompanyTokens(appliedFilter.Company);
+            var participants = companyTokens.Count == 0
+                ? chartUniverse
+                : chartUniverse
+                    .Where(x => companyTokens.Any(token =>
+                        ContainsCompanyToken(x.CompanyName, token)
+                        || ContainsCompanyToken(x.NormalizedCompanyName, token)))
+                    .ToList();
+            var donggukSource = chartUniverse;
+            var donggukAwardRows = CollectorNoticeRules.ResolveDonggukAwardNoticeRows(
+                DonggukAdjustRateTrendBuilder.BuildAwardNoticeRows(donggukSource, appliedFilter.StartDate, appliedFilter.EndDate),
+                snapshot.IncrementalAwardNoticeRows);
             ReplaceCollection(VisibleAwardNoticeItems, donggukAwardRows);
             IncrementalAwardSummaryText = BuildDonggukAwardNoticeSummary(donggukAwardRows);
-            ReplaceCollection(NoticeAdjustRateTrendPoints, DonggukAdjustRateTrendBuilder.BuildPoints(participants, appliedFilter.StartDate, appliedFilter.EndDate));
-            ReplaceCollection(NoticeAwardReferenceTrendPoints, DonggukAdjustRateTrendBuilder.BuildAwardReferencePoints(participants, appliedFilter.StartDate, appliedFilter.EndDate));
-            NoticeAdjustRateTrendSummaryText = DonggukAdjustRateTrendBuilder.BuildSummary(participants, appliedFilter.StartDate, appliedFilter.EndDate);
+            ReplaceCollection(NoticeAdjustRateTrendPoints, DonggukAdjustRateTrendBuilder.BuildPoints(donggukSource, appliedFilter.StartDate, appliedFilter.EndDate));
+            ReplaceCollection(NoticeAwardReferenceTrendPoints, DonggukAdjustRateTrendBuilder.BuildAwardReferencePoints(donggukSource, appliedFilter.StartDate, appliedFilter.EndDate));
+            NoticeAdjustRateTrendSummaryText = DonggukAdjustRateTrendBuilder.BuildSummary(donggukSource, appliedFilter.StartDate, appliedFilter.EndDate);
             SelectedBidNoticeItem = null;
             SelectedAwardNoticeItem = null;
             RefreshFirstPageBidRecommendation();
@@ -1804,7 +1842,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
 
         var endDate = EndDate == default ? DateTime.Today : EndDate.Date;
-        var startBoundary = endDate.AddMonths(-3).Date;
+        var startBoundary = StartDate == default ? endDate.AddMonths(-6).Date : StartDate.Date;
         return participants
             .Where(x => x.OpenDate.Date >= startBoundary && x.OpenDate.Date <= endDate)
             .ToList();

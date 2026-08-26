@@ -45,6 +45,13 @@
     <Resource Include="Assets\map-background.png" />
   </ItemGroup>
 
+  <ItemGroup Condition="Exists('..\nara_collect_cpp\build\Release\nara_award_collect.exe')">
+    <Content Include="..\nara_collect_cpp\build\Release\nara_award_collect.exe">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
   <ItemGroup Condition="Exists('..\..\..\전체_통합_데이터.xlsx')">
     <Content Include="..\..\..\전체_통합_데이터.xlsx">
       <Link>전체_통합_데이터.xlsx</Link>
