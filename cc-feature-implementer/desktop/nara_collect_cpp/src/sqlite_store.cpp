@@ -189,7 +189,10 @@ std::vector<ParticipantRow> LoadJsonlRows(const std::filesystem::path& jsonl_pat
         row.notice_no = NoticeNoOf(notice);
         row.notice_name = JsonString(line, "notice_name");
         row.ordering_agency = JsonString(line, "ordering_agency");
-        row.region = NormalizeStoredRegion(JsonString(line, "region"));
+        row.region = CollectRegionToken(JsonString(line, "region"));
+        if (row.region != "전국" && row.region != "경북") {
+            continue;
+        }
         row.rank = static_cast<int>(JsonNumber(line, "rank").value_or(0));
         row.company_name = company;
         row.normalized_company_name = CanonicalizeCompany(company);

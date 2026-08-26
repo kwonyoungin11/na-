@@ -38,6 +38,10 @@
    - 잘못: 파이썬 파이프라인이 타임아웃·3개월 데이터만 남림. 수집은 C++이어야 하는데 파이썬을 돌림.
    - 규칙: 나라장터 낙찰 수집 엔트리는 `nara_award_collect` (C++). 조회는 3개월 창으로 나눈다. 파이썬 collect는 쓰지 않는다.
 
+20. **지역을 목록 빈칸이면 전부 전국으로 넣음**
+   - 잘못: `rgnLmtBidLocplcJdgmBssNm`이 비면 `전국`. sqlite 185공고 중 183이 전국. 파이썬은 `getBidPblancListInfoPrtcptPsblRgn`으로 참가가능지역을 읽는다.
+   - 규칙: 토큰은 `전국`|`경북`만. `경상북도`/`대구,경북` → `경북`. 목록이 비면 참가가능지역 API. 전북 등은 버린다.
+
 19. **나라장터 1위를 예가대비÷하한으로 100.00에 붙임**
    - 잘못: `bidprcrt`÷`sucsfbidLwltRate` 또는 예산(asignBdgtAmt)을 기초예가로 써서 분홍선이 100에 수평.
    - 규칙: 기초대비사정률 = `ComputeBaseAdjustRate(투찰금액, bssamt, 하한)`. 기초예가는 PreparPcDetail `bssamt`만. 86.x를 100으로 바꾸지 않는다.

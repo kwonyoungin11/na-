@@ -44,10 +44,6 @@ bool PassesCollectRules(const AwardNotice& notice) {
     if (!domain) {
         return false;
     }
-    const auto region = notice.region;
-    if (region.find("전국") == std::string::npos && region.find("경북") == std::string::npos) {
-        return false;
-    }
     std::set<std::string> names;
     bool has_target = false;
     for (const auto& company : notice.companies) {
@@ -55,7 +51,8 @@ bool PassesCollectRules(const AwardNotice& notice) {
             continue;
         }
         names.insert(company.name);
-        if (company.name.find("문화재연구원") != std::string::npos) {
+        if (company.name.find("문화재연구원") != std::string::npos
+            || company.name.find("문화유산연구원") != std::string::npos) {
             has_target = true;
         }
     }
@@ -157,6 +154,34 @@ std::optional<double> JsonNumber(const std::string& object, const std::string& k
     }
 }
 
+std::string ExtractJsonObject(const std::string& json, const std::string& key) {
+    const std::string needle = "\"" + key + "\"";
+    auto pos = json.find(needle);
+    if (pos == std::string::npos) {
+        return {};
+    }
+    pos = json.find(':', pos + needle.size());
+    if (pos == std::string::npos) {
+        return {};
+    }
+    pos = json.find_first_not_of(" \t\r\n", pos + 1);
+    if (pos == std::string::npos || json[pos] != '{') {
+        return {};
+    }
+    int depth = 0;
+    for (size_t i = pos; i < json.size(); ++i) {
+        if (json[i] == '{') {
+            ++depth;
+        } else if (json[i] == '}') {
+            --depth;
+            if (depth == 0) {
+                return json.substr(pos, i - pos + 1);
+            }
+        }
+    }
+    return {};
+}
+
 std::vector<std::string> ParseJsonObjectArray(const std::string& json, const std::string& array_key) {
     const std::string needle = "\"" + array_key + "\"";
     auto pos = json.find(needle);
@@ -195,7 +220,25 @@ std::vector<std::string> ParseResponseItems(const std::string& body) {
     if (items.empty()) {
         items = ParseJsonObjectArray(body, "item");
     }
+    if (items.empty()) {
+        auto obj = ExtractJsonObject(body, "item");
+        if (!obj.empty()) {
+            items.push_back(std::move(obj));
+        }
+    }
     return items;
+}
+
+std::string BuildOpengListQuery(
+    const std::string& begin_dt,
+    const std::string& end_dt,
+    const std::string& keyword,
+    int page) {
+    std::ostringstream path;
+    path << "/1230000/as/ScsbidInfoService/getOpengResultListInfoServcPPSSrch"
+         << "?inqryDiv=2&inqryBgnDt=" << begin_dt << "&inqryEndDt=" << end_dt
+         << "&type=json&numOfRows=100&pageNo=" << page << "&bidNtceNm=" << keyword;
+    return path.str();
 }
 
 std::optional<double> ParseLowerRate(const std::string& bid_notice_body) {
@@ -205,6 +248,31 @@ std::optional<double> ParseLowerRate(const std::string& bid_notice_body) {
         }
     }
     return std::nullopt;
+}
+
+std::string CollectRegionToken(const std::string& raw) {
+    if (raw.find("경상북") != std::string::npos || raw.find("경북") != std::string::npos) {
+        return "경북";
+    }
+    if (raw.find("전국") != std::string::npos) {
+        return "전국";
+    }
+    return {};
+}
+
+std::string ParseParticipantRegion(const std::string& body) {
+    std::string joined;
+    for (const auto& item : ParseResponseItems(body)) {
+        auto name = JsonString(item, "prtcptPsblRgnNm");
+        if (name.empty()) {
+            continue;
+        }
+        if (!joined.empty()) {
+            joined += ",";
+        }
+        joined += name;
+    }
+    return CollectRegionToken(joined);
 }
 
 std::optional<double> ParseBaseAmount(const std::string& bid_notice_body) {
@@ -231,11 +299,8 @@ void ApplyDetailCompanies(AwardNotice& notice, const std::string& detail_body) {
         }
         company.rank = static_cast<int>(JsonNumber(corp, "opengRank").value_or(0));
         company.bid_amount = JsonNumber(corp, "bidprcAmt");
-        const auto bid_rate = JsonNumber(corp, "bidprcrt");
         if (company.bid_amount && notice.base_amount && notice.lower_rate) {
             company.adjust_rate = ComputeBaseAdjustRate(*company.bid_amount, *notice.base_amount, *notice.lower_rate);
-        } else if (bid_rate && *bid_rate >= 99.0 && *bid_rate <= 101.0) {
-            company.adjust_rate = bid_rate;
         }
         notice.companies.push_back(std::move(company));
     }

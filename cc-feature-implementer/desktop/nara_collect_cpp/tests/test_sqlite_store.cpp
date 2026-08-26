@@ -59,14 +59,17 @@ std::string JsonlLine(
     int rank,
     const char* rate,
     const char* open_date,
-    const char* lower = nullptr) {
+    const char* lower = nullptr,
+    const char* region = "전국") {
     std::string line = "{\"notice_number\":\"";
     line += notice;
     line += "\",\"notice_name\":\"";
     line += name;
     line += "\",\"ordering_agency\":\"";
     line += agency;
-    line += "\",\"region\":\"전국\",\"open_date\":\"";
+    line += "\",\"region\":\"";
+    line += region;
+    line += "\",\"open_date\":\"";
     line += open_date;
     line += "\",\"rank\":";
     line += std::to_string(rank);
@@ -89,7 +92,8 @@ void WriteSixCompanyNotice(
     const char* agency,
     const char* open_date,
     const char* dongguk_rate,
-    const char* lower = nullptr) {
+    const char* lower = nullptr,
+    const char* region = "전국") {
     const char* companies[] = {
         "춘추문화재연구원",
         "전북문화재연구원",
@@ -100,7 +104,7 @@ void WriteSixCompanyNotice(
     };
     for (int i = 0; i < 6; ++i) {
         const char* rate = i == 5 ? dongguk_rate : "99.78000";
-        out << JsonlLine(notice, name, agency, companies[i], i + 1, rate, open_date, lower) << "\n";
+        out << JsonlLine(notice, name, agency, companies[i], i + 1, rate, open_date, lower, region) << "\n";
     }
 }
 
@@ -147,6 +151,24 @@ int main(int argc, char** argv) {
             << "\n";
         WriteSixCompanyNotice(
             out, "IMPACT-000", "금강 공주권역 국가유산영향진단 용역", "공주시", "2025-12-01 11:00:00", "99.61000");
+        WriteSixCompanyNotice(
+            out,
+            "JEON-000",
+            "전주 정밀발굴조사 용역",
+            "전주시",
+            "2025-09-20 11:00:00",
+            "99.65000",
+            nullptr,
+            "전북");
+        WriteSixCompanyNotice(
+            out,
+            "GB-000",
+            "경주 사정동 정밀발굴조사 용역",
+            "경주시",
+            "2025-09-21 11:00:00",
+            "99.65000",
+            nullptr,
+            "경상북도");
     }
 
     const auto merged = nara::MergeJsonlIntoStore(jsonl, db);
@@ -154,8 +176,8 @@ int main(int argc, char** argv) {
         std::cerr << "FAIL: merge error " << merged.error << "\n";
         return 1;
     }
-    if (merged.notices != 2) {
-        std::cerr << "FAIL: persist-filtered merge should keep 2 notices, got " << merged.notices << "\n";
+    if (merged.notices != 3) {
+        std::cerr << "FAIL: preprocess should keep 전국+경북 only, got " << merged.notices << "\n";
         return 1;
     }
 
@@ -165,6 +187,8 @@ int main(int argc, char** argv) {
     bool has_tiny = false;
     bool has_impact = false;
     bool has_converted = false;
+    bool has_jeon = false;
+    bool has_gb = false;
     for (const auto& row : rows) {
         if (row.notice_number == "KEEP1-000") {
             has_keep = true;
@@ -181,6 +205,12 @@ int main(int argc, char** argv) {
         if (row.notice_number == "NEW2-000" && row.company_name.find("동국") != std::string::npos) {
             has_converted = row.adjust_rate && *row.adjust_rate >= 99.0 && *row.adjust_rate <= 101.0;
         }
+        if (row.notice_number == "JEON-000") {
+            has_jeon = true;
+        }
+        if (row.notice_number == "GB-000") {
+            has_gb = row.region == "경북";
+        }
     }
     if (!has_keep) {
         return Fail("merge must keep notices already in sqlite");
@@ -196,6 +226,12 @@ int main(int argc, char** argv) {
     }
     if (has_converted) {
         return Fail("예가대비 86.x를 100.00 기초대비사정률로 바꾸지 않는다");
+    }
+    if (has_jeon) {
+        return Fail("전처리 후 전북은 전국/경북에서 제외");
+    }
+    if (!has_gb) {
+        return Fail("경상북도 jsonl must store as 경북");
     }
 
     _putenv_s("NARA_DASHBOARD_DB", "");

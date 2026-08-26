@@ -38,8 +38,15 @@ std::vector<std::string> ParseJsonObjectArray(const std::string& json, const std
 std::vector<std::string> ParseResponseItems(const std::string& body);
 std::optional<double> ParseLowerRate(const std::string& bid_notice_body);
 std::optional<double> ParseBaseAmount(const std::string& bid_notice_body);
+std::string CollectRegionToken(const std::string& raw);
+std::string ParseParticipantRegion(const std::string& body);
 void ApplyDetailCompanies(AwardNotice& notice, const std::string& detail_body);
 std::string JsonString(const std::string& object, const std::string& key);
 std::optional<double> JsonNumber(const std::string& object, const std::string& key);
+std::string BuildOpengListQuery(
+    const std::string& begin_dt,
+    const std::string& end_dt,
+    const std::string& keyword,
+    int page);
 
 }  // namespace nara

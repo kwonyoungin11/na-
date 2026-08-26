@@ -144,15 +144,12 @@ int main(int argc, char** argv) {
         std::optional<double> base_amount;
     };
     std::map<std::string, BidNoticeMeta> bid_notice_cache;
+    std::map<std::string, std::string> region_cache;
     for (const auto& month : months) {
         for (const auto& keyword : keywords) {
           for (int page = 1; page <= 20; ++page) {
             std::ostringstream path;
-            path << "/1230000/as/ScsbidInfoService/getOpengResultListInfoServcPPSSrch"
-                 << "?inqryDiv=1&inqryBgnDt=" << MonthStart(month)
-                 << "&inqryEndDt=" << MonthEnd(month)
-                 << "&type=json&numOfRows=100&pageNo=" << page
-                 << "&bidNtceNm=" << UrlEncode(keyword)
+            path << nara::BuildOpengListQuery(MonthStart(month), MonthEnd(month), UrlEncode(keyword), page)
                  << "&ServiceKey=" << UrlEncode(key);
             std::string body;
             try {
@@ -186,9 +183,30 @@ int main(int argc, char** argv) {
                 }
                 notice.notice_name = nara::JsonString(item, "bidNtceNm");
                 notice.agency = nara::JsonString(item, "dminsttNm");
-                notice.region = nara::JsonString(item, "rgnLmtBidLocplcJdgmBssNm");
-                if (notice.region.empty()) {
-                    notice.region = "전국";
+                const auto ntce_no = nara::JsonString(item, "bidNtceNo");
+                const auto cached_region = region_cache.find(ntce_no);
+                if (cached_region != region_cache.end()) {
+                    notice.region = cached_region->second;
+                } else {
+                    std::ostringstream region_path;
+                    region_path << "/1230000/ad/BidPublicInfoService/getBidPblancListInfoPrtcptPsblRgn"
+                                << "?inqryDiv=2&type=json&numOfRows=100&pageNo=1"
+                                << "&bidNtceNo=" << UrlEncode(ntce_no)
+                                << "&bidNtceOrd=" << UrlEncode(ord.empty() ? "000" : ord)
+                                << "&ServiceKey=" << UrlEncode(key);
+                    try {
+                        notice.region = nara::ParseParticipantRegion(nara::HttpGet("apis.data.go.kr", region_path.str()));
+                    } catch (const std::exception& ex) {
+                        std::cerr << "WARN region " << notice.notice_number << " " << ex.what() << "\n";
+                    }
+                    std::this_thread::sleep_for(std::chrono::milliseconds(80));
+                    if (notice.region.empty()) {
+                        notice.region = nara::CollectRegionToken(nara::JsonString(item, "rgnLmtBidLocplcJdgmBssNm"));
+                    }
+                    if (notice.region.empty()) {
+                        notice.region = "전국";
+                    }
+                    region_cache[ntce_no] = notice.region;
                 }
                 notice.open_date = nara::JsonString(item, "opengDt");
                 notice.base_amount = nara::JsonNumber(item, "bssamt");
@@ -198,7 +216,6 @@ int main(int argc, char** argv) {
                 notice.lower_rate = nara::JsonNumber(item, "sucsfbidLwltRate");
                 ++notices;
 
-                const auto ntce_no = nara::JsonString(item, "bidNtceNo");
                 if (!notice.lower_rate || !notice.base_amount) {
                     const auto cached = bid_notice_cache.find(ntce_no);
                     if (cached != bid_notice_cache.end()) {
@@ -232,7 +249,7 @@ int main(int argc, char** argv) {
                 if (!notice.base_amount) {
                     std::ostringstream prepar;
                     prepar << "/1230000/as/ScsbidInfoService/getOpengResultListInfoServcPreparPcDetail"
-                           << "?type=json&numOfRows=10&pageNo=1"
+                           << "?inqryDiv=2&type=json&numOfRows=10&pageNo=1"
                            << "&bidNtceNo=" << UrlEncode(ntce_no)
                            << "&bidNtceOrd=" << UrlEncode(ord.empty() ? "000" : ord)
                            << "&bidClsfcNo="

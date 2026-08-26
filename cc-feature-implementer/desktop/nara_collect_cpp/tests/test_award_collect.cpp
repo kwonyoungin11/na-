@@ -56,6 +56,43 @@ int main() {
         return Fail("5 companies must be rejected");
     }
 
+    nara::AwardNotice gyungbuk = notice;
+    gyungbuk.region = "경상북도";
+    if (!nara::PassesCollectRules(gyungbuk)) {
+        return Fail("python 2nd preprocess keeps 경상북도 as 경북");
+    }
+    nara::AwardNotice jeonbuk = notice;
+    jeonbuk.region = "전북";
+    if (!nara::PassesCollectRules(jeonbuk)) {
+        return Fail("collect keeps all regions; preprocess later keeps 전국/경북 only");
+    }
+    nara::AwardNotice heritage = notice;
+    heritage.companies = {
+        {"재단법인 해원문화유산연구원", 1, 99.78},
+        {"전북문화유산연구원", 2, 99.79},
+        {"경강문화유산연구원", 3, 99.80},
+        {"한울문화유산연구원", 4, 99.81},
+        {"고대문화유산연구원", 5, 99.82},
+        {"동국문화유산연구원", 6, 99.40},
+    };
+    if (!nara::PassesCollectRules(heritage)) {
+        return Fail("python 전처리 is 문화유산연구원 → 문화재연구원 then keep");
+    }
+    if (nara::CollectRegionToken("경상북도") != "경북" || nara::CollectRegionToken("대구,경북") != "경북") {
+        return Fail("CollectRegionToken 경상북도/대구,경북 → 경북");
+    }
+    if (!nara::CollectRegionToken("").empty()) {
+        return Fail("empty list region is unknown until PrtcptPsblRgn API");
+    }
+    if (nara::CollectRegionToken("전국") != "전국") {
+        return Fail("전국 stays 전국");
+    }
+    const auto region_json = std::string(
+        "{\"response\":{\"body\":{\"items\":[{\"prtcptPsblRgnNm\":\"경상북도\"}]}}}");
+    if (nara::ParseParticipantRegion(region_json) != "경북") {
+        return Fail("python extract_region_name reads prtcptPsblRgnNm");
+    }
+
     const auto months = nara::CollectMonths("2026-02", "2026-08");
     if (months.size() != 7) {
         std::cerr << "FAIL: Feb-Aug inclusive should be 7 months, got " << months.size() << "\n";
@@ -128,6 +165,28 @@ int main() {
     }
     if (filled.companies[0].adjust_rate) {
         return Fail("예가대비 bidprcrt/하한만으로는 adjust_rate를 100.0으로 쓰지 않는다");
+    }
+
+    const auto prepar_object = std::string(
+        "{\"response\":{\"body\":{\"items\":{\"item\":{\"bssamt\":\"143400000\",\"plnprc\":\"123800000\"}}}}}");
+    const auto prepar_base = nara::ParseBaseAmount(prepar_object);
+    if (!prepar_base || std::fabs(*prepar_base - 143400000.0) > 0.5) {
+        return Fail("python extract_prepar_price_summary reads single item.bssamt");
+    }
+
+    nara::AwardNotice bidprcrt_only;
+    bidprcrt_only.lower_rate = 86.245;
+    const auto fake100 = std::string(
+        "{\"response\":{\"body\":{\"items\":[{\"opengRank\":\"1\",\"prcbdrNm\":\"춘추문화재연구원\","
+        "\"bidprcAmt\":\"123403300\",\"bidprcrt\":\"100.014\"}]}}}");
+    nara::ApplyDetailCompanies(bidprcrt_only, fake100);
+    if (!bidprcrt_only.companies.empty() && bidprcrt_only.companies[0].adjust_rate) {
+        return Fail("python calculate_row never stores bidprcrt as 기초대비사정률");
+    }
+
+    const auto list_q = nara::BuildOpengListQuery("202508010000", "202508312359", "발굴조사", 1);
+    if (list_q.find("inqryDiv=2") == std::string::npos) {
+        return Fail("python list search uses 개찰일시 inqryDiv=2");
     }
 
     nara::AwardNotice with_base;
