@@ -46,6 +46,12 @@ int main() {
     if (kCardRadius != 22 || kDockRadius != 16 || kToolbarRadius != 16 || kResetBtnRadius != 14) {
         return Fail("card 22 / dock 16 / toolbar 16 / reset 14");
     }
+    if (kMapInnerRadius != 16 || kPlotRadius != 16) {
+        return Fail("전장 맵 외각 map_inner/plot radius 16");
+    }
+    if (kMapInnerRadius > kCardRadius || kPlotRadius > kMapInnerRadius) {
+        return Fail("plot 16 sits inside map_inner 16 inside card 22");
+    }
     if (kHoverRadius != 6 || kRankBadgeRadius != 2 || kCompanyPanelRadius != 12) {
         return Fail("hover 6 / rank badge 2 / company panel 12");
     }
@@ -131,6 +137,12 @@ int main() {
     }
     if (kComboH != 40 || kComboRadius != 12) {
         return Fail("분석 범위 combo is 40px radius 12");
+    }
+    if (kRegionSegmentRadius != kComboRadius) {
+        return Fail("전국|경북 is one 12px shell matching combo, not two overlapping pills");
+    }
+    if (std::fabs(kComboStrokeW - 1.2f) > 0.01f || kComboStrokeArgb != kStrokeStrongArgb) {
+        return Fail("분석 범위 cell stroke is 1.2 #BAC6D5 so the 칸 edge is visible");
     }
     if (kCheckSize != 18 || kCheckRadius != 6 || kCheckGap != 10) {
         return Fail("업체 checkbox is 18x18 radius 6 gap 10");
@@ -307,6 +319,10 @@ int main() {
     if (dock_seg.nationwide.Right() != dock_seg.gyeongbuk.x
         || dock_seg.gyeongbuk.Right() != chrome.combo_region.Right()) {
         return Fail("chart dock region slot also splits 전국|경북");
+    }
+    if (dock_seg.nationwide.Contains(dock_seg.gyeongbuk.x, dock_seg.gyeongbuk.y + 1)
+        || dock_seg.nationwide.w + dock_seg.gyeongbuk.w != chrome.combo_region.w) {
+        return Fail("전국|경북 halves share one divider and must not overlap");
     }
     if (chrome.company_all.w != 64 || chrome.company_all.h != 32) {
         return Fail("전체 hit target is 64x32");

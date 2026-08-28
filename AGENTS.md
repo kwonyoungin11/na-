@@ -1,4 +1,3 @@
-
 # AGENTS.md
 
 ## Scope
@@ -7,14 +6,15 @@ This file contains durable repository instructions only.
 
 - Put personal communication preferences in `~/.codex/AGENTS.md`.
 - Put directory-specific rules in the closest nested `AGENTS.md`.
-- Put repeatable multi-step workflows in `.agents/skills/`.
 - Use `.agents/PLANS.md` (or a task-specific plan file) for complex or long-running work.
 
-## Development Gate
+## Disabled tooling
 
-Canonical text: `.grok/rules/00-dev-engineering.md`. The hook injects that file. Do not replace it with a 15-agent / every-MCP ritual.
+Grok **hooks**, **MCP servers**, and **skills** are removed. Do not recreate, install, call, or load them.
 
-Follow that file. Short form: loop (failing check → smallest fix → same check), graph (표 스냅샷 = 전장 맵), region is `전국`|`경북` only, C++ collect, read `.agents/MISTAKES.md` before chart/collect/table edits.
+Canonical domain text: `.grok/rules/00-dev-engineering.md`.
+
+Short form: loop (failing check → smallest fix → same check), graph (표 스냅샷 = 전장 맵), region is `전국`|`경북` only, C++ collect, read `.agents/MISTAKES.md` before chart/collect/table edits.
 
 Live C++ desktop: `cc-feature-implementer/desktop/nara_collect_cpp/build/Release/nara_desktop.exe` via explorer. C# Debug exe only when the user asked for the C# app.
 
@@ -88,10 +88,6 @@ For auth, permissions, secrets, payments, infra, production config, migrations, 
 - Do not add or upgrade dependencies unless necessary.
 - Reuse existing libraries, helpers, and patterns before introducing new ones.
 - Call out dependency, lockfile, package manager, or CI/CD changes explicitly.
-
-## Skills
-
-- If the task matches a repeatable workflow (for example release notes, commit hygiene, docs refresh, dependency drift checks, or migration checklists), prefer the appropriate skill instead of embedding the whole procedure here.
 
 ## Repo Commands
 

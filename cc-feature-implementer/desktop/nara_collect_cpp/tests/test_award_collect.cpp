@@ -106,7 +106,28 @@ int main() {
     if (months.front() != "2026-02" || months.back() != "2026-08") {
         return Fail("month range bounds");
     }
-    const auto windows = nara::CollectThreeMonthWindows("2025-08", "2026-08");
+    if (nara::FormatYmd(2026, 8, 28) != "2026-08-28") {
+        return Fail("FormatYmd must follow OS local Y-M-D, not a hardcoded 2024");
+    }
+    if (nara::YmdMinusMonths(2026, 8, 28, 12) != "2025-08-28") {
+        return Fail("1년 창은 오늘-12개월~오늘 (2026-08-28 → 2025-08-28)");
+    }
+    if (nara::YmdMinusMonths(2024, 8, 28, 12) != "2023-08-28") {
+        return Fail("wrong OS clock 2024 would produce the 2023-2024 footer");
+    }
+    if (nara::kCollectLookbackMonths != 12) {
+        return Fail("수집·표시 lookback은 1년(12개월)");
+    }
+    const auto span = nara::LookbackCollectMonthSpan(2026, 8);
+    if (span.start_month != "2025-08" || span.end_month != "2026-08") {
+        std::cerr << "FAIL: 2026-08 1년 기본값 got " << span.start_month << "~" << span.end_month << "\n";
+        return 1;
+    }
+    const auto six = nara::LookbackCollectMonthSpan(2026, 8, 6);
+    if (six.start_month != "2026-02") {
+        return Fail("6-month helper is only for range math, not the app default");
+    }
+    const auto windows = nara::CollectThreeMonthWindows(span.start_month, span.end_month);
     if (windows.size() != 5) {
         std::cerr << "FAIL: 1년은 3개월 창 5개여야 한다 got " << windows.size() << "\n";
         return 1;

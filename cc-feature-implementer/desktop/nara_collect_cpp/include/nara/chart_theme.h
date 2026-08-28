@@ -78,10 +78,13 @@ constexpr int kResetShadowBlur = 16;
 
 // Radii — DesignTokens.xaml + MapResetButtonStyle / hover callout / rank badge.
 constexpr int kCardRadius = 22;
+constexpr int kMapInnerRadius = 16;
+constexpr int kPlotRadius = 16;
 constexpr int kDockRadius = 16;
 constexpr int kToolbarRadius = 16;
 constexpr int kResetBtnRadius = 14;
 constexpr int kComboRadius = 12;
+constexpr int kRegionSegmentRadius = kComboRadius;
 constexpr int kCompanyPanelRadius = 12;
 constexpr int kHoverRadius = 6;
 constexpr int kRankBadgeRadius = 2;
@@ -111,6 +114,7 @@ constexpr float kHoverChipWidth = 1.8f;
 constexpr float kPointerWidth = 1.2f;
 constexpr float kAccentBarH = 3.0f;
 constexpr float kCardStrokeW = 1.0f;
+constexpr float kComboStrokeW = 1.2f;
 
 // Colors (AARRGGBB) — NativeBidChartControl + DesignTokens + bidder_colors.json.
 constexpr uint32_t kBgArgb = 0xFFF6F8FB;
@@ -136,6 +140,7 @@ constexpr uint32_t kPointerLabelTextArgb = 0xFF1D4ED8;
 constexpr uint32_t kCalloutPenArgb = 0xFFFDBA74;
 constexpr uint32_t kStrokeSubtleArgb = 0xFFD8E0EA;
 constexpr uint32_t kStrokeStrongArgb = 0xFFBAC6D5;
+constexpr uint32_t kComboStrokeArgb = kStrokeStrongArgb;
 constexpr uint32_t kGlassFillArgb = 0xD6FFFFFF;
 constexpr uint32_t kDockFillArgb = 0xF2FFFFFF;
 constexpr uint32_t kCompanyPanelArgb = 0xFFFFFFFF;

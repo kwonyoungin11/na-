@@ -32,6 +32,10 @@ struct CollectWindow {
     std::string end_month;
 };
 
+inline constexpr int kCollectLookbackMonths = 12;
+std::string FormatYmd(int year, int month, int day);
+std::string YmdMinusMonths(int year, int month, int day, int months);
+CollectWindow LookbackCollectMonthSpan(int year, int month, int lookback_months = kCollectLookbackMonths);
 std::vector<std::string> CollectMonths(const std::string& start_month, const std::string& end_month);
 std::vector<CollectWindow> CollectThreeMonthWindows(const std::string& start_month, const std::string& end_month);
 std::vector<std::string> ParseJsonObjectArray(const std::string& json, const std::string& array_key);

@@ -1,0 +1,36 @@
+# This repository does not use Grok hooks, MCP servers, or skills.
+# Do not add mcp_servers, [hooks], or skill paths.
+
+[skills]
+paths = []
+ignore = [
+  ".agents/skills",
+  ".grok/skills",
+]
+disabled = [
+  "api",
+  "bidder-visualization",
+  "data-preprocessing",
+  "fixed-bidder-map",
+  "graph-engineering",
+  "karpathy-guidelines",
+  "korean-font-fixer",
+  "logic",
+  "loop-engineering",
+  "nara-award-analysis-program",
+  "optimal-position",
+  "report",
+  "shadow-strategy",
+]
+server_skill_dirs = []
+bundled_skill_dirs = []
+
+[compat.cursor]
+skills = false
+mcps = false
+hooks = false
+
+[compat.claude]
+skills = false
+mcps = false
+hooks = false

@@ -73,6 +73,11 @@ std::string PathString(const std::filesystem::path& path) {
     return path.lexically_normal().string();
 }
 
+std::string PathUtf8(const std::filesystem::path& path) {
+    const auto u8 = path.lexically_normal().u8string();
+    return std::string(u8.begin(), u8.end());
+}
+
 std::string QuoteArg(const std::string& value) {
     return "\"" + value + "\"";
 }
@@ -278,7 +283,7 @@ bool EnsureParticipantsSchema(const std::filesystem::path& db_path) {
     std::error_code ec;
     std::filesystem::create_directories(db_path.parent_path(), ec);
     sqlite3* db = nullptr;
-    if (sqlite3_open(PathString(db_path).c_str(), &db) != SQLITE_OK) {
+    if (sqlite3_open(PathUtf8(db_path).c_str(), &db) != SQLITE_OK) {
         if (db) {
             sqlite3_close(db);
         }
@@ -315,7 +320,7 @@ void EnsurePortableDatabase() {
 std::vector<ParticipantRow> LoadParticipants(const std::filesystem::path& db_path) {
     std::vector<ParticipantRow> rows;
     sqlite3* db = nullptr;
-    if (sqlite3_open_v2(PathString(db_path).c_str(), &db, SQLITE_OPEN_READONLY, nullptr) != SQLITE_OK) {
+    if (sqlite3_open_v2(PathUtf8(db_path).c_str(), &db, SQLITE_OPEN_READONLY, nullptr) != SQLITE_OK) {
         if (db) {
             sqlite3_close(db);
         }
@@ -385,7 +390,7 @@ JsonlMergeResult MergeJsonlIntoStore(
     }
 
     sqlite3* db = nullptr;
-    if (sqlite3_open(PathString(db_path).c_str(), &db) != SQLITE_OK) {
+    if (sqlite3_open(PathUtf8(db_path).c_str(), &db) != SQLITE_OK) {
         result.error = db ? sqlite3_errmsg(db) : "sqlite open failed";
         if (db) {
             sqlite3_close(db);

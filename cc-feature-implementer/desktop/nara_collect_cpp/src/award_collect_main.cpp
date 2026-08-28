@@ -3,6 +3,7 @@
 
 #include <cctype>
 #include <chrono>
+#include <ctime>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -102,8 +103,13 @@ std::string MonthEnd(const std::string& month) {
 }  // namespace
 
 int main(int argc, char** argv) {
-    std::string start_month = "2026-02";
-    std::string end_month = "2026-08";
+    const auto now = std::time(nullptr);
+    std::tm local{};
+    localtime_s(&local, &now);
+    const auto default_span =
+        nara::LookbackCollectMonthSpan(local.tm_year + 1900, local.tm_mon + 1, nara::kCollectLookbackMonths);
+    std::string start_month = default_span.start_month;
+    std::string end_month = default_span.end_month;
     std::string env_path = ".env";
     std::string out_path = "cpp_award_collect.jsonl";
     for (int i = 1; i < argc; ++i) {

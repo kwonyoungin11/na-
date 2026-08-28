@@ -62,6 +62,11 @@ using chart_theme::kCompanyPanelRadius;
 using chart_theme::kCompanyWrapRows;
 using chart_theme::kComboH;
 using chart_theme::kComboRadius;
+using chart_theme::kComboStrokeArgb;
+using chart_theme::kComboStrokeW;
+using chart_theme::kRegionSegmentRadius;
+using chart_theme::kMapInnerRadius;
+using chart_theme::kPlotRadius;
 using chart_theme::kDockFillArgb;
 using chart_theme::kDockMinH;
 using chart_theme::kDockRadius;
@@ -195,6 +200,7 @@ HWND g_period = nullptr;
 HWND g_precision = nullptr;
 HWND g_min = nullptr;
 HWND g_max = nullptr;
+WNDPROC g_comboOrigProc = nullptr;
 std::string g_region_token = "전국";
 ChartRegionHandler g_region_handler = nullptr;
 HFONT g_uiFont = nullptr;
@@ -264,23 +270,46 @@ Gdiplus::RectF ToRectF(const RectI& r) {
             static_cast<Gdiplus::REAL>(r.h)};
 }
 
+void ClipToRoundRect(Gdiplus::Graphics& g, const RectI& r, float radius,
+                     Gdiplus::CombineMode mode = Gdiplus::CombineModeReplace) {
+    Gdiplus::GraphicsPath path;
+    RoundRectPath(path, ToRectF(r), radius);
+    g.SetClip(&path, mode);
+}
+
+void ClipPlot(Gdiplus::Graphics& g) {
+    ClipToRoundRect(g, g_chrome.plot, static_cast<float>(kPlotRadius));
+}
+
 void PaintRegionSegment(Gdiplus::Graphics& g, const RectI& slot, const std::string& selected) {
     const auto seg = SplitRegionSegment(slot);
     const int on = RegionIndexFromToken(selected);
+    const Gdiplus::RectF outer = ToRectF(slot);
+    const float radius = static_cast<float>(kRegionSegmentRadius);
+    Gdiplus::GraphicsPath shell;
+    RoundRectPath(shell, outer, radius);
+    Gdiplus::SolidBrush idle(Argb(kCompanyPanelArgb));
+    g.FillPath(&idle, &shell);
+    const Gdiplus::GraphicsState saved = g.Save();
+    g.SetClip(&shell);
+    Gdiplus::SolidBrush active_fill(Argb(kAccentSubtleArgb));
+    g.FillRectangle(&active_fill, ToRectF(on == 0 ? seg.nationwide : seg.gyeongbuk));
+    g.Restore(saved);
+    Gdiplus::Pen border(Argb(kComboStrokeArgb), kComboStrokeW);
+    g.DrawPath(&border, &shell);
+    const Gdiplus::REAL mid = static_cast<Gdiplus::REAL>(seg.gyeongbuk.x) + 0.5f;
+    g.DrawLine(&border, mid, outer.Y + 5.0f, mid, outer.GetBottom() - 5.0f);
     Gdiplus::FontFamily family(kFontFamily);
     Gdiplus::Font font(&family, kFontCaption, Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
     Gdiplus::StringFormat center;
     center.SetAlignment(Gdiplus::StringAlignmentCenter);
     center.SetLineAlignment(Gdiplus::StringAlignmentCenter);
-    auto paint = [&](const RectI& box, int index) {
-        const bool active = index == on;
-        FillRoundRect(g, ToRectF(box), 10.0f, active ? kAccentSubtleArgb : kCompanyPanelArgb,
-                      active ? kAccentArgb : kStrokeSubtleArgb, 1.0f);
-        Gdiplus::SolidBrush text(Argb(active ? chart_theme::kAccentStrongArgb : kSubtleTextArgb));
+    auto label = [&](const RectI& box, int index) {
+        Gdiplus::SolidBrush text(Argb(index == on ? chart_theme::kAccentStrongArgb : kSubtleTextArgb));
         g.DrawString(RegionLabelAt(index), -1, &font, ToRectF(box), &center, &text);
     };
-    paint(seg.nationwide, 0);
-    paint(seg.gyeongbuk, 1);
+    label(seg.nationwide, 0);
+    label(seg.gyeongbuk, 1);
 }
 
 void DrawOffsetShadow(Gdiplus::Graphics& g, const Gdiplus::RectF& r, float radius, int depth, uint32_t argb) {
@@ -320,6 +349,60 @@ void ApplyCompanyFlags(int index, bool click_all) {
     g_hasStatic = false;
 }
 
+void PaintClosedCombo(HWND hwnd, HDC hdc) {
+    Gdiplus::Graphics dg(hdc);
+    dg.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    dg.SetTextRenderingHint(Gdiplus::TextRenderingHintClearTypeGridFit);
+    RECT rc{};
+    GetClientRect(hwnd, &rc);
+    const float h = static_cast<float>((std::min)(kComboH, static_cast<int>(rc.bottom - rc.top)));
+    const Gdiplus::RectF r(0.5f, 0.5f, static_cast<Gdiplus::REAL>(rc.right - rc.left) - 1.0f, h - 1.0f);
+    const bool focused = GetFocus() == hwnd;
+    FillRoundRect(dg, r, static_cast<float>(kComboRadius), kPlotBgArgb,
+                  focused ? chart_theme::kAccentArgb : kComboStrokeArgb, kComboStrokeW);
+    Gdiplus::SolidBrush chevron(Argb(kMutedCaptionArgb));
+    const Gdiplus::REAL cx = r.X + r.Width - 16.0f;
+    const Gdiplus::REAL cy = r.Y + r.Height * 0.5f;
+    Gdiplus::PointF pts[3] = {{cx - 5.0f, cy - 3.0f}, {cx + 5.0f, cy - 3.0f}, {cx, cy + 3.0f}};
+    dg.FillPolygon(&chevron, pts, 3);
+    wchar_t caption[64] = {};
+    const int index = static_cast<int>(SendMessageW(hwnd, CB_GETCURSEL, 0, 0));
+    if (index >= 0) {
+        SendMessageW(hwnd, CB_GETLBTEXT, index, reinterpret_cast<LPARAM>(caption));
+    }
+    Gdiplus::FontFamily family(kFontFamily);
+    Gdiplus::Font font(&family, kFontBody, Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
+    Gdiplus::SolidBrush text(Argb(kTextArgb));
+    Gdiplus::StringFormat fmt;
+    fmt.SetAlignment(Gdiplus::StringAlignmentNear);
+    fmt.SetLineAlignment(Gdiplus::StringAlignmentCenter);
+    fmt.SetTrimming(Gdiplus::StringTrimmingEllipsisCharacter);
+    fmt.SetFormatFlags(Gdiplus::StringFormatFlagsNoWrap);
+    Gdiplus::RectF text_box(r.X + 10.0f, r.Y, (std::max)(8.0f, r.Width - 32.0f), r.Height);
+    dg.DrawString(caption, -1, &font, text_box, &fmt, &text);
+}
+
+LRESULT CALLBACK ComboProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    if (msg == WM_PAINT) {
+        PAINTSTRUCT ps{};
+        HDC hdc = BeginPaint(hwnd, &ps);
+        PaintClosedCombo(hwnd, hdc);
+        EndPaint(hwnd, &ps);
+        return 0;
+    }
+    if (msg == WM_PRINTCLIENT) {
+        PaintClosedCombo(hwnd, reinterpret_cast<HDC>(wParam));
+        return 0;
+    }
+    if (msg == WM_ERASEBKGND) {
+        return 1;
+    }
+    if (!g_comboOrigProc) {
+        return DefWindowProcW(hwnd, msg, wParam, lParam);
+    }
+    return CallWindowProcW(g_comboOrigProc, hwnd, msg, wParam, lParam);
+}
+
 void StyleCombo(HWND combo, int w, int h) {
     if (!combo) {
         return;
@@ -329,6 +412,14 @@ void StyleCombo(HWND combo, int w, int h) {
     SendMessageW(combo, CB_SETITEMHEIGHT, 0, 28);
     HRGN rgn = CreateRoundRectRgn(0, 0, w + 1, h + 1, kComboRadius * 2, kComboRadius * 2);
     SetWindowRgn(combo, rgn, TRUE);
+    const auto current = reinterpret_cast<WNDPROC>(GetWindowLongPtrW(combo, GWLP_WNDPROC));
+    if (current != ComboProc) {
+        const auto prev = reinterpret_cast<WNDPROC>(
+            SetWindowLongPtrW(combo, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(ComboProc)));
+        if (!g_comboOrigProc) {
+            g_comboOrigProc = prev;
+        }
+    }
 }
 
 std::wstring Utf8ToWide(const std::string& text) {
@@ -598,7 +689,7 @@ void DrawChipLabel(Gdiplus::Graphics& g, const Gdiplus::Rect& rect, const std::w
     fmt.SetTrimming(Gdiplus::StringTrimmingNone);
     g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
     g.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAliasGridFit);
-    g.SetClip(rect);
+    g.SetClip(rect, Gdiplus::CombineModeIntersect);
     Gdiplus::SolidBrush white(Argb(0xFFFFFFFFu));
     const Gdiplus::RectF box(static_cast<Gdiplus::REAL>(rect.X), static_cast<Gdiplus::REAL>(rect.Y),
                              static_cast<Gdiplus::REAL>(rect.Width), static_cast<Gdiplus::REAL>(rect.Height));
@@ -728,12 +819,11 @@ void PaintDonggukChips(Gdiplus::Graphics& g) {
     const int plotW = g_chrome.plot.w;
     const int plotH = g_chrome.plot.h;
     const int rows = static_cast<int>(g_chart.notices.size());
-    const Gdiplus::Rect plot(plotL, plotT, plotW, plotH);
     const unsigned elapsed = GetTickCount() - g_bounceOrigin;
     const float scale = DonggukBounceScale(elapsed);
     const float lift = DonggukBounceLiftPx(elapsed);
     Gdiplus::FontFamily family(kFontFamily);
-    g.SetClip(plot);
+    ClipPlot(g);
     g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
     for (int r = 0; r < rows; ++r) {
         const int y = plotT + (r * cell) - g_chart.view.scroll_y;
@@ -772,7 +862,7 @@ void PaintDonggukChips(Gdiplus::Graphics& g) {
                 if (!BounceOverlaySkipsLabels() && (!SkipChipLabelsDuringPan() || !g_chart.panning)) {
                     DrawChipLabel(g, rect, Utf8ToWide(BuildShortLabel(color_name)), family, cell);
                 }
-                g.SetClip(plot);
+                ClipPlot(g);
             }
         }
     }
@@ -792,7 +882,7 @@ void PaintHoverOverlay(Gdiplus::Graphics& g) {
     Gdiplus::Pen pointer(Argb(kPointerArgb), kPointerWidth);
     const Gdiplus::REAL dashes[] = {4.0f, 3.0f};
     pointer.SetDashPattern(dashes, 2);
-    g.SetClip(Gdiplus::Rect(plotL, plotT, plotW, plotH));
+    ClipPlot(g);
     g.DrawLine(&pointer, g_chart.hover_x, plotT + 1, g_chart.hover_x, plotT + plotH - 1);
     g.DrawLine(&pointer, plotL + 1, g_chart.hover_y, plotL + plotW - 1, g_chart.hover_y);
     wchar_t rate_text[48];
@@ -872,17 +962,22 @@ void PaintChart(HDC hdc, RECT client) {
     const int plotH = g_chrome.plot.h;
     const int cols = ColumnCount();
     const int rows = static_cast<int>(g_chart.notices.size());
-    const Gdiplus::Rect plot(plotL, plotT, plotW, plotH);
     const Gdiplus::RectF card = ToRectF(g_chrome.map_card);
     DrawOffsetShadow(g, card, static_cast<float>(kCardRadius), kCardShadowDepth, kCardShadowArgb);
     FillRoundRect(g, card, static_cast<float>(kCardRadius), kCardFillArgb, kCardStrokeArgb, kCardStrokeW);
-    Gdiplus::SolidBrush chart_bg(Argb(kBgArgb));
-    g.FillRectangle(&chart_bg, g_chrome.map_inner.x, g_chrome.map_inner.y, g_chrome.map_inner.w, g_chrome.map_inner.h);
+    FillRoundRect(g, ToRectF(g_chrome.map_inner), static_cast<float>(kMapInnerRadius), kBgArgb, 0, 0);
 
+    g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    {
+        Gdiplus::GraphicsPath plot_path;
+        RoundRectPath(plot_path, Gdiplus::RectF(static_cast<Gdiplus::REAL>(plotL), static_cast<Gdiplus::REAL>(plotT),
+                                                static_cast<Gdiplus::REAL>(plotW), static_cast<Gdiplus::REAL>(plotH)),
+                      static_cast<float>(kPlotRadius));
+        g.FillPath(&white, &plot_path);
+        g.DrawPath(&axis, &plot_path);
+    }
     g.SetSmoothingMode(Gdiplus::SmoothingModeNone);
-    g.FillRectangle(&white, plot);
-    g.DrawRectangle(&axis, plot);
-    g.SetClip(plot);
+    ClipPlot(g);
     for (int col = 0; col <= cols; ++col) {
         const int x = plotL + (col * cell) - g_chart.view.scroll_x;
         if (x < plotL - cell || x > plotL + plotW + cell) {
@@ -900,17 +995,17 @@ void PaintChart(HDC hdc, RECT client) {
     }
 
     if (rows == 0) {
-        g.ResetClip();
-        Gdiplus::StringFormat center;
-        center.SetAlignment(Gdiplus::StringAlignmentCenter);
-        center.SetLineAlignment(Gdiplus::StringAlignmentCenter);
+        ClipPlot(g);
+        Gdiplus::StringFormat empty_fmt;
+        empty_fmt.SetAlignment(Gdiplus::StringAlignmentCenter);
+        empty_fmt.SetLineAlignment(Gdiplus::StringAlignmentCenter);
         wchar_t empty[160];
         swprintf_s(empty, L"동국 참여 낙찰공고가 없습니다. 지역을 %s에서 바꿔 보세요.",
                    RegionLabelAt(RegionIndexFromToken(g_region_token)));
         g.DrawString(empty, -1, &empty_font,
                      Gdiplus::RectF(static_cast<Gdiplus::REAL>(plotL), static_cast<Gdiplus::REAL>(plotT),
                                     static_cast<Gdiplus::REAL>(plotW), static_cast<Gdiplus::REAL>(plotH)),
-                     &center, &muted);
+                     &empty_fmt, &muted);
     }
 
     for (int r = 0; r < rows; ++r) {
@@ -922,7 +1017,9 @@ void PaintChart(HDC hdc, RECT client) {
         const std::string open_date = r < static_cast<int>(g_chart.open_dates.size()) ? g_chart.open_dates[r] : "";
         const auto caption_utf8 = FormatNoticeYLabel(scatter.notice_number, open_date);
         g.ResetClip();
-        g.SetClip(Gdiplus::Rect(g_chrome.map_inner.x + 6, plotT, plotL - g_chrome.map_inner.x - 10, plotH));
+        ClipToRoundRect(g, g_chrome.map_inner, static_cast<float>(kMapInnerRadius));
+        g.SetClip(Gdiplus::Rect(g_chrome.map_inner.x + 6, plotT, plotL - g_chrome.map_inner.x - 10, plotH),
+                  Gdiplus::CombineModeIntersect);
         Gdiplus::StringFormat yfmt;
         yfmt.SetAlignment(Gdiplus::StringAlignmentNear);
         yfmt.SetLineAlignment(Gdiplus::StringAlignmentCenter);
@@ -932,7 +1029,7 @@ void PaintChart(HDC hdc, RECT client) {
                                   static_cast<Gdiplus::REAL>(plotL - g_chrome.map_inner.x - 12),
                                   static_cast<Gdiplus::REAL>(cell));
         g.DrawString(Utf8ToWide(caption_utf8).c_str(), -1, &axis_font, ybox, &yfmt, &muted);
-        g.SetClip(plot);
+        ClipPlot(g);
 
         std::map<int, std::vector<const ParticipantRow*>> buckets;
         for (const auto& chip : scatter.chips) {
@@ -962,7 +1059,7 @@ void PaintChart(HDC hdc, RECT client) {
                 Gdiplus::Rect rect(x, yy, side, side);
                 Gdiplus::RectF box(static_cast<Gdiplus::REAL>(x), static_cast<Gdiplus::REAL>(yy),
                                    static_cast<Gdiplus::REAL>(side), static_cast<Gdiplus::REAL>(side));
-                g.SetClip(plot);
+                ClipPlot(g);
                 const bool rank1 = chip.rank == 1 && !nara::LooksLikeOpenApiHundred(chip)
                                    && !nara::NoticeHasLowerLimitAwardCluster(scatter.chips);
                 PaintChipBody(g, box, cell, CompanyColor(color_name).GetValue(), rank1);
@@ -978,14 +1075,20 @@ void PaintChart(HDC hdc, RECT client) {
                     const auto short_name = BuildShortLabel(color_name);
                     DrawChipLabel(g, rect, Utf8ToWide(short_name), family, cell);
                 }
-                g.SetClip(plot);
+                ClipPlot(g);
             }
         }
     }
 
     g.ResetClip();
-    g.DrawLine(&axis, plotL, plotT + plotH, plotL + plotW, plotT + plotH);
-    g.DrawLine(&axis, plotL, plotT, plotL, plotT + plotH);
+    g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    {
+        Gdiplus::GraphicsPath plot_path;
+        RoundRectPath(plot_path, Gdiplus::RectF(static_cast<Gdiplus::REAL>(plotL), static_cast<Gdiplus::REAL>(plotT),
+                                                static_cast<Gdiplus::REAL>(plotW), static_cast<Gdiplus::REAL>(plotH)),
+                      static_cast<float>(kPlotRadius));
+        g.DrawPath(&axis, &plot_path);
+    }
     g.DrawString(kAxisNotice, -1, &axis_bold,
                  Gdiplus::PointF(static_cast<Gdiplus::REAL>(g_chrome.map_inner.x + 6),
                                  static_cast<Gdiplus::REAL>((std::max)(g_chrome.map_inner.y + 2, plotT - 16))),
@@ -1160,22 +1263,16 @@ void PaintComboItem(const DRAWITEMSTRUCT* item) {
                            static_cast<Gdiplus::REAL>(rc.right - rc.left) - 1.0f,
                            static_cast<Gdiplus::REAL>(rc.bottom - rc.top) - 1.0f);
     const bool edit = (item->itemState & ODS_COMBOBOXEDIT) != 0;
+    if (edit) {
+        return;
+    }
     const bool selected = (item->itemState & ODS_SELECTED) != 0;
     uint32_t fill = kPlotBgArgb;
-    if (!edit && selected) {
+    if (selected) {
         fill = kAccentSubtleArgb;
     }
-    if (edit) {
-        FillRoundRect(dg, r, static_cast<float>(kComboRadius), fill, kStrokeSubtleArgb, 1.0f);
-        Gdiplus::SolidBrush chevron(Argb(kMutedCaptionArgb));
-        const Gdiplus::REAL cx = r.X + r.Width - 18.0f;
-        const Gdiplus::REAL cy = r.Y + r.Height * 0.5f;
-        Gdiplus::PointF pts[3] = {{cx - 5.0f, cy - 3.0f}, {cx + 5.0f, cy - 3.0f}, {cx, cy + 3.0f}};
-        dg.FillPolygon(&chevron, pts, 3);
-    } else {
-        Gdiplus::SolidBrush brush(Argb(fill));
-        dg.FillRectangle(&brush, r);
-    }
+    Gdiplus::SolidBrush brush(Argb(fill));
+    dg.FillRectangle(&brush, r);
     wchar_t caption[64] = {};
     if (item->itemID != 0xFFFFFFFFu) {
         SendMessageW(item->hwndItem, CB_GETLBTEXT, item->itemID, reinterpret_cast<LPARAM>(caption));

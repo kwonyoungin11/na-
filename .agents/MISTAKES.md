@@ -97,5 +97,13 @@
    - 규칙: 드래그 프레임은 캐시하지 않는다. 마우스 업에서 라벨 포함 레이어를 다시 그린다. 칩 글자는 AntiAliasGridFit + 32bpp DIB.
 
 15. **Windows 훅 command에 `${GROK_WORKSPACE_ROOT}`를 넣음**
-    - 잘못: `-File "${GROK_WORKSPACE_ROOT}/.grok/hooks/dev-engineering.ps1"` → 변수가 비어 `/.grok/hooks/...`가 되고 PowerShell이 exit 1. 매 프롬프트/툴마다 빨간 글자.
-    - 규칙: 훅 command에 `${GROK_WORKSPACE_ROOT}`를 쓰지 않는다. cwd 상대 `.grok\hooks\dev-engineering.ps1` 또는 절대 경로만 `-File`에 넘긴다.
+   - 잘못: `-File "${GROK_WORKSPACE_ROOT}/.grok/hooks/dev-engineering.ps1"` → 변수가 비어 `/.grok/hooks/...`가 되고 PowerShell이 exit 1. 매 프롬프트/툴마다 빨간 글자.
+   - 규칙: 훅 command에 `${GROK_WORKSPACE_ROOT}`를 쓰지 않는다. cwd 상대 `.grok\hooks\dev-engineering.ps1` 또는 절대 경로만 `-File`에 넘긴다.
+
+21. **수집 CLI 기본 기간이 2~8월(7개월)인데 표/푸터는 1년**
+   - 잘못: `nara_award_collect` argv 기본값이 `2026-02`~`2026-08`. 업데이트 버튼은 12개월을 넘기지만, 인자 없이 돌리면 7개월만 모인다.
+   - 규칙: 수집 기본 구간은 `kCollectLookbackMonths`(12). 오늘 기준 같은 달까지. OpenAPI는 3개월 창으로 나눈다. 표·전장 맵도 그 start/end를 쓴다.
+
+22. **한글 사용자 경로에서 sqlite를 ACP `path.string()`으로 열어 빈 표**
+   - 잘못: `sqlite3_open`은 UTF-8인데 `PathString`이 `.string()`(ACP)을 넘김. `C:\Users\권을\...`에서 `EnsureParticipantsSchema` 실패, db 없음, 공고 0건.
+   - 규칙: sqlite open은 `path.u8string()`/`sqlite3_open16`. 빈 표는 먼저 db/jsonl 존재와 `GetLocalTime` 연도를 나눈다. OS가 2026이면 푸터는 2025-08-28~2026-08-28이다.

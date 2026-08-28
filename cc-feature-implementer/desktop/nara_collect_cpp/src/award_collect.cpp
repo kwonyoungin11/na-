@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdio>
 #include <set>
 #include <sstream>
 
@@ -78,6 +79,44 @@ std::vector<std::string> CollectMonths(const std::string& start_month, const std
         months.push_back(out.str());
     }
     return months;
+}
+
+std::string FormatYmd(int year, int month, int day) {
+    char buf[16];
+    std::snprintf(buf, sizeof(buf), "%04d-%02d-%02d", year, month, day);
+    return buf;
+}
+
+std::string YmdMinusMonths(int year, int month, int day, int months) {
+    month -= months;
+    while (month <= 0) {
+        month += 12;
+        year -= 1;
+    }
+    return FormatYmd(year, month, day);
+}
+
+CollectWindow LookbackCollectMonthSpan(int year, int month, int lookback_months) {
+    CollectWindow span;
+    if (year < 1 || month < 1 || month > 12 || lookback_months < 0) {
+        return span;
+    }
+    const int end_index = year * 12 + month;
+    const int start_index = end_index - lookback_months;
+    auto format = [](int index) {
+        const int y = (index - 1) / 12;
+        const int m = (index - 1) % 12 + 1;
+        std::ostringstream out;
+        out << y << "-";
+        if (m < 10) {
+            out << "0";
+        }
+        out << m;
+        return out.str();
+    };
+    span.start_month = format(start_index);
+    span.end_month = format(end_index);
+    return span;
 }
 
 std::vector<CollectWindow> CollectThreeMonthWindows(const std::string& start_month, const std::string& end_month) {

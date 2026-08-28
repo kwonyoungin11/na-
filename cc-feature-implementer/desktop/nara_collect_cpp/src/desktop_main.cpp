@@ -50,7 +50,7 @@ std::string g_region_token = "전국";
 int g_scroll = 0;
 int g_selected = 0;
 int g_notice_count = 0;
-int g_lookback_months = 12;
+int g_lookback_months = nara::kCollectLookbackMonths;
 std::string g_status;
 RECT g_tableRect{};
 
@@ -69,23 +69,13 @@ std::wstring Utf8ToWide(const std::string& text) {
 std::string TodayMinusMonths(int months) {
     SYSTEMTIME now{};
     GetLocalTime(&now);
-    int year = now.wYear;
-    int month = now.wMonth - months;
-    while (month <= 0) {
-        month += 12;
-        year -= 1;
-    }
-    char buf[16];
-    std::snprintf(buf, sizeof(buf), "%04d-%02d-%02d", year, month, now.wDay);
-    return buf;
+    return nara::YmdMinusMonths(now.wYear, now.wMonth, now.wDay, months);
 }
 
 std::string Today() {
     SYSTEMTIME now{};
     GetLocalTime(&now);
-    char buf[16];
-    std::snprintf(buf, sizeof(buf), "%04d-%02d-%02d", now.wYear, now.wMonth, now.wDay);
-    return buf;
+    return nara::FormatYmd(now.wYear, now.wMonth, now.wDay);
 }
 
 void RoundRectPath(Gdiplus::GraphicsPath& path, Gdiplus::RectF r, float radius) {
@@ -222,25 +212,36 @@ void OnChartRegion(const std::string& token) {
 void PaintRegionSegment(Gdiplus::Graphics& g, const nara::chart_theme::RectI& slot, const Gdiplus::Font& font) {
     const auto seg = nara::chart_theme::SplitRegionSegment(slot);
     const int on = nara::chart_theme::RegionIndexFromToken(g_region_token);
+    Gdiplus::RectF outer(static_cast<Gdiplus::REAL>(slot.x), static_cast<Gdiplus::REAL>(slot.y),
+                         static_cast<Gdiplus::REAL>(slot.w), static_cast<Gdiplus::REAL>(slot.h));
+    Gdiplus::GraphicsPath shell;
+    RoundRectPath(shell, outer, static_cast<float>(nara::chart_theme::kRegionSegmentRadius));
+    Gdiplus::SolidBrush idle_fill{Gdiplus::Color(nara::chart_theme::kCompanyPanelArgb)};
+    g.FillPath(&idle_fill, &shell);
+    const Gdiplus::GraphicsState saved = g.Save();
+    g.SetClip(&shell);
+    const auto& active = on == 0 ? seg.nationwide : seg.gyeongbuk;
+    Gdiplus::SolidBrush on_fill{Gdiplus::Color(nara::chart_theme::kAccentSubtleArgb)};
+    g.FillRectangle(&on_fill,
+                    Gdiplus::RectF(static_cast<Gdiplus::REAL>(active.x), static_cast<Gdiplus::REAL>(active.y),
+                                   static_cast<Gdiplus::REAL>(active.w), static_cast<Gdiplus::REAL>(active.h)));
+    g.Restore(saved);
+    Gdiplus::Pen border{Gdiplus::Color(nara::chart_theme::kComboStrokeArgb), nara::chart_theme::kComboStrokeW};
+    g.DrawPath(&border, &shell);
+    const Gdiplus::REAL mid = static_cast<Gdiplus::REAL>(seg.gyeongbuk.x) + 0.5f;
+    g.DrawLine(&border, mid, outer.Y + 5.0f, mid, outer.GetBottom() - 5.0f);
     Gdiplus::StringFormat center;
     center.SetAlignment(Gdiplus::StringAlignmentCenter);
     center.SetLineAlignment(Gdiplus::StringAlignmentCenter);
-    auto cell = [&](const nara::chart_theme::RectI& box, int index) {
+    auto label = [&](const nara::chart_theme::RectI& box, int index) {
         Gdiplus::RectF r(static_cast<Gdiplus::REAL>(box.x), static_cast<Gdiplus::REAL>(box.y),
                          static_cast<Gdiplus::REAL>(box.w), static_cast<Gdiplus::REAL>(box.h));
-        Gdiplus::GraphicsPath path;
-        Gdiplus::RectF inner(r.X + 1.0f, r.Y + 1.0f, r.Width - 2.0f, r.Height - 2.0f);
-        RoundRectPath(path, inner, 10.0f);
-        const bool active = index == on;
-        Gdiplus::SolidBrush fill(Gdiplus::Color(active ? 0xFFFFF4E5u : 0xFFFFFFFFu));
-        Gdiplus::Pen border(Gdiplus::Color(active ? 0xFFD97706u : 0xFFD8E0EAu), 1.0f);
-        g.FillPath(&fill, &path);
-        g.DrawPath(&border, &path);
-        Gdiplus::SolidBrush text(Gdiplus::Color(active ? 0xFFB45309u : 0xFF5A6473u));
+        Gdiplus::SolidBrush text(Gdiplus::Color(index == on ? nara::chart_theme::kAccentStrongArgb
+                                                           : nara::chart_theme::kSubtleTextArgb));
         g.DrawString(nara::chart_theme::RegionLabelAt(index), -1, &font, r, &center, &text);
     };
-    cell(seg.nationwide, 0);
-    cell(seg.gyeongbuk, 1);
+    label(seg.nationwide, 0);
+    label(seg.gyeongbuk, 1);
 }
 
 void LayoutMain(HWND hwnd) {

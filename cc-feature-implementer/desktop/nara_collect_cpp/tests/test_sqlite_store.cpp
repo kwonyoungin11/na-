@@ -34,7 +34,7 @@ bool Exec(sqlite3* db, const char* sql) {
 
 bool SeedKeepNotice(const std::filesystem::path& db_path) {
     sqlite3* db = nullptr;
-    if (sqlite3_open(db_path.string().c_str(), &db) != SQLITE_OK) {
+    if (sqlite3_open16(db_path.wstring().c_str(), &db) != SQLITE_OK) {
         if (db) {
             sqlite3_close(db);
         }
