@@ -163,6 +163,51 @@ int main() {
     if (!nara::NoticeHasLowerLimitAwardCluster({mixed_r1, mixed_r2, mixed_dg})) {
         return Fail("순위 있는 100.00 군집은 동국 99.x와 무관하게 잡아야 한다");
     }
+    if (nara::IsMappedRank1(mixed_r1, {mixed_r1, mixed_r2, mixed_dg})) {
+        return Fail("100.00 cluster rank1 must not map as 1위");
+    }
+
+    auto spread_r1 = Row("SPREAD", 1, "미래문화재연구원", 99.95105);
+    spread_r1.lower_rate = 87.745;
+    auto spread_r2 = Row("SPREAD", 2, "한울문화재연구원", 99.99000);
+    spread_r2.lower_rate = 87.745;
+    auto spread_dg = Row("SPREAD", 40, "동국문화재연구원", 99.20000);
+    spread_dg.lower_rate = 87.745;
+    std::vector<nara::ParticipantRow> spread = {spread_r1, spread_r2, spread_dg};
+    const char* extras[] = {"가온문화재연구원", "화서문화재연구원", "미리문화재연구원",
+                            "산들문화재연구원", "금강문화재연구원", "호남문화재연구원"};
+    const double extra_rates[] = {99.12, 99.40, 99.70, 100.40, 100.70, 100.95};
+    for (int i = 0; i < 6; ++i) {
+        auto extra = Row("SPREAD", i + 3, extras[i], extra_rates[i]);
+        extra.lower_rate = 87.745;
+        spread.push_back(extra);
+    }
+    if (!nara::LooksLikeOpenApiHundred(spread_r1)) {
+        return Fail("99.95 + 하한율 still matches the per-chip OpenAPI band");
+    }
+    if (nara::NoticeHasLowerLimitAwardCluster(spread)) {
+        return Fail("99.12-100.95 spread is not a 100.00 cluster");
+    }
+    if (!nara::IsMappedRank1(spread_r1, spread)) {
+        return Fail("1위 at 99.95 with spread chips must stay on the 1위 map");
+    }
+
+    auto mid_r1 = Row("MID", 1, "한빛문화재연구원", 100.04000);
+    mid_r1.lower_rate = 87.745;
+    auto mid_r2 = Row("MID", 2, "호남문화재연구원", 100.04708);
+    mid_r2.lower_rate = 87.745;
+    std::vector<nara::ParticipantRow> mid = {mid_r1, mid_r2, spread_dg};
+    for (int i = 0; i < 6; ++i) {
+        auto extra = Row("MID", i + 3, extras[i], extra_rates[i]);
+        extra.lower_rate = 87.745;
+        mid.push_back(extra);
+    }
+    if (!nara::LooksLikeOpenApiHundred(mid_r1)) {
+        return Fail("100.04 + 하한율 still matches the per-chip OpenAPI band");
+    }
+    if (!nara::IsMappedRank1(mid_r1, mid)) {
+        return Fail("1위 at 100.04 with spread chips must stay on the 1위 map");
+    }
 
     std::cerr << "ok scatter chips match window companies\n";
     return 0;

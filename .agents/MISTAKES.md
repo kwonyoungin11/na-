@@ -16,6 +16,10 @@
    - 잘못: OpenAPI `bidprcrt`(예가대비투찰률 86.x) ÷ 낙찰하한율 → 100.014를 `adjust_rate`에 넣고 `chip.rank == 1` 금색을 그대로 그림. 창녕-고암(R26BK01673928-000) 실제 1위는 춘추 99.78004(아이건설·기초예가 공식)이지 100.014가 아니다. `ToChartAdjustRate`는 99–101이면 원값을 유지해서 이 값을 고치지 못한다.
    - 규칙: 전장 맵 1위 좌표는 기초대비사정률(아이건설 99.xxxx / `ComputeBaseAdjustRate(투찰금액, 기초예가, 하한)`). 예가대비÷하한으로 만든 100.00±0.15 군집을 1위 위치로 쓰지 않는다. 금색은 그 좌표의 낙찰 업체에만. 나라장터에 이미 있는 99.xxxx는 덮지 않는다. 아이건설넷은 나라장터에 사정률이 없거나(86.x/96.x/100.00 군집) 업체가 없을 때만 쓴다.
 
+0c. **99.90–100.20 실제 1위를 가짜 100군집으로 지움**
+   - 잘못: `LooksLikeOpenApiHundred`(하한율 있는 99.90–100.20 칩)를 1위 금색/토글/표 낙찰에 그대로 씀. 칩이 99.1–100.9로 퍼진 공고의 진짜 1위(99.95, 100.04 등, 2위가 바로 위)가 구멍처럼 사라짐.
+   - 규칙: 가짜 100은 `NoticeHasLowerLimitAwardCluster`만. 1위가 그 구간에 있어도 다른 칩이 99–101에 퍼져 있으면 `IsMappedRank1`. 칩 봉우리(100.29)와 1위 위치는 다를 수 있다.
+
 1. **표 순위 ≠ 차트 칩 수**
    - 잘못: DB/엑셀에 남은 원본 `Rank`(62위, 40위)를 그대로 표에 씀. 전장 맵은 99–101 창의 고유 업체만 칩으로 그림.
    - 규칙: 칩 수 = 창 안 고유 업체 수. 동국 순위 = 그 칩들 안에서의 순위. 문구에 `N개사`를 넣어 칩 수와 같게 한다. `ScatterChartRules` / C++ `BuildScatterNotice`만 쓴다.
@@ -92,9 +96,13 @@
 11. **아이건설넷 비밀번호를 소스에 넣음**
     - 규칙: `nara-workspace/app/igunsul.local.env`만. 깃 추적 금지 (`**/igunsul.local.env`).
 
+28. **줌마다 DirectWrite 칩을 다시 그려 전장 맵이 느림**
+   - 잘못: 휠 한 칸마다 `ZoomAt` → 전체 칩·글자 재생성. 팬은 BitBlt인데 줌만 풀 리빌드.
+   - 규칙: 줌 중에는 마지막 선명한 플롯을 `StretchBlt`. 휠이 멈춘 뒤 `ZoomSettleMs`에 한 번만 다시 그린다.
+
 16. **전장 맵 드래그 후 칩에 업체명이 없음**
    - 잘못: 팬 중에 라벨을 생략한 프레임을 정적 비트맵으로 캐시하고, 호버는 그 비트맵만 BitBlt함. ClearType은 메모리 DC에 글자가 안 남음.
-   - 규칙: 드래그 프레임은 캐시하지 않는다. 마우스 업에서 라벨 포함 레이어를 다시 그린다. 칩 글자는 AntiAliasGridFit + 32bpp DIB.
+   - 규칙: 라벨을 뺀 드래그 프레임은 캐시하지 않는다. 팬은 라벨이 이미 들어 있는 overscan 플롯 비트맵을 BitBlt한다. DirectWrite 칩을 매 마우스 이동마다 다시 만들지 않는다.
 
 15. **Windows 훅 command에 `${GROK_WORKSPACE_ROOT}`를 넣음**
    - 잘못: `-File "${GROK_WORKSPACE_ROOT}/.grok/hooks/dev-engineering.ps1"` → 변수가 비어 `/.grok/hooks/...`가 되고 PowerShell이 exit 1. 매 프롬프트/툴마다 빨간 글자.
@@ -107,3 +115,23 @@
 22. **한글 사용자 경로에서 sqlite를 ACP `path.string()`으로 열어 빈 표**
    - 잘못: `sqlite3_open`은 UTF-8인데 `PathString`이 `.string()`(ACP)을 넘김. `C:\Users\권을\...`에서 `EnsureParticipantsSchema` 실패, db 없음, 공고 0건.
    - 규칙: sqlite open은 `path.u8string()`/`sqlite3_open16`. 빈 표는 먼저 db/jsonl 존재와 `GetLocalTime` 연도를 나눈다. OS가 2026이면 푸터는 2025-08-28~2026-08-28이다.
+
+23. **「깨끗해 보인다」를 「안 깨끗하다」로 읽고 C#을 고침**
+   - 잘못: C#이 깨끗하고 C++가 더럽다는 비교인데, C# 글꼴·그림자를 바꿈.
+   - 규칙: UI 불만은 두 앱을 먼저 비교한다. 깨끗한 쪽을 기준으로 더러운 쪽(C++ GDI+)만 고친다.
+
+27. **DirectWrite 칩 글자를 플롯 클립 없이 Flush해서 축·1위 버튼 뒤로 샘**
+   - 잘못: GDI+ `ClipPlot` 뒤에 DWrite 큐를 창 전체에 Flush. 외곽 8방향 스트로크가 맵 바깥·Y축·툴바에 보임.
+   - 규칙: 칩 라벨은 `clip_plot`. 칩 Flush 후 거터를 다시 채우고 툴바를 그린다. 맵 밖 텍스트는 plot clip 없음.
+
+26. **칩·표 한글을 GDI+ AddString/DrawString으로 그림**
+   - 잘못: C# `FormattedText`는 DirectWrite NATURAL_SYMMETRIC+그레이스케일인데 C++는 GDI+ 경로. 150% DPI여도 GDI+ 8px 한글이 뭉개짐.
+   - 규칙: 글자는 `dwrite_text`로만. GDI+는 도형. Ideal은 ClearType이 아니다. C#을 바꾸지 않는다.
+
+25. **C#은 DIP×DPI인데 C++는 20을 물리 픽셀로 씀**
+   - 잘못: Per-Monitor V2인데 칸·글자·패드를 96dpi 숫자 그대로 그림. 144DPI(150%)에서 C# 칩 30px·한글 12px, C++ 칩 20px·한글 8px. “엔진이 달라서”가 아니라 스케일 누락.
+   - 규칙: 레이아웃은 DIP. `GetDpiForWindow/96`로 `ScaleTransform`. 마우스·콤보 HWND만 `DipToPx`. 셀 20은 줌 DIP이지 화면 픽셀이 아니다.
+
+24. **C#처럼 보이게 GDI+ 0.4펜을 글자 위에 그음 / 칩을 둥글게 / 그림자를 하드 오프셋**
+   - 잘못: C# `DrawGeometry(white, 0.4 pen)`·`DrawRectangle`·`DropShadowEffect(blur)`를 그대로 GDI+에 옮김. 가는 펜은 ~1px로 번지고, radius 3 칩은 모서리가 흐리며, blur 토큰을 안 쓰고 사각형만 한 장 밑으로 복제함.
+   - 규칙: 칩은 C#처럼 직각·테두리 `#21252B`. 글자 외곽은 먼저 스트로크하고 흰색으로 덮는다. 텍스트는 WPF Ideal = `TextRenderingHintAntiAlias`. 그림자는 `BlurShadowLayerCount` 레이어. C#을 바꾸지 않는다.

@@ -84,6 +84,35 @@ int main() {
     if (!nara::scatter_cache::CanCacheStaticLayer(false)) {
         return Fail("idle frames with labels may be cached");
     }
+    if (!nara::scatter_cache::CanBlitPlotCacheDuringPan()) {
+        return Fail("pan must blit a labeled overscan bitmap, not rebuild DirectWrite chips");
+    }
+    if (nara::scatter_cache::PlotCacheOverscanDip(700) < 700) {
+        return Fail("overscan is at least one extra viewport so a drag does not rebuild");
+    }
+    if (!nara::scatter_cache::PlotCacheCoversView(100, 900, 250, 400)) {
+        return Fail("view inside overscan reuses the plot bitmap");
+    }
+    if (nara::scatter_cache::PlotCacheCoversView(100, 900, 800, 400)) {
+        return Fail("view past the cache must rebuild");
+    }
+    if (!nara::scatter_cache::CanStretchPlotCacheDuringZoom()) {
+        return Fail("zoom must StretchBlt the last crisp plot, not rebuild chips per wheel tick");
+    }
+    if (nara::scatter_cache::ZoomSettleMs() < 50 || nara::scatter_cache::ZoomSettleMs() > 200) {
+        return Fail("rebuild after the wheel stops, ~90ms");
+    }
+    if (nara::scatter_cache::ZoomSrcSpan(700, 20, 22) != 636) {
+        return Fail("zoom-in source is dest * old_cell / new_cell");
+    }
+    if (nara::scatter_cache::ZoomSrcOrigin(0, 100, 250, 20, 22) != 127) {
+        return Fail("zoom source origin keeps the cursor world point");
+    }
+    ScatterWorldCacheKey filtered = world;
+    filtered.filter_hash = 9;
+    if (CanReuseWorldLayer(world, filtered)) {
+        return Fail("1위/업체 filter must bust the plot cache");
+    }
     if (nara::scatter_cache::BounceOverlaySkipsLabels()) {
         return Fail("bounced 동국 overlay covers the static chip, so it must draw 업체명");
     }

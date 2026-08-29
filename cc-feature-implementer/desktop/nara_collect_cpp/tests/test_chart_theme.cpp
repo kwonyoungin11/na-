@@ -19,6 +19,12 @@ int main() {
     if (kCellPx != 20) {
         return Fail("C# GetScatterCellSize step 0.01 is 20px");
     }
+    if (std::fabs(DpiScaleFromDpi(96) - 1.0f) > 0.001f || std::fabs(DpiScaleFromDpi(144) - 1.5f) > 0.001f) {
+        return Fail("WPF PixelsPerDip: 96->1.0, 144->1.5");
+    }
+    if (DipToPx(20, 1.5f) != 30 || DipToPx(8, 1.5f) != 12 || PxToDip(30, 1.5f) != 20) {
+        return Fail("150% DPI: 20dip cell is 30px, 8dip Hangul is 12px");
+    }
     if (ScatterColumnCount(99.0, 101.0, 0.01) != 201) {
         return Fail("99.0-101.0 step 0.01 must be 201 columns");
     }
@@ -55,23 +61,51 @@ int main() {
     if (kHoverRadius != 6 || kRankBadgeRadius != 2 || kCompanyPanelRadius != 12) {
         return Fail("hover 6 / rank badge 2 / company panel 12");
     }
-    if (kChipRadius != 3) {
-        return Fail("전장 맵 chip is slightly rounded: 3px at 20px cell");
+    if (kChipRadius != 0) {
+        return Fail("C# DrawScatter chips are DrawRectangle, not rounded");
     }
-    if (std::fabs(ChipRadiusPx(20) - 3.0f) > 0.01f) {
-        return Fail("20px cell chip radius is 3px");
-    }
-    if (std::fabs(ChipRadiusPx(40) - 6.0f) > 0.01f) {
-        return Fail("chip radius scales with cell, same as chip font");
-    }
-    if (std::fabs(kChipOutlineDarken - 0.10f) > 0.001f) {
-        return Fail("업체명 바깥라인 is 10% darker");
+    if (std::fabs(ChipRadiusPx(20)) > 0.01f || std::fabs(ChipRadiusPx(40)) > 0.01f) {
+        return Fail("chip radius stays 0 at every zoom like C# DrawRectangle");
     }
     if (DarkenArgb(0xFF21252Bu, 0.10f) != 0xFF1E2127u) {
         return Fail("#21252B * 0.90 = #1E2127");
     }
-    if (ChipOutlineArgb() != 0xFF1E2127u) {
-        return Fail("chip outline is 10% darker than #21252B");
+    if (ChipOutlineArgb() != kChipBorderArgb || kChipBorderArgb != 0xFF21252Bu) {
+        return Fail("C# BlockBorderPen is #21252B");
+    }
+    if (!ChipLabelStrokeBehindFill()) {
+        return Fail("GDI+ chip glyphs fill over outline so 0.4px pen does not eat Hangul");
+    }
+    if (kTextRenderingHintIdeal != 4) {
+        return Fail("WPF Ideal maps to GDI+ TextRenderingHintAntiAlias");
+    }
+    if (!kTextUsesDirectWrite) {
+        return Fail("C# FormattedText is DirectWrite; chip/UI text must not stay on GDI+ AddString");
+    }
+    if (BlurShadowLayerCount(22) < 4 || BlurShadowLayerCount(16) < 3) {
+        return Fail("C# DropShadowEffect blur is layered, not a hard offset");
+    }
+    if (kChipLabelOutlineArgb != 0x59000000u) {
+        return Fail("chip label outline matches C# #59000000");
+    }
+    if (std::fabs(kChipLabelOutlineWidth - 0.4f) > 0.01f) {
+        return Fail("chip label outline is 0.4px at 20px cell like C#");
+    }
+    if (std::fabs(ChipLabelOutlineWidthPx(20) - 0.4f) > 0.01f) {
+        return Fail("20px cell chip label outline is 0.4px");
+    }
+    if (std::fabs(ChipLabelOutlineWidthPx(40) - 0.8f) > 0.01f) {
+        return Fail("chip label outline scales with zoom like chip font");
+    }
+    if (kRank1BtnW != 72 || kRank1BtnH != 40) {
+        return Fail("1위 overlay is 72x40 in plot center");
+    }
+    if (std::wstring(kRank1Label) != L"1위") {
+        return Fail("center overlay label is 1위");
+    }
+    if (ChipPassesRank1Filter(false, false) != true || ChipPassesRank1Filter(true, false) != false
+        || ChipPassesRank1Filter(true, true) != true) {
+        return Fail("1위 toggle hides non-rank1 chips only when on");
     }
     if (std::fabs(kFontAxis - 10.0f) > 0.01f || std::fabs(kFontEyebrow - 11.0f) > 0.01f
         || std::fabs(kFontCaption - 12.0f) > 0.01f || std::fabs(kFontReset - 13.0f) > 0.01f
@@ -132,11 +166,11 @@ int main() {
         || std::wstring(kCompanyAllLabel) != L"전체") {
         return Fail("Korean dock/reset labels must match ChartPopupWindow.xaml");
     }
-    if (kResetH != 40 || kResetMinW != 124 || kDockMinH != 168) {
-        return Fail("reset 40x124 and dock min 168");
+    if (kResetH != 40 || kResetMinW != 124 || kDockMinH != 134) {
+        return Fail("reset 40x124 and dock min 134 (20% shorter so the map is larger)");
     }
-    if (kComboH != 40 || kComboRadius != 12) {
-        return Fail("분석 범위 combo is 40px radius 12");
+    if (kComboH != 32 || kComboRadius != 12) {
+        return Fail("분석 범위 combo is 32px (20% shorter dock) radius 12");
     }
     if (kRegionSegmentRadius != kComboRadius) {
         return Fail("전국|경북 is one 12px shell matching combo, not two overlapping pills");
@@ -154,8 +188,8 @@ int main() {
         || kCardShadowDepth != 4 || kCardShadowBlur != 22) {
         return Fail("map card fill #FFFFFF stroke #D8E0EA shadow 8% black depth 4 blur 22");
     }
-    if (kDockPadX != 14 || kDockPadY != 12 || kDockRadius != 16 || kEyebrowGap != 8) {
-        return Fail("dock pad 14,12 radius 16 eyebrow gap 8");
+    if (kDockPadX != 14 || kDockPadY != 10 || kDockRadius != 16 || kEyebrowGap != 6) {
+        return Fail("dock pad 14,10 radius 16 eyebrow gap 6");
     }
     if (kAccentStrongArgb != 0xFFB45309u || std::fabs(kFontEyebrow - 11.0f) > 0.01f) {
         return Fail("eyebrow 분석 범위 is 11px #B45309");
@@ -167,8 +201,8 @@ int main() {
     if (kGlassFillArgb != 0xD6FFFFFFu || kResetShadowArgb != 0x2E081018u) {
         return Fail("reset glass #D6FFFFFF shadow #081018 @ 18%");
     }
-    if (kCompanyPadX != 8 || kCompanyPadY != 6 || kCompanyWrapMinH != 128 || kCompanyPanelRadius != 12) {
-        return Fail("업체 wrap pad 8,6 minHeight 128 radius 12");
+    if (kCompanyPadX != 8 || kCompanyPadY != 6 || kCompanyWrapMinH != 102 || kCompanyPanelRadius != 12) {
+        return Fail("업체 wrap pad 8,6 minHeight 102 radius 12");
     }
     if (!ChipPaintBefore(false, false, 8, true, false, 54)) {
         return Fail("동국 paints last so non-동국 comes before");
@@ -182,11 +216,14 @@ int main() {
         return Fail("map card and dock are stacked with gap 10, no overlap");
     }
     if (chrome.dock_inner.h < kDockMinH) {
-        return Fail("dock inner minHeight 168");
+        return Fail("dock inner minHeight 134");
     }
-    if (chrome.combo_period.h != 40 || chrome.combo_precision.h != 40 || chrome.combo_region.h != 40
-        || chrome.combo_min.h != 40 || chrome.combo_max.h != 40) {
-        return Fail("dock combos are 40px");
+    if (chrome.combo_period.h != 32 || chrome.combo_precision.h != 32 || chrome.combo_region.h != 32
+        || chrome.combo_min.h != 32 || chrome.combo_max.h != 32) {
+        return Fail("dock combos are 32px");
+    }
+    if (chrome.dock.h > 200) {
+        return Fail("dock height must drop ~20% so the scatter map is larger");
     }
     if (chrome.reset_btn.w != kResetMinW || chrome.reset_btn.h != kResetH) {
         return Fail("맵 초기화 overlay pill is 124x40");
@@ -195,12 +232,31 @@ int main() {
         || chrome.reset_toolbar.x < chrome.map_inner.x) {
         return Fail("맵 초기화 overlay stays inside the map inner card");
     }
-    if (chrome.reset_btn.x != chrome.reset_toolbar.x + kToolbarPad
-        || chrome.reset_btn.y != chrome.reset_toolbar.y + kToolbarPad) {
+    if (chrome.reset_btn.y != chrome.reset_toolbar.y + kToolbarPad) {
         return Fail("reset pill sits in toolbar pad 8");
     }
+    if (chrome.rank1_btn.w != kRank1BtnW || chrome.rank1_btn.h != kRank1BtnH) {
+        return Fail("1위 button size");
+    }
+    if (chrome.reset_toolbar.w != kToolbarPad * 2 + kRank1BtnW + kFieldGap + kResetMinW) {
+        return Fail("toolbar holds 1위 and 맵 초기화");
+    }
+    if (chrome.rank1_btn.x != chrome.reset_toolbar.x + kToolbarPad
+        || chrome.rank1_btn.y != chrome.reset_toolbar.y + kToolbarPad) {
+        return Fail("1위 pill sits in the window toolbar, not on the plot");
+    }
+    if (chrome.reset_btn.x != chrome.rank1_btn.Right() + kFieldGap) {
+        return Fail("맵 초기화 sits to the right of 1위");
+    }
+    if (!chrome.map_inner.Contains(chrome.rank1_btn.x + 1, chrome.rank1_btn.y + 1)) {
+        return Fail("1위 stays inside the map window card");
+    }
+    if (chrome.rank1_btn.x == chrome.plot.x + (chrome.plot.w - kRank1BtnW) / 2
+        && chrome.rank1_btn.y == chrome.plot.y + (chrome.plot.h - kRank1BtnH) / 2) {
+        return Fail("1위 must not sit on the scatter center");
+    }
     if (chrome.company_wrap.h < kCompanyWrapMinH) {
-        return Fail("업체 wrap minHeight 128");
+        return Fail("업체 wrap minHeight 102");
     }
     if (chrome.plot.x != chrome.map_inner.x + kPlotLeft || chrome.plot.y != chrome.map_inner.y + kPlotTop) {
         return Fail("plot is the inner host rect, not the full popup");
@@ -238,8 +294,8 @@ int main() {
         || kMainTablePadX != 16 || kMainCardInset != 20 || kMainHeaderGap != 12) {
         return Fail("main toolbar sizes must match MainWindow.xaml 40px / 124 / 108 / 132 / 148");
     }
-    if (kCompanyAllW != 64 || kCompanyAllH != 32 || kCompanyHeaderH != 32) {
-        return Fail("전체 is GhostButton 64x32 in the 32px 업체 header");
+    if (kCompanyAllW != 64 || kCompanyAllH != 26 || kCompanyHeaderH != 26) {
+        return Fail("전체 is GhostButton 64x26 in the 26px 업체 header");
     }
     if (std::fabs(kFontCompanyAll - 13.0f) > 0.01f) {
         return Fail("전체 uses ButtonBaseStyle 13px");
@@ -324,8 +380,8 @@ int main() {
         || dock_seg.nationwide.w + dock_seg.gyeongbuk.w != chrome.combo_region.w) {
         return Fail("전국|경북 halves share one divider and must not overlap");
     }
-    if (chrome.company_all.w != 64 || chrome.company_all.h != 32) {
-        return Fail("전체 hit target is 64x32");
+    if (chrome.company_all.w != 64 || chrome.company_all.h != 26) {
+        return Fail("전체 hit target is 64x26");
     }
     if (chrome.company_all.Right() != chrome.company_pane.Right()) {
         return Fail("전체 is right-aligned in the 업체 pane");

@@ -35,6 +35,7 @@ void PreferChartAdjustRates(
 bool IsLowerLimitAwardRate(double rate);
 bool LooksLikeOpenApiHundred(const ParticipantRow& row);
 bool NoticeHasLowerLimitAwardCluster(const std::vector<ParticipantRow>& rows);
+bool IsMappedRank1(const ParticipantRow& chip, const std::vector<ParticipantRow>& notice_chips);
 
 std::string FormatDonggukRankLabel(
     const ScatterNotice& scatter,

@@ -8,15 +8,15 @@ public sealed class DefaultAppPathResolver : IAppPathResolver
     public const string AppRootEnvironmentVariable = "NARA_APP_ROOT";
 
     private const string WorkspaceLinuxRoot = "/mnt/a/c/nara-workspace";
-    private const string WorkspaceWindowsRoot = @"A:\\c\\nara-workspace";
+    private const string WorkspaceWindowsRoot = @"A:\c\nara-workspace";
     private const string SkillScriptLinuxPath = "/mnt/a/c/.agents/skills/API/scripts/run_master_sync_pipeline.py";
-    private const string SkillScriptWindowsPath = @"A:\\c\\.agents\\skills\\API\\scripts\\run_master_sync_pipeline.py";
+    private const string SkillScriptWindowsPath = @"A:\c\.agents\skills\API\scripts\run_master_sync_pipeline.py";
     private const string ProjectEnvLinuxPath = "/mnt/a/c/.env";
-    private const string ProjectEnvWindowsPath = @"A:\\c\\.env";
+    private const string ProjectEnvWindowsPath = @"A:\c\.env";
     private const string AnalysisProfileLinuxPath = "/mnt/a/c/.agents/skills/shadow-strategy/analysis_profile.json";
-    private const string AnalysisProfileWindowsPath = @"A:\\c\\.agents\\skills\\shadow-strategy\\analysis_profile.json";
+    private const string AnalysisProfileWindowsPath = @"A:\c\.agents\skills\shadow-strategy\analysis_profile.json";
     private const string ApiRuleProfileLinuxPath = "/mnt/a/c/.agents/skills/API/rule_profile.json";
-    private const string ApiRuleProfileWindowsPath = @"A:\\c\\.agents\\skills\\API\\rule_profile.json";
+    private const string ApiRuleProfileWindowsPath = @"A:\c\.agents\skills\API\rule_profile.json";
 
     public static string ResolveDefaultWorkspaceRoot()
     {
@@ -26,9 +26,15 @@ public sealed class DefaultAppPathResolver : IAppPathResolver
             return fromEnv.Trim();
         }
 
-        return OperatingSystem.IsWindows()
-            ? WorkspaceWindowsRoot
-            : WorkspaceLinuxRoot;
+        foreach (var candidate in GetWorkspaceRootCandidates())
+        {
+            if (Directory.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return Path.GetFullPath(AppContext.BaseDirectory);
     }
 
     public static string ResolveDefaultAppRootDirectory()
@@ -226,16 +232,30 @@ public sealed class DefaultAppPathResolver : IAppPathResolver
             yield return fromEnv.Trim();
         }
 
-        if (OperatingSystem.IsWindows())
+        foreach (var ancestor in EnumerateDirectoryAncestors(AppContext.BaseDirectory, 8))
+        {
+            if (LooksLikeWorkspaceRoot(ancestor))
+            {
+                yield return ancestor;
+            }
+        }
+
+        if (Directory.Exists(WorkspaceWindowsRoot))
         {
             yield return WorkspaceWindowsRoot;
-            yield return WorkspaceLinuxRoot;
         }
-        else
+
+        if (Directory.Exists(WorkspaceLinuxRoot))
         {
             yield return WorkspaceLinuxRoot;
-            yield return WorkspaceWindowsRoot;
         }
+    }
+
+    private static bool LooksLikeWorkspaceRoot(string root)
+    {
+        return Directory.Exists(Path.Combine(root, ".agents"))
+            && (Directory.Exists(Path.Combine(root, "cc-feature-implementer"))
+                || File.Exists(Path.Combine(root, "AGENTS.md")));
     }
 
     private static string ResolveOptionalPath(

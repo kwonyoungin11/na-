@@ -281,6 +281,58 @@ public class DefaultAppPathResolverTests
     }
 
     [Fact]
+    public void ResolveDefaultWorkspaceRoot_WhenEnvUnset_DoesNotUseMissingADrive()
+    {
+        lock (EnvLock)
+        {
+            var previousWorkspace = Environment.GetEnvironmentVariable(DefaultAppPathResolver.WorkspaceRootEnvironmentVariable);
+            var previousAppRoot = Environment.GetEnvironmentVariable(DefaultAppPathResolver.AppRootEnvironmentVariable);
+            try
+            {
+                Environment.SetEnvironmentVariable(DefaultAppPathResolver.WorkspaceRootEnvironmentVariable, null);
+                Environment.SetEnvironmentVariable(DefaultAppPathResolver.AppRootEnvironmentVariable, null);
+
+                var root = DefaultAppPathResolver.ResolveDefaultWorkspaceRoot();
+                var drive = Path.GetPathRoot(Path.GetFullPath(root));
+
+                Assert.False(string.IsNullOrWhiteSpace(drive));
+                Assert.True(Directory.Exists(drive), $"workspace root drive missing: {root}");
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable(DefaultAppPathResolver.WorkspaceRootEnvironmentVariable, previousWorkspace);
+                Environment.SetEnvironmentVariable(DefaultAppPathResolver.AppRootEnvironmentVariable, previousAppRoot);
+            }
+        }
+    }
+
+    [Fact]
+    public void ResolveDefaultAppLogDirectory_WhenEnvUnset_ParentDriveExists()
+    {
+        lock (EnvLock)
+        {
+            var previousWorkspace = Environment.GetEnvironmentVariable(DefaultAppPathResolver.WorkspaceRootEnvironmentVariable);
+            var previousAppRoot = Environment.GetEnvironmentVariable(DefaultAppPathResolver.AppRootEnvironmentVariable);
+            try
+            {
+                Environment.SetEnvironmentVariable(DefaultAppPathResolver.WorkspaceRootEnvironmentVariable, null);
+                Environment.SetEnvironmentVariable(DefaultAppPathResolver.AppRootEnvironmentVariable, null);
+
+                var logs = DefaultAppPathResolver.ResolveDefaultAppLogDirectory();
+                var drive = Path.GetPathRoot(Path.GetFullPath(logs));
+
+                Assert.False(string.IsNullOrWhiteSpace(drive));
+                Assert.True(Directory.Exists(drive), $"log directory drive missing: {logs}");
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable(DefaultAppPathResolver.WorkspaceRootEnvironmentVariable, previousWorkspace);
+                Environment.SetEnvironmentVariable(DefaultAppPathResolver.AppRootEnvironmentVariable, previousAppRoot);
+            }
+        }
+    }
+
+    [Fact]
     public void ResolveDefaultAppRootDirectory_PrioritizesAppRootEnvironmentSetting()
     {
         lock (EnvLock)

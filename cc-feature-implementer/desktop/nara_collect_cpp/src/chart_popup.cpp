@@ -9,6 +9,7 @@
 #include "nara/scatter_cache.h"
 #include "nara/igunsul_convert.h"
 #include "nara/scatter_chart.h"
+#include "nara/dwrite_text.h"
 
 #include <algorithm>
 #include <cmath>
@@ -49,9 +50,19 @@ using chart_theme::kCheckGap;
 using chart_theme::kCheckMarkArgb;
 using chart_theme::kCheckRadius;
 using chart_theme::kCheckSize;
+using chart_theme::kChipBorderArgb;
 using chart_theme::kChipBorderWidth;
-using chart_theme::ChipOutlineArgb;
+using chart_theme::kChipLabelOutlineArgb;
+using chart_theme::kCardShadowBlur;
+using chart_theme::BlurShadowArgb;
+using chart_theme::BlurShadowInflate;
+using chart_theme::BlurShadowLayerCount;
+using chart_theme::ChipLabelStrokeBehindFill;
 using chart_theme::ChipRadiusPx;
+using chart_theme::kTextRenderingHintIdeal;
+using chart_theme::DpiScaleFromDpi;
+using chart_theme::DipToPx;
+using chart_theme::PxToDip;
 using chart_theme::kCompanyAllH;
 using chart_theme::kCompanyAllLabel;
 using chart_theme::kCompanyAllW;
@@ -120,9 +131,15 @@ using chart_theme::kResetMarginRight;
 using chart_theme::kResetMarginTop;
 using chart_theme::kResetMinW;
 using chart_theme::kResetShadowArgb;
+using chart_theme::kResetShadowBlur;
 using chart_theme::kResetShadowDepth;
+using chart_theme::kRank1BtnH;
+using chart_theme::kRank1BtnW;
+using chart_theme::kRank1Label;
+using chart_theme::ChipPassesRank1Filter;
 using chart_theme::kToolbarPad;
 using chart_theme::kToolbarRadius;
+using chart_theme::kToolbarShadowBlur;
 using chart_theme::kToolbarShadowDepth;
 using chart_theme::kWindowBgArgb;
 using chart_theme::kShadowArgb;
@@ -131,10 +148,12 @@ using chart_theme::kStrokeSubtleArgb;
 using chart_theme::kSubtleTextArgb;
 using chart_theme::kTextArgb;
 using chart_theme::kWindowMinH;
+using chart_theme::kWindowMinH;
 using chart_theme::kWindowMinW;
 using chart_theme::kWindowTitle;
 using chart_theme::ChartChrome;
 using chart_theme::ChipLabelFontPx;
+using chart_theme::ChipLabelOutlineWidthPx;
 using chart_theme::ChipLabelScreenPx;
 using chart_theme::ApplyCompanyClick;
 using chart_theme::ChipPaintBefore;
@@ -153,7 +172,16 @@ using scatter_cache::ChromeHot;
 using scatter_cache::IsOverlayOnlyFrame;
 using scatter_cache::ScatterViewCacheKey;
 using scatter_cache::BounceOverlaySkipsLabels;
+using scatter_cache::CanBlitPlotCacheDuringPan;
+using scatter_cache::CanStretchPlotCacheDuringZoom;
+using scatter_cache::ZoomSettleMs;
+using scatter_cache::ZoomSrcOrigin;
+using scatter_cache::ZoomSrcSpan;
 using scatter_cache::CanCacheStaticLayer;
+using scatter_cache::CanReuseWorldLayer;
+using scatter_cache::PlotCacheCoversView;
+using scatter_cache::PlotCacheOverscanDip;
+using scatter_cache::ScatterWorldCacheKey;
 using scatter_cache::DonggukBounceLiftPx;
 using scatter_cache::DonggukBounceScale;
 using scatter_cache::SkipChipLabelsDuringPan;
@@ -207,6 +235,9 @@ HFONT g_uiFont = nullptr;
 int g_hotCompany = -1;
 bool g_hotReset = false;
 bool g_hotAll = false;
+bool g_hotRank1 = false;
+bool g_rank1Only = false;
+float g_dpi_scale = 1.0f;
 int g_prepareVersion = 0;
 HDC g_layerDc = nullptr;
 HBITMAP g_layerBmp = nullptr;
@@ -219,13 +250,33 @@ HGDIOBJ g_frameOld = nullptr;
 int g_frameW = 0;
 int g_frameH = 0;
 bool g_hasStatic = false;
+HDC g_plotCacheDc = nullptr;
+HBITMAP g_plotCacheBmp = nullptr;
+HGDIOBJ g_plotCacheOld = nullptr;
+int g_plotCachePxW = 0;
+int g_plotCachePxH = 0;
+int g_plotCacheOriginX = 0;
+int g_plotCacheOriginY = 0;
+int g_plotCacheOverscanX = 0;
+int g_plotCacheOverscanY = 0;
+int g_plotCacheAxisW = 0;
+int g_plotCachePlotW = 0;
+int g_plotCachePlotH = 0;
+ScatterWorldCacheKey g_plotCacheKey{};
+bool g_hasPlotCache = false;
 ScatterViewCacheKey g_staticKey{};
 DWORD g_bounceOrigin = 0;
 constexpr UINT_PTR kBounceTimer = 1;
+constexpr UINT_PTR kZoomSettleTimer = 2;
+bool g_zooming = false;
+int g_staticScrollX = 0;
+int g_staticScrollY = 0;
+int g_staticCell = 20;
 void UpdateScroll(HWND hwnd);
 void ReleaseLayer();
 void PaintDonggukChips(Gdiplus::Graphics& g);
 void PaintHoverOverlay(Gdiplus::Graphics& g);
+int FilterHash();
 
 Gdiplus::Color Argb(uint32_t argb) {
     return Gdiplus::Color(argb);
@@ -233,6 +284,10 @@ Gdiplus::Color Argb(uint32_t argb) {
 
 void RoundRectPath(Gdiplus::GraphicsPath& path, Gdiplus::RectF r, float radius) {
     const float rad = (std::min)(radius, (std::min)(r.Width, r.Height) / 2.0f);
+    if (rad < 0.5f) {
+        path.AddRectangle(r);
+        return;
+    }
     const float d = rad * 2.0f;
     path.AddArc(r.X, r.Y, d, d, 180, 90);
     path.AddArc(r.X + r.Width - d, r.Y, d, d, 270, 90);
@@ -253,10 +308,51 @@ void FillRoundRect(Gdiplus::Graphics& g, const Gdiplus::RectF& r, float radius, 
     }
 }
 
+void ApplyCrispGraphics(Gdiplus::Graphics& g);
+void ApplyDpiTransform(Gdiplus::Graphics& g);
+bool MapRank1(const ParticipantRow& chip, const ScatterNotice& scatter);
+void SyncWorld(HWND hwnd);
+
+unsigned WindowDpi(HWND hwnd) {
+    using Fn = UINT(WINAPI*)(HWND);
+    static Fn fn =
+        reinterpret_cast<Fn>(GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForWindow"));
+    UINT dpi = 96;
+    if (fn != nullptr && hwnd != nullptr) {
+        dpi = fn(hwnd);
+    }
+    if (dpi < 96) {
+        dpi = 96;
+    }
+    if (dpi > 384) {
+        dpi = 384;
+    }
+    return dpi;
+}
+
+void SyncDpi(HWND hwnd) {
+    const float scale = DpiScaleFromDpi(WindowDpi(hwnd));
+    if (std::fabs(scale - g_dpi_scale) > 0.001f) {
+        g_dpi_scale = scale;
+        g_hasStatic = false;
+        if (g_uiFont) {
+            DeleteObject(g_uiFont);
+            g_uiFont = nullptr;
+        }
+    }
+}
+
+int ToPx(int dip) { return DipToPx(dip, g_dpi_scale); }
+int ToDip(int px) { return PxToDip(px, g_dpi_scale); }
+
+void ApplyDpiTransform(Gdiplus::Graphics& g) { g.ScaleTransform(g_dpi_scale, g_dpi_scale); }
+void FillGlyphs(Gdiplus::Graphics& g, const wchar_t* text, const Gdiplus::FontFamily& family, int style, float size,
+                const Gdiplus::RectF& box, Gdiplus::StringAlignment h, Gdiplus::StringAlignment v, uint32_t argb);
+
 void PaintChipBody(Gdiplus::Graphics& g, const Gdiplus::RectF& box, int cell, uint32_t fill, bool rank1) {
     const float radius = ChipRadiusPx(cell);
     g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-    FillRoundRect(g, box, radius, fill, ChipOutlineArgb(), kChipBorderWidth);
+    FillRoundRect(g, box, radius, fill, kChipBorderArgb, kChipBorderWidth);
     if (rank1) {
         Gdiplus::GraphicsPath gold_path;
         RoundRectPath(gold_path, box, radius);
@@ -300,21 +396,41 @@ void PaintRegionSegment(Gdiplus::Graphics& g, const RectI& slot, const std::stri
     const Gdiplus::REAL mid = static_cast<Gdiplus::REAL>(seg.gyeongbuk.x) + 0.5f;
     g.DrawLine(&border, mid, outer.Y + 5.0f, mid, outer.GetBottom() - 5.0f);
     Gdiplus::FontFamily family(kFontFamily);
-    Gdiplus::Font font(&family, kFontCaption, Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
-    Gdiplus::StringFormat center;
-    center.SetAlignment(Gdiplus::StringAlignmentCenter);
-    center.SetLineAlignment(Gdiplus::StringAlignmentCenter);
     auto label = [&](const RectI& box, int index) {
-        Gdiplus::SolidBrush text(Argb(index == on ? chart_theme::kAccentStrongArgb : kSubtleTextArgb));
-        g.DrawString(RegionLabelAt(index), -1, &font, ToRectF(box), &center, &text);
+        FillGlyphs(g, RegionLabelAt(index), family, Gdiplus::FontStyleBold, kFontCaption, ToRectF(box),
+                   Gdiplus::StringAlignmentCenter, Gdiplus::StringAlignmentCenter,
+                   index == on ? chart_theme::kAccentStrongArgb : kSubtleTextArgb);
     };
     label(seg.nationwide, 0);
     label(seg.gyeongbuk, 1);
 }
 
-void DrawOffsetShadow(Gdiplus::Graphics& g, const Gdiplus::RectF& r, float radius, int depth, uint32_t argb) {
-    FillRoundRect(g, Gdiplus::RectF(r.X + 1.0f, r.Y + static_cast<Gdiplus::REAL>(depth), r.Width, r.Height), radius,
-                  argb, 0, 0);
+void DrawOffsetShadow(Gdiplus::Graphics& g, const Gdiplus::RectF& r, float radius, int depth, int blur,
+                      uint32_t argb) {
+    const int layers = BlurShadowLayerCount(blur);
+    for (int i = layers - 1; i >= 0; --i) {
+        const float inf = BlurShadowInflate(blur, i, layers);
+        FillRoundRect(g,
+                      Gdiplus::RectF(r.X - inf + 1.0f, r.Y - inf + static_cast<Gdiplus::REAL>(depth),
+                                     r.Width + inf * 2.0f, r.Height + inf * 2.0f),
+                      radius + inf, BlurShadowArgb(argb, i, layers), 0, 0);
+    }
+}
+
+nara::dwrite_text::Align DwAlign(Gdiplus::StringAlignment a) {
+    if (a == Gdiplus::StringAlignmentCenter) {
+        return nara::dwrite_text::Align::Center;
+    }
+    if (a == Gdiplus::StringAlignmentFar) {
+        return nara::dwrite_text::Align::Far;
+    }
+    return nara::dwrite_text::Align::Near;
+}
+
+void FillGlyphs(Gdiplus::Graphics&, const wchar_t* text, const Gdiplus::FontFamily&, int style, float size,
+                const Gdiplus::RectF& box, Gdiplus::StringAlignment h, Gdiplus::StringAlignment v, uint32_t argb) {
+    nara::dwrite_text::QueueBox(box.X, box.Y, box.Width, box.Height, text, size, argb, DwAlign(h), DwAlign(v),
+                                style == Gdiplus::FontStyleBold);
 }
 
 bool CompanyVisible(const std::string& name) {
@@ -350,36 +466,35 @@ void ApplyCompanyFlags(int index, bool click_all) {
 }
 
 void PaintClosedCombo(HWND hwnd, HDC hdc) {
-    Gdiplus::Graphics dg(hdc);
-    dg.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-    dg.SetTextRenderingHint(Gdiplus::TextRenderingHintClearTypeGridFit);
     RECT rc{};
     GetClientRect(hwnd, &rc);
-    const float h = static_cast<float>((std::min)(kComboH, static_cast<int>(rc.bottom - rc.top)));
-    const Gdiplus::RectF r(0.5f, 0.5f, static_cast<Gdiplus::REAL>(rc.right - rc.left) - 1.0f, h - 1.0f);
-    const bool focused = GetFocus() == hwnd;
-    FillRoundRect(dg, r, static_cast<float>(kComboRadius), kPlotBgArgb,
-                  focused ? chart_theme::kAccentArgb : kComboStrokeArgb, kComboStrokeW);
-    Gdiplus::SolidBrush chevron(Argb(kMutedCaptionArgb));
-    const Gdiplus::REAL cx = r.X + r.Width - 16.0f;
-    const Gdiplus::REAL cy = r.Y + r.Height * 0.5f;
-    Gdiplus::PointF pts[3] = {{cx - 5.0f, cy - 3.0f}, {cx + 5.0f, cy - 3.0f}, {cx, cy + 3.0f}};
-    dg.FillPolygon(&chevron, pts, 3);
+    const float dip_w = static_cast<float>(ToDip(rc.right - rc.left));
+    const float dip_h = static_cast<float>(ToDip(rc.bottom - rc.top));
+    const float h = (std::min)(static_cast<float>(kComboH), dip_h);
+    const Gdiplus::RectF r(0.5f, 0.5f, dip_w - 1.0f, h - 1.0f);
     wchar_t caption[64] = {};
     const int index = static_cast<int>(SendMessageW(hwnd, CB_GETCURSEL, 0, 0));
     if (index >= 0) {
         SendMessageW(hwnd, CB_GETLBTEXT, index, reinterpret_cast<LPARAM>(caption));
     }
-    Gdiplus::FontFamily family(kFontFamily);
-    Gdiplus::Font font(&family, kFontBody, Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
-    Gdiplus::SolidBrush text(Argb(kTextArgb));
-    Gdiplus::StringFormat fmt;
-    fmt.SetAlignment(Gdiplus::StringAlignmentNear);
-    fmt.SetLineAlignment(Gdiplus::StringAlignmentCenter);
-    fmt.SetTrimming(Gdiplus::StringTrimmingEllipsisCharacter);
-    fmt.SetFormatFlags(Gdiplus::StringFormatFlagsNoWrap);
-    Gdiplus::RectF text_box(r.X + 10.0f, r.Y, (std::max)(8.0f, r.Width - 32.0f), r.Height);
-    dg.DrawString(caption, -1, &font, text_box, &fmt, &text);
+    {
+        Gdiplus::Graphics dg(hdc);
+        ApplyCrispGraphics(dg);
+        ApplyDpiTransform(dg);
+        const bool focused = GetFocus() == hwnd;
+        FillRoundRect(dg, r, static_cast<float>(kComboRadius), kPlotBgArgb,
+                      focused ? chart_theme::kAccentArgb : kComboStrokeArgb, kComboStrokeW);
+        Gdiplus::SolidBrush chevron(Argb(kMutedCaptionArgb));
+        const Gdiplus::REAL cx = r.X + r.Width - 16.0f;
+        const Gdiplus::REAL cy = r.Y + r.Height * 0.5f;
+        Gdiplus::PointF pts[3] = {{cx - 5.0f, cy - 3.0f}, {cx + 5.0f, cy - 3.0f}, {cx, cy + 3.0f}};
+        dg.FillPolygon(&chevron, pts, 3);
+    }
+    nara::dwrite_text::ResetQueue();
+    nara::dwrite_text::QueueBox(r.X + 10.0f, r.Y, (std::max)(8.0f, r.Width - 32.0f), r.Height, caption, kFontBody,
+                                kTextArgb, nara::dwrite_text::Align::Near, nara::dwrite_text::Align::Center, false,
+                                true, true);
+    nara::dwrite_text::Flush(hdc, rc.right, rc.bottom, g_dpi_scale);
 }
 
 LRESULT CALLBACK ComboProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -410,7 +525,8 @@ void StyleCombo(HWND combo, int w, int h) {
     SetWindowTheme(combo, L"", L"");
     SendMessageW(combo, CB_SETITEMHEIGHT, static_cast<WPARAM>(-1), h);
     SendMessageW(combo, CB_SETITEMHEIGHT, 0, 28);
-    HRGN rgn = CreateRoundRectRgn(0, 0, w + 1, h + 1, kComboRadius * 2, kComboRadius * 2);
+    const int rad = ToPx(kComboRadius * 2);
+    HRGN rgn = CreateRoundRectRgn(0, 0, w + 1, h + 1, rad, rad);
     SetWindowRgn(combo, rgn, TRUE);
     const auto current = reinterpret_cast<WNDPROC>(GetWindowLongPtrW(combo, GWLP_WNDPROC));
     if (current != ComboProc) {
@@ -544,7 +660,7 @@ void EnsureUiFont() {
     if (g_uiFont) {
         return;
     }
-    g_uiFont = CreateFontW(-13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_TT_PRECIS,
+    g_uiFont = CreateFontW(-ToPx(13), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_TT_PRECIS,
                            CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, VARIABLE_PITCH | FF_DONTCARE, kFontFamily);
 }
 
@@ -555,16 +671,17 @@ void ApplyUiFont(HWND hwnd) {
 }
 
 void LayoutChartDock(HWND hwnd) {
+    SyncDpi(hwnd);
     RECT rc{};
     GetClientRect(hwnd, &rc);
-    g_chrome = LayoutChartChrome(rc.right, rc.bottom, static_cast<int>(g_companyItems.size()));
-    const int combo_drop = 220;
+    g_chrome = LayoutChartChrome(ToDip(rc.right), ToDip(rc.bottom), static_cast<int>(g_companyItems.size()));
+    const int combo_drop = ToPx(220);
     auto place = [&](HWND combo, const RectI& box) {
         if (!combo) {
             return;
         }
-        MoveWindow(combo, box.x, box.y, box.w, combo_drop, TRUE);
-        StyleCombo(combo, box.w, kComboH);
+        MoveWindow(combo, ToPx(box.x), ToPx(box.y), ToPx(box.w), combo_drop, TRUE);
+        StyleCombo(combo, ToPx(box.w), ToPx(kComboH));
     };
     place(g_period, g_chrome.combo_period);
     place(g_precision, g_chrome.combo_precision);
@@ -664,8 +781,11 @@ Gdiplus::Color CompanyColor(const std::string& name) {
     return Argb(color);
 }
 
-void SyncWorld(RECT client) {
-    g_chrome = LayoutChartChrome(static_cast<int>(client.right), static_cast<int>(client.bottom),
+void SyncWorld(HWND hwnd) {
+    SyncDpi(hwnd);
+    RECT client{};
+    GetClientRect(hwnd, &client);
+    g_chrome = LayoutChartChrome(ToDip(client.right), ToDip(client.bottom),
                                  static_cast<int>(g_companyItems.size()));
     const int cell = CellSize(g_chart.view.scale);
     g_chart.view.plot_w = g_chrome.plot.w;
@@ -675,25 +795,29 @@ void SyncWorld(RECT client) {
     g_chart.view = ClampView(g_chart.view);
 }
 
-void DrawChipLabel(Gdiplus::Graphics& g, const Gdiplus::Rect& rect, const std::wstring& label,
-                   const Gdiplus::FontFamily& family, int cell) {
+void ApplyCrispGraphics(Gdiplus::Graphics& g) {
+    g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    g.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
+    g.SetCompositingQuality(Gdiplus::CompositingQualityHighQuality);
+    g.SetInterpolationMode(Gdiplus::InterpolationModeNearestNeighbor);
+    g.SetTextRenderingHint(static_cast<Gdiplus::TextRenderingHint>(kTextRenderingHintIdeal));
+}
+
+bool MapRank1(const ParticipantRow& chip, const ScatterNotice& scatter) {
+    return nara::IsMappedRank1(chip, scatter.chips);
+}
+
+void DrawChipLabel(Gdiplus::Graphics&, const Gdiplus::Rect& rect, const std::wstring& label,
+                   const Gdiplus::FontFamily&, int cell) {
     if (label.empty() || rect.Width < 6 || rect.Height < 6) {
         return;
     }
-    const float font_px = ChipLabelScreenPx(cell, 2);
-    Gdiplus::Font font(&family, font_px, Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
-    Gdiplus::StringFormat fmt;
-    fmt.SetAlignment(Gdiplus::StringAlignmentCenter);
-    fmt.SetLineAlignment(Gdiplus::StringAlignmentCenter);
-    fmt.SetFormatFlags(Gdiplus::StringFormatFlagsNoWrap | Gdiplus::StringFormatFlagsNoClip);
-    fmt.SetTrimming(Gdiplus::StringTrimmingNone);
-    g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-    g.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAliasGridFit);
-    g.SetClip(rect, Gdiplus::CombineModeIntersect);
-    Gdiplus::SolidBrush white(Argb(0xFFFFFFFFu));
-    const Gdiplus::RectF box(static_cast<Gdiplus::REAL>(rect.X), static_cast<Gdiplus::REAL>(rect.Y),
-                             static_cast<Gdiplus::REAL>(rect.Width), static_cast<Gdiplus::REAL>(rect.Height));
-    g.DrawString(label.c_str(), -1, &font, box, &fmt, &white);
+    const int chars = (std::max)(1, static_cast<int>(label.size()));
+    nara::dwrite_text::QueueBox(static_cast<float>(rect.X), static_cast<float>(rect.Y),
+                                static_cast<float>(rect.Width), static_cast<float>(rect.Height), label.c_str(),
+                                ChipLabelScreenPx(cell, chars), 0xFFFFFFFFu, nara::dwrite_text::Align::Center,
+                                nara::dwrite_text::Align::Center, true, false, true, kChipLabelOutlineArgb,
+                                ChipLabelOutlineWidthPx(cell), true);
 }
 
 void ReleaseFrame() {
@@ -711,7 +835,24 @@ void ReleaseFrame() {
     g_frameH = 0;
 }
 
+void ReleasePlotCache() {
+    if (g_plotCacheDc) {
+        SelectObject(g_plotCacheDc, g_plotCacheOld);
+        DeleteDC(g_plotCacheDc);
+        g_plotCacheDc = nullptr;
+        g_plotCacheOld = nullptr;
+    }
+    if (g_plotCacheBmp) {
+        DeleteObject(g_plotCacheBmp);
+        g_plotCacheBmp = nullptr;
+    }
+    g_plotCachePxW = 0;
+    g_plotCachePxH = 0;
+    g_hasPlotCache = false;
+}
+
 void ReleaseLayer() {
+    ReleasePlotCache();
     if (g_layerDc) {
         SelectObject(g_layerDc, g_layerOld);
         DeleteDC(g_layerDc);
@@ -774,21 +915,379 @@ void EnsureFrame(HDC ref, int w, int h) {
     g_frameH = h;
 }
 
+ScatterWorldCacheKey MakeWorldKey() {
+    ScatterWorldCacheKey key;
+    key.prepare = g_prepareVersion;
+    key.cols = ColumnCount();
+    key.rows = static_cast<int>(g_chart.notices.size());
+    key.cell_milli = CellSize(g_chart.view.scale) * 1000;
+    key.dpi_milli = static_cast<int>(std::lround(g_dpi_scale * 1000.0f));
+    key.filter_hash = FilterHash();
+    return key;
+}
+
+void PaintScatterWorld(Gdiplus::Graphics& g, int plotL, int plotT, int plotW, int plotH, int scroll_x, int scroll_y) {
+    const int cell = CellSize(g_chart.view.scale);
+    const int cols = ColumnCount();
+    const int rows = static_cast<int>(g_chart.notices.size());
+    Gdiplus::SolidBrush white(Argb(kPlotBgArgb));
+    g.FillRectangle(&white, static_cast<Gdiplus::REAL>(plotL), static_cast<Gdiplus::REAL>(plotT),
+                    static_cast<Gdiplus::REAL>(plotW), static_cast<Gdiplus::REAL>(plotH));
+    Gdiplus::Pen grid(Argb(kGridArgb), kGridWidth);
+    Gdiplus::Pen major(Argb(kMajorGridArgb), kGridWidth);
+    g.SetSmoothingMode(Gdiplus::SmoothingModeNone);
+    g.SetClip(Gdiplus::Rect(plotL, plotT, plotW, plotH));
+    for (int col = 0; col <= cols; ++col) {
+        const int x = plotL + (col * cell) - scroll_x;
+        if (x < plotL - cell || x > plotL + plotW + cell) {
+            continue;
+        }
+        g.DrawLine(col % 10 == 0 ? &major : &grid, x, plotT, x, plotT + plotH);
+    }
+    const int grid_rows = rows + kBottomPadCells;
+    for (int r = 0; r <= grid_rows; ++r) {
+        const int y = plotT + (r * cell) - scroll_y;
+        if (y < plotT - cell || y > plotT + plotH + cell) {
+            continue;
+        }
+        g.DrawLine(&grid, plotL, y, plotL + plotW, y);
+    }
+    Gdiplus::FontFamily family(kFontFamily);
+    g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    for (int r = 0; r < rows; ++r) {
+        const int y = plotT + (r * cell) - scroll_y;
+        if (y + cell < plotT || y > plotT + plotH) {
+            continue;
+        }
+        const auto& scatter = g_chart.notices[r];
+        std::map<int, std::vector<const ParticipantRow*>> buckets;
+        for (const auto& chip : scatter.chips) {
+            if (!chip.adjust_rate) {
+                continue;
+            }
+            const auto chip_name = chip.normalized_company_name.empty() ? chip.company_name : chip.normalized_company_name;
+            if (!CompanyVisible(chip_name) || !ChipPassesRank1Filter(g_rank1Only, MapRank1(chip, scatter))) {
+                continue;
+            }
+            buckets[ToColumn(*chip.adjust_rate)].push_back(&chip);
+        }
+        for (auto& [col, bucket] : buckets) {
+            std::sort(bucket.begin(), bucket.end(), [](const ParticipantRow* a, const ParticipantRow* b) {
+                const auto name_a = a->normalized_company_name.empty() ? a->company_name : a->normalized_company_name;
+                const auto name_b = b->normalized_company_name.empty() ? b->company_name : b->normalized_company_name;
+                return ChipPaintBefore(IsDonggukName(name_a), a->rank == 1, a->rank, IsDonggukName(name_b),
+                                       b->rank == 1, b->rank);
+            });
+            for (int i = 0; i < static_cast<int>(bucket.size()); ++i) {
+                const auto& chip = *bucket[i];
+                const int side = (std::max)(2, cell - 2);
+                const int x = plotL + (col * cell) - scroll_x + ((cell - side) / 2) + ((i % 2) * 1);
+                const int yy = y + ((cell - side) / 2) + (((i / 2) % 2) * 1);
+                if (x + side < plotL || x > plotL + plotW || yy + side < plotT || yy > plotT + plotH) {
+                    continue;
+                }
+                const auto color_name = chip.normalized_company_name.empty() ? chip.company_name : chip.normalized_company_name;
+                Gdiplus::Rect rect(x, yy, side, side);
+                Gdiplus::RectF box(static_cast<Gdiplus::REAL>(x), static_cast<Gdiplus::REAL>(yy),
+                                   static_cast<Gdiplus::REAL>(side), static_cast<Gdiplus::REAL>(side));
+                const bool rank1 = MapRank1(chip, scatter);
+                PaintChipBody(g, box, cell, CompanyColor(color_name).GetValue(), rank1);
+                if (rank1) {
+                    const int bw = (std::max)(6, static_cast<int>(side * 0.42));
+                    const int bh = (std::max)(6, static_cast<int>(side * 0.38));
+                    Gdiplus::RectF badge(static_cast<Gdiplus::REAL>(rect.X + side - bw),
+                                         static_cast<Gdiplus::REAL>(rect.Y + 1), static_cast<Gdiplus::REAL>(bw),
+                                         static_cast<Gdiplus::REAL>(bh));
+                    FillRoundRect(g, badge, static_cast<float>(kRankBadgeRadius), kRankBadgeArgb, 0, 0);
+                }
+                DrawChipLabel(g, rect, Utf8ToWide(BuildShortLabel(color_name)), family, cell);
+            }
+        }
+    }
+    g.ResetClip();
+}
+
+bool BuildPlotCache() {
+    if (!CanBlitPlotCacheDuringPan()) {
+        return false;
+    }
+    const int plotW = g_chrome.plot.w;
+    const int plotH = g_chrome.plot.h;
+    if (plotW < 8 || plotH < 8) {
+        return false;
+    }
+    const int axis_w = (std::max)(8, g_chrome.plot.x - g_chrome.map_inner.x);
+    int over_x = PlotCacheOverscanDip(plotW);
+    int over_y = PlotCacheOverscanDip(plotH);
+    int cache_w = axis_w + plotW + 2 * over_x;
+    int cache_h = plotH + 2 * over_y;
+    const int px_w = ToPx(cache_w);
+    const int px_h = ToPx(cache_h);
+    if (static_cast<long long>(px_w) * px_h > 40'000'000LL) {
+        over_x = plotW / 2;
+        over_y = plotH / 2;
+        cache_w = axis_w + plotW + 2 * over_x;
+        cache_h = plotH + 2 * over_y;
+    }
+    const int origin_x = g_chart.view.scroll_x - over_x;
+    const int origin_y = g_chart.view.scroll_y - over_y;
+    const auto key = MakeWorldKey();
+    if (g_hasPlotCache && CanReuseWorldLayer(g_plotCacheKey, key) && g_plotCacheOriginX == origin_x
+        && g_plotCacheOriginY == origin_y && g_plotCachePxW == ToPx(cache_w) && g_plotCachePxH == ToPx(cache_h)) {
+        return true;
+    }
+    ReleasePlotCache();
+    g_plotCacheDc = CreateCompatibleDC(g_layerDc ? g_layerDc : nullptr);
+    BITMAPINFO bmi{};
+    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth = ToPx(cache_w);
+    bmi.bmiHeader.biHeight = -ToPx(cache_h);
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
+    void* bits = nullptr;
+    g_plotCacheBmp = CreateDIBSection(g_plotCacheDc, &bmi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    if (!g_plotCacheBmp) {
+        DeleteDC(g_plotCacheDc);
+        g_plotCacheDc = nullptr;
+        return false;
+    }
+    g_plotCacheOld = SelectObject(g_plotCacheDc, g_plotCacheBmp);
+    g_plotCachePxW = ToPx(cache_w);
+    g_plotCachePxH = ToPx(cache_h);
+    {
+        Gdiplus::Graphics g(g_plotCacheDc);
+        ApplyCrispGraphics(g);
+        ApplyDpiTransform(g);
+        g.Clear(Argb(kBgArgb));
+        const int scatter_l = axis_w;
+        const int scatter_w = plotW + 2 * over_x;
+        const int scatter_h = plotH + 2 * over_y;
+        nara::dwrite_text::ResetQueue();
+        nara::dwrite_text::SetPlotClip(static_cast<float>(scatter_l), 0.0f, static_cast<float>(scatter_w),
+                                       static_cast<float>(scatter_h));
+        PaintScatterWorld(g, scatter_l, 0, scatter_w, scatter_h, origin_x, origin_y);
+        const int cell = CellSize(g_chart.view.scale);
+        const int rows = static_cast<int>(g_chart.notices.size());
+        for (int r = 0; r < rows; ++r) {
+            const int y = (r * cell) - origin_y;
+            if (y + cell < 0 || y > scatter_h) {
+                continue;
+            }
+            const auto ytext = Utf8ToWide(FormatNoticeYLabel(g_chart.notices[r].notice_number,
+                                                            r < static_cast<int>(g_chart.open_dates.size())
+                                                                ? g_chart.open_dates[r]
+                                                                : ""));
+            nara::dwrite_text::QueueBox(0.0f, static_cast<float>(y), static_cast<float>(axis_w - 4),
+                                        static_cast<float>(cell), ytext.c_str(), kFontAxis, kSubtleTextArgb,
+                                        nara::dwrite_text::Align::Near, nara::dwrite_text::Align::Center, false, true,
+                                        true);
+        }
+        g.Flush();
+        nara::dwrite_text::Flush(g_plotCacheDc, g_plotCachePxW, g_plotCachePxH, g_dpi_scale);
+    }
+    g_plotCacheOriginX = origin_x;
+    g_plotCacheOriginY = origin_y;
+    g_plotCacheOverscanX = over_x;
+    g_plotCacheOverscanY = over_y;
+    g_plotCacheAxisW = axis_w;
+    g_plotCachePlotW = plotW;
+    g_plotCachePlotH = plotH;
+    g_plotCacheKey = key;
+    g_hasPlotCache = true;
+    return true;
+}
+
+bool TryPresentPan(HDC hdc, int pixel_w, int pixel_h) {
+    if (!g_chart.panning || !CanBlitPlotCacheDuringPan() || !g_hasStatic || !g_layerDc) {
+        return false;
+    }
+    const int sx = g_chart.view.scroll_x;
+    const int sy = g_chart.view.scroll_y;
+    const int plotW = g_chrome.plot.w;
+    const int plotH = g_chrome.plot.h;
+    const int scatter_w = plotW + 2 * g_plotCacheOverscanX;
+    const int scatter_h = plotH + 2 * g_plotCacheOverscanY;
+    if (!g_hasPlotCache || !CanReuseWorldLayer(g_plotCacheKey, MakeWorldKey())
+        || !PlotCacheCoversView(g_plotCacheOriginX, scatter_w, sx, plotW)
+        || !PlotCacheCoversView(g_plotCacheOriginY, scatter_h, sy, plotH)) {
+        if (!BuildPlotCache()) {
+            return false;
+        }
+    }
+    EnsureFrame(hdc, pixel_w, pixel_h);
+    BitBlt(g_frameDc, 0, 0, pixel_w, pixel_h, g_layerDc, 0, 0, SRCCOPY);
+    const int dsx = sx - g_plotCacheOriginX;
+    const int dsy = sy - g_plotCacheOriginY;
+    const int src_plot_x = ToPx(g_plotCacheAxisW + dsx);
+    const int src_plot_y = ToPx(dsy);
+    const int src_axis_x = ToPx(0);
+    const int dest_axis_x = ToPx(g_chrome.map_inner.x);
+    const int dest_plot_x = ToPx(g_chrome.plot.x);
+    const int dest_plot_y = ToPx(g_chrome.plot.y);
+    const int dest_plot_w = ToPx(plotW);
+    const int dest_plot_h = ToPx(plotH);
+    const int dest_axis_w = ToPx(g_plotCacheAxisW);
+    BitBlt(g_frameDc, dest_axis_x, dest_plot_y, dest_axis_w, dest_plot_h, g_plotCacheDc, src_axis_x, src_plot_y,
+           SRCCOPY);
+    BitBlt(g_frameDc, dest_plot_x, dest_plot_y, dest_plot_w, dest_plot_h, g_plotCacheDc, src_plot_x, src_plot_y,
+           SRCCOPY);
+    {
+        Gdiplus::Graphics overlay(g_frameDc);
+        ApplyCrispGraphics(overlay);
+        ApplyDpiTransform(overlay);
+        const Gdiplus::RectF toolbar = ToRectF(g_chrome.reset_toolbar);
+        const Gdiplus::RectF reset = ToRectF(g_chrome.reset_btn);
+        const Gdiplus::RectF rank1 = ToRectF(g_chrome.rank1_btn);
+        DrawOffsetShadow(overlay, toolbar, static_cast<float>(kToolbarRadius), kToolbarShadowDepth, kToolbarShadowBlur,
+                         kResetShadowArgb);
+        FillRoundRect(overlay, toolbar, static_cast<float>(kToolbarRadius), kGlassFillArgb, kStrokeSubtleArgb, 1.0f);
+        DrawOffsetShadow(overlay, reset, static_cast<float>(kResetBtnRadius), kResetShadowDepth, kResetShadowBlur,
+                         kResetShadowArgb);
+        FillRoundRect(overlay, reset, static_cast<float>(kResetBtnRadius), kGlassFillArgb,
+                      g_hotReset ? kAccentArgb : kStrokeStrongArgb, 1.0f);
+        nara::dwrite_text::ResetQueue();
+        nara::dwrite_text::SetPlotClip(static_cast<float>(g_chrome.plot.x), static_cast<float>(g_chrome.plot.y),
+                                       static_cast<float>(g_chrome.plot.w), static_cast<float>(g_chrome.plot.h));
+        FillGlyphs(overlay, kResetLabel, Gdiplus::FontFamily(kFontFamily), Gdiplus::FontStyleBold, kFontReset, reset,
+                   Gdiplus::StringAlignmentCenter, Gdiplus::StringAlignmentCenter, kTextArgb);
+        const uint32_t rank1_fill = g_rank1Only ? chart_theme::kAccentArgb : kGlassFillArgb;
+        const uint32_t rank1_text = g_rank1Only ? 0xFFFFFFFFu : kTextArgb;
+        DrawOffsetShadow(overlay, rank1, static_cast<float>(kResetBtnRadius), kResetShadowDepth, kResetShadowBlur,
+                         kResetShadowArgb);
+        FillRoundRect(overlay, rank1, static_cast<float>(kResetBtnRadius), rank1_fill,
+                      (g_hotRank1 || g_rank1Only) ? kAccentArgb : kStrokeStrongArgb, 1.0f);
+        FillGlyphs(overlay, kRank1Label, Gdiplus::FontFamily(kFontFamily), Gdiplus::FontStyleBold, kFontReset, rank1,
+                   Gdiplus::StringAlignmentCenter, Gdiplus::StringAlignmentCenter, rank1_text);
+        PaintDonggukChips(overlay);
+        PaintHoverOverlay(overlay);
+    }
+    nara::dwrite_text::Flush(g_frameDc, pixel_w, pixel_h, g_dpi_scale);
+    BitBlt(hdc, 0, 0, pixel_w, pixel_h, g_frameDc, 0, 0, SRCCOPY);
+    return true;
+}
+
+bool TryPresentZoom(HDC hdc, int pixel_w, int pixel_h) {
+    if (!g_zooming || !CanStretchPlotCacheDuringZoom() || !g_layerDc) {
+        return false;
+    }
+    const int new_cell = CellSize(g_chart.view.scale);
+    int old_cell = 0;
+    int origin_x = 0;
+    int origin_y = 0;
+    int axis_w = g_chrome.plot.x - g_chrome.map_inner.x;
+    HDC src = nullptr;
+    bool from_cache = false;
+    if (g_hasPlotCache && g_plotCacheDc && g_plotCacheKey.cell_milli > 0) {
+        old_cell = g_plotCacheKey.cell_milli / 1000;
+        origin_x = g_plotCacheOriginX;
+        origin_y = g_plotCacheOriginY;
+        axis_w = g_plotCacheAxisW;
+        src = g_plotCacheDc;
+        from_cache = true;
+    } else if (g_hasStatic && g_staticCell > 0) {
+        old_cell = g_staticCell;
+        origin_x = g_staticScrollX;
+        origin_y = g_staticScrollY;
+        src = g_layerDc;
+    }
+    if (src == nullptr || old_cell <= 0 || new_cell <= 0) {
+        return false;
+    }
+    const int plotW = g_chrome.plot.w;
+    const int plotH = g_chrome.plot.h;
+    const int sx = g_chart.view.scroll_x;
+    const int sy = g_chart.view.scroll_y;
+    int src_plot_x = 0;
+    int src_plot_y = 0;
+    int src_axis_x = 0;
+    if (from_cache) {
+        src_plot_x = ToPx(ZoomSrcOrigin(axis_w, origin_x, sx, old_cell, new_cell));
+        src_plot_y = ToPx(ZoomSrcOrigin(0, origin_y, sy, old_cell, new_cell));
+        src_axis_x = ToPx(0);
+    } else {
+        src_plot_x = ToPx(ZoomSrcOrigin(g_chrome.plot.x, origin_x, sx, old_cell, new_cell));
+        src_plot_y = ToPx(ZoomSrcOrigin(g_chrome.plot.y, origin_y, sy, old_cell, new_cell));
+        src_axis_x = ToPx(g_chrome.map_inner.x);
+    }
+    const int src_plot_w = ToPx(ZoomSrcSpan(plotW, old_cell, new_cell));
+    const int src_plot_h = ToPx(ZoomSrcSpan(plotH, old_cell, new_cell));
+    const int src_axis_w = ToPx(axis_w);
+    const int dest_axis_x = ToPx(g_chrome.map_inner.x);
+    const int dest_plot_x = ToPx(g_chrome.plot.x);
+    const int dest_plot_y = ToPx(g_chrome.plot.y);
+    const int dest_plot_w = ToPx(plotW);
+    const int dest_plot_h = ToPx(plotH);
+    EnsureFrame(hdc, pixel_w, pixel_h);
+    BitBlt(g_frameDc, 0, 0, pixel_w, pixel_h, g_layerDc, 0, 0, SRCCOPY);
+    {
+        Gdiplus::Graphics g(g_frameDc);
+        ApplyCrispGraphics(g);
+        ApplyDpiTransform(g);
+        Gdiplus::SolidBrush bg(Argb(kBgArgb));
+        Gdiplus::SolidBrush plot(Argb(kPlotBgArgb));
+        g.FillRectangle(&bg, ToRectF(g_chrome.map_inner));
+        g.FillRectangle(&plot, ToRectF(g_chrome.plot));
+        g.Flush();
+    }
+    SetStretchBltMode(g_frameDc, COLORONCOLOR);
+    StretchBlt(g_frameDc, dest_axis_x, dest_plot_y, src_axis_w, dest_plot_h, src, src_axis_x, src_plot_y, src_axis_w,
+               src_plot_h, SRCCOPY);
+    StretchBlt(g_frameDc, dest_plot_x, dest_plot_y, dest_plot_w, dest_plot_h, src, src_plot_x, src_plot_y, src_plot_w,
+               src_plot_h, SRCCOPY);
+    {
+        Gdiplus::Graphics overlay(g_frameDc);
+        ApplyCrispGraphics(overlay);
+        ApplyDpiTransform(overlay);
+        const Gdiplus::RectF toolbar = ToRectF(g_chrome.reset_toolbar);
+        const Gdiplus::RectF reset = ToRectF(g_chrome.reset_btn);
+        const Gdiplus::RectF rank1 = ToRectF(g_chrome.rank1_btn);
+        DrawOffsetShadow(overlay, toolbar, static_cast<float>(kToolbarRadius), kToolbarShadowDepth, kToolbarShadowBlur,
+                         kResetShadowArgb);
+        FillRoundRect(overlay, toolbar, static_cast<float>(kToolbarRadius), kGlassFillArgb, kStrokeSubtleArgb, 1.0f);
+        DrawOffsetShadow(overlay, reset, static_cast<float>(kResetBtnRadius), kResetShadowDepth, kResetShadowBlur,
+                         kResetShadowArgb);
+        FillRoundRect(overlay, reset, static_cast<float>(kResetBtnRadius), kGlassFillArgb,
+                      g_hotReset ? kAccentArgb : kStrokeStrongArgb, 1.0f);
+        nara::dwrite_text::ResetQueue();
+        FillGlyphs(overlay, kResetLabel, Gdiplus::FontFamily(kFontFamily), Gdiplus::FontStyleBold, kFontReset, reset,
+                   Gdiplus::StringAlignmentCenter, Gdiplus::StringAlignmentCenter, kTextArgb);
+        const uint32_t rank1_fill = g_rank1Only ? chart_theme::kAccentArgb : kGlassFillArgb;
+        const uint32_t rank1_text = g_rank1Only ? 0xFFFFFFFFu : kTextArgb;
+        DrawOffsetShadow(overlay, rank1, static_cast<float>(kResetBtnRadius), kResetShadowDepth, kResetShadowBlur,
+                         kResetShadowArgb);
+        FillRoundRect(overlay, rank1, static_cast<float>(kResetBtnRadius), rank1_fill,
+                      (g_hotRank1 || g_rank1Only) ? kAccentArgb : kStrokeStrongArgb, 1.0f);
+        FillGlyphs(overlay, kRank1Label, Gdiplus::FontFamily(kFontFamily), Gdiplus::FontStyleBold, kFontReset, rank1,
+                   Gdiplus::StringAlignmentCenter, Gdiplus::StringAlignmentCenter, rank1_text);
+    }
+    nara::dwrite_text::Flush(g_frameDc, pixel_w, pixel_h, g_dpi_scale);
+    BitBlt(hdc, 0, 0, pixel_w, pixel_h, g_frameDc, 0, 0, SRCCOPY);
+    return true;
+}
+
 void PresentChart(HDC hdc, int w, int h) {
     EnsureFrame(hdc, w, h);
     BitBlt(g_frameDc, 0, 0, w, h, g_layerDc, 0, 0, SRCCOPY);
     {
         Gdiplus::Graphics overlay(g_frameDc);
-        overlay.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-        overlay.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAliasGridFit);
+        ApplyCrispGraphics(overlay);
+        ApplyDpiTransform(overlay);
+        nara::dwrite_text::ResetQueue();
+        nara::dwrite_text::SetPlotClip(static_cast<float>(g_chrome.plot.x), static_cast<float>(g_chrome.plot.y),
+                                       static_cast<float>(g_chrome.plot.w), static_cast<float>(g_chrome.plot.h));
         PaintDonggukChips(overlay);
         PaintHoverOverlay(overlay);
     }
+    nara::dwrite_text::Flush(g_frameDc, w, h, g_dpi_scale);
     BitBlt(hdc, 0, 0, w, h, g_frameDc, 0, 0, SRCCOPY);
 }
 
 int FilterHash() {
-    int hash = 0;
+    int hash = static_cast<int>(std::lround(g_dpi_scale * 100.0f));
+    if (g_rank1Only) {
+        hash = hash * 131 + 17;
+    }
     for (const auto& item : g_companyItems) {
         hash = hash * 131 + (item.checked ? 1 : 0);
     }
@@ -808,7 +1307,7 @@ ScatterViewCacheKey MakeViewKey(int width, int height) {
     key.cols = ColumnCount();
     key.rows = static_cast<int>(g_chart.notices.size());
     key.filter_hash = FilterHash();
-    key.chrome_hot = ChromeHot(g_hotCompany, g_hotReset, g_hotAll);
+    key.chrome_hot = ChromeHot(g_hotCompany, g_hotReset, g_hotAll, g_hotRank1);
     return key;
 }
 
@@ -837,7 +1336,8 @@ void PaintDonggukChips(Gdiplus::Graphics& g) {
                 continue;
             }
             const auto chip_name = chip.normalized_company_name.empty() ? chip.company_name : chip.normalized_company_name;
-            if (!IsDonggukName(chip_name) || !CompanyVisible(chip_name)) {
+            if (!IsDonggukName(chip_name) || !CompanyVisible(chip_name)
+                || !ChipPassesRank1Filter(g_rank1Only, MapRank1(chip, scatter))) {
                 continue;
             }
             buckets[ToColumn(*chip.adjust_rate)].push_back(&chip);
@@ -848,6 +1348,9 @@ void PaintDonggukChips(Gdiplus::Graphics& g) {
                 const int side = (std::max)(2, cell - 2);
                 const int x = plotL + (col * cell) - g_chart.view.scroll_x + ((cell - side) / 2) + ((i % 2) * 1);
                 const int yy = y + ((cell - side) / 2) + (((i / 2) % 2) * 1);
+                if (x + side < plotL || x > plotL + plotW || yy + side < plotT || yy > plotT + plotH) {
+                    continue;
+                }
                 const float cx = static_cast<float>(x) + static_cast<float>(side) * 0.5f;
                 const float cy = static_cast<float>(yy) + static_cast<float>(side) * 0.5f;
                 const float ns = static_cast<float>(side) * scale;
@@ -857,8 +1360,7 @@ void PaintDonggukChips(Gdiplus::Graphics& g) {
                 const auto color_name =
                     chip.normalized_company_name.empty() ? chip.company_name : chip.normalized_company_name;
                 PaintChipBody(g, box, cell, CompanyColor(color_name).GetValue(),
-                              chip.rank == 1 && !nara::LooksLikeOpenApiHundred(chip)
-                                  && !nara::NoticeHasLowerLimitAwardCluster(scatter.chips));
+                              MapRank1(chip, scatter));
                 if (!BounceOverlaySkipsLabels() && (!SkipChipLabelsDuringPan() || !g_chart.panning)) {
                     DrawChipLabel(g, rect, Utf8ToWide(BuildShortLabel(color_name)), family, cell);
                 }
@@ -878,7 +1380,6 @@ void PaintHoverOverlay(Gdiplus::Graphics& g) {
     const int plotW = g_chrome.plot.w;
     const int plotH = g_chrome.plot.h;
     Gdiplus::FontFamily family(kFontFamily);
-    Gdiplus::Font hover_font(&family, kFontHover, Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
     Gdiplus::Pen pointer(Argb(kPointerArgb), kPointerWidth);
     const Gdiplus::REAL dashes[] = {4.0f, 3.0f};
     pointer.SetDashPattern(dashes, 2);
@@ -907,29 +1408,40 @@ void PaintHoverOverlay(Gdiplus::Graphics& g) {
     FillRoundRect(g, Gdiplus::RectF(static_cast<Gdiplus::REAL>(tx), static_cast<Gdiplus::REAL>(ty),
                                     static_cast<Gdiplus::REAL>(label_w), static_cast<Gdiplus::REAL>(label_h)),
                   static_cast<float>(kHoverRadius), kPointerLabelBgArgb, kCalloutPenArgb, 1.2f);
-    Gdiplus::SolidBrush hover_ink(Argb(kPointerLabelTextArgb));
-    g.DrawString(rate_text, -1, &hover_font,
-                 Gdiplus::PointF(static_cast<Gdiplus::REAL>(tx + 8), static_cast<Gdiplus::REAL>(ty + 5)),
-                 &hover_ink);
+    FillGlyphs(g, rate_text, family, Gdiplus::FontStyleBold, kFontHover,
+               Gdiplus::RectF(static_cast<Gdiplus::REAL>(tx + 8), static_cast<Gdiplus::REAL>(ty + 4),
+                              static_cast<Gdiplus::REAL>(label_w - 12), static_cast<Gdiplus::REAL>(label_h - 6)),
+               Gdiplus::StringAlignmentNear, Gdiplus::StringAlignmentCenter, kPointerLabelTextArgb);
     g.ResetClip();
 }
 
-void PaintChart(HDC hdc, RECT client) {
+void PaintChart(HWND hwnd, HDC hdc) {
+    RECT client{};
+    GetClientRect(hwnd, &client);
     const int width = (std::max)(1, static_cast<int>(client.right));
     const int height = (std::max)(1, static_cast<int>(client.bottom));
-    SyncWorld(client);
+    SyncWorld(hwnd);
     const auto view_key = MakeViewKey(width, height);
+    if (TryPresentZoom(hdc, width, height)) {
+        return;
+    }
+    if (TryPresentPan(hdc, width, height)) {
+        return;
+    }
     if (IsOverlayOnlyFrame(g_hasStatic, g_staticKey, view_key) && g_layerDc) {
         PresentChart(hdc, width, height);
         return;
     }
     EnsureLayer(hdc, width, height);
     HDC mem = g_layerDc;
+    nara::dwrite_text::ResetQueue();
+    nara::dwrite_text::SetPlotClip(static_cast<float>(g_chrome.plot.x), static_cast<float>(g_chrome.plot.y),
+                                   static_cast<float>(g_chrome.plot.w), static_cast<float>(g_chrome.plot.h));
 
     {
     Gdiplus::Graphics g(mem);
-    g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-    g.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAliasGridFit);
+    ApplyCrispGraphics(g);
+    ApplyDpiTransform(g);
     g.Clear(Argb(kWindowBgArgb));
 
     Gdiplus::LinearGradientBrush accent_bar(Gdiplus::Point(0, 0), Gdiplus::Point(width, 0),
@@ -938,15 +1450,10 @@ void PaintChart(HDC hdc, RECT client) {
 
     Gdiplus::FontFamily family(kFontFamily);
     Gdiplus::Font axis_font(&family, kFontAxis, Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
-    Gdiplus::Font axis_bold(&family, kFontAxis, Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
-    Gdiplus::Font eyebrow(&family, kFontEyebrow, Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
-    Gdiplus::Font caption(&family, kFontCaption, Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
     Gdiplus::Font company_font(&family, kFontCompany, Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
     Gdiplus::Font empty_font(&family, kFontEmpty, Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
     Gdiplus::SolidBrush muted(Argb(kSubtleTextArgb));
-    Gdiplus::SolidBrush caption_brush(Argb(kMutedCaptionArgb));
     Gdiplus::SolidBrush ink(Argb(kTextArgb));
-    Gdiplus::SolidBrush copper(Argb(chart_theme::kAccentStrongArgb));
     Gdiplus::SolidBrush white(Argb(kPlotBgArgb));
     Gdiplus::Pen grid(Argb(kGridArgb), kGridWidth);
     Gdiplus::Pen major(Argb(kMajorGridArgb), kGridWidth);
@@ -963,7 +1470,7 @@ void PaintChart(HDC hdc, RECT client) {
     const int cols = ColumnCount();
     const int rows = static_cast<int>(g_chart.notices.size());
     const Gdiplus::RectF card = ToRectF(g_chrome.map_card);
-    DrawOffsetShadow(g, card, static_cast<float>(kCardRadius), kCardShadowDepth, kCardShadowArgb);
+    DrawOffsetShadow(g, card, static_cast<float>(kCardRadius), kCardShadowDepth, kCardShadowBlur, kCardShadowArgb);
     FillRoundRect(g, card, static_cast<float>(kCardRadius), kCardFillArgb, kCardStrokeArgb, kCardStrokeW);
     FillRoundRect(g, ToRectF(g_chrome.map_inner), static_cast<float>(kMapInnerRadius), kBgArgb, 0, 0);
 
@@ -1002,42 +1509,26 @@ void PaintChart(HDC hdc, RECT client) {
         wchar_t empty[160];
         swprintf_s(empty, L"동국 참여 낙찰공고가 없습니다. 지역을 %s에서 바꿔 보세요.",
                    RegionLabelAt(RegionIndexFromToken(g_region_token)));
-        g.DrawString(empty, -1, &empty_font,
-                     Gdiplus::RectF(static_cast<Gdiplus::REAL>(plotL), static_cast<Gdiplus::REAL>(plotT),
-                                    static_cast<Gdiplus::REAL>(plotW), static_cast<Gdiplus::REAL>(plotH)),
-                     &empty_fmt, &muted);
+        nara::dwrite_text::QueueBox(static_cast<float>(plotL), static_cast<float>(plotT),
+                                    static_cast<float>(plotW), static_cast<float>(plotH), empty, kFontEmpty,
+                                    kSubtleTextArgb, nara::dwrite_text::Align::Center,
+                                    nara::dwrite_text::Align::Center, true, false, false, 0, 0, true);
     }
 
+    ClipPlot(g);
     for (int r = 0; r < rows; ++r) {
         const int y = plotT + (r * cell) - g_chart.view.scroll_y;
         if (y + cell < plotT || y > plotT + plotH) {
             continue;
         }
         const auto& scatter = g_chart.notices[r];
-        const std::string open_date = r < static_cast<int>(g_chart.open_dates.size()) ? g_chart.open_dates[r] : "";
-        const auto caption_utf8 = FormatNoticeYLabel(scatter.notice_number, open_date);
-        g.ResetClip();
-        ClipToRoundRect(g, g_chrome.map_inner, static_cast<float>(kMapInnerRadius));
-        g.SetClip(Gdiplus::Rect(g_chrome.map_inner.x + 6, plotT, plotL - g_chrome.map_inner.x - 10, plotH),
-                  Gdiplus::CombineModeIntersect);
-        Gdiplus::StringFormat yfmt;
-        yfmt.SetAlignment(Gdiplus::StringAlignmentNear);
-        yfmt.SetLineAlignment(Gdiplus::StringAlignmentCenter);
-        yfmt.SetTrimming(Gdiplus::StringTrimmingEllipsisCharacter);
-        yfmt.SetFormatFlags(Gdiplus::StringFormatFlagsNoWrap);
-        const Gdiplus::RectF ybox(static_cast<Gdiplus::REAL>(g_chrome.map_inner.x + 6), static_cast<Gdiplus::REAL>(y),
-                                  static_cast<Gdiplus::REAL>(plotL - g_chrome.map_inner.x - 12),
-                                  static_cast<Gdiplus::REAL>(cell));
-        g.DrawString(Utf8ToWide(caption_utf8).c_str(), -1, &axis_font, ybox, &yfmt, &muted);
-        ClipPlot(g);
-
         std::map<int, std::vector<const ParticipantRow*>> buckets;
         for (const auto& chip : scatter.chips) {
             if (!chip.adjust_rate) {
                 continue;
             }
             const auto chip_name = chip.normalized_company_name.empty() ? chip.company_name : chip.normalized_company_name;
-            if (!CompanyVisible(chip_name)) {
+            if (!CompanyVisible(chip_name) || !ChipPassesRank1Filter(g_rank1Only, MapRank1(chip, scatter))) {
                 continue;
             }
             buckets[ToColumn(*chip.adjust_rate)].push_back(&chip);
@@ -1054,14 +1545,16 @@ void PaintChart(HDC hdc, RECT client) {
                 const int side = (std::max)(2, cell - 2);
                 const int x = plotL + (col * cell) - g_chart.view.scroll_x + ((cell - side) / 2) + ((i % 2) * 1);
                 const int yy = y + ((cell - side) / 2) + (((i / 2) % 2) * 1);
+                if (x + side < plotL || x > plotL + plotW || yy + side < plotT || yy > plotT + plotH) {
+                    continue;
+                }
                 const auto color_name = chip.normalized_company_name.empty() ? chip.company_name
                                                                             : chip.normalized_company_name;
                 Gdiplus::Rect rect(x, yy, side, side);
                 Gdiplus::RectF box(static_cast<Gdiplus::REAL>(x), static_cast<Gdiplus::REAL>(yy),
                                    static_cast<Gdiplus::REAL>(side), static_cast<Gdiplus::REAL>(side));
                 ClipPlot(g);
-                const bool rank1 = chip.rank == 1 && !nara::LooksLikeOpenApiHundred(chip)
-                                   && !nara::NoticeHasLowerLimitAwardCluster(scatter.chips);
+                const bool rank1 = MapRank1(chip, scatter);
                 PaintChipBody(g, box, cell, CompanyColor(color_name).GetValue(), rank1);
                 if (rank1) {
                     const int bw = (std::max)(6, static_cast<int>(side * 0.42));
@@ -1081,6 +1574,33 @@ void PaintChart(HDC hdc, RECT client) {
     }
 
     g.ResetClip();
+    g.Flush();
+    nara::dwrite_text::Flush(mem, width, height, g_dpi_scale);
+    nara::dwrite_text::ResetQueue();
+    {
+        Gdiplus::SolidBrush gutter(Argb(kBgArgb));
+        const Gdiplus::RectF inner = ToRectF(g_chrome.map_inner);
+        g.FillRectangle(&gutter, inner.X, inner.Y, static_cast<Gdiplus::REAL>(plotL) - inner.X, inner.Height);
+        g.FillRectangle(&gutter, static_cast<Gdiplus::REAL>(plotL), inner.Y, static_cast<Gdiplus::REAL>(plotW),
+                        static_cast<Gdiplus::REAL>(plotT) - inner.Y);
+        g.FillRectangle(&gutter, static_cast<Gdiplus::REAL>(plotL + plotW), inner.Y,
+                        inner.GetRight() - static_cast<Gdiplus::REAL>(plotL + plotW), inner.Height);
+        g.FillRectangle(&gutter, static_cast<Gdiplus::REAL>(plotL), static_cast<Gdiplus::REAL>(plotT + plotH),
+                        static_cast<Gdiplus::REAL>(plotW), inner.GetBottom() - static_cast<Gdiplus::REAL>(plotT + plotH));
+    }
+    for (int r = 0; r < rows; ++r) {
+        const int y = plotT + (r * cell) - g_chart.view.scroll_y;
+        if (y + cell < plotT || y > plotT + plotH) {
+            continue;
+        }
+        const auto& scatter = g_chart.notices[r];
+        const std::string open_date = r < static_cast<int>(g_chart.open_dates.size()) ? g_chart.open_dates[r] : "";
+        const auto ytext = Utf8ToWide(FormatNoticeYLabel(scatter.notice_number, open_date));
+        nara::dwrite_text::QueueBox(static_cast<float>(g_chrome.map_inner.x + 6), static_cast<float>(y),
+                                    static_cast<float>(plotL - g_chrome.map_inner.x - 12), static_cast<float>(cell),
+                                    ytext.c_str(), kFontAxis, kSubtleTextArgb, nara::dwrite_text::Align::Near,
+                                    nara::dwrite_text::Align::Center, false, true, true);
+    }
     g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
     {
         Gdiplus::GraphicsPath plot_path;
@@ -1089,14 +1609,15 @@ void PaintChart(HDC hdc, RECT client) {
                       static_cast<float>(kPlotRadius));
         g.DrawPath(&axis, &plot_path);
     }
-    g.DrawString(kAxisNotice, -1, &axis_bold,
-                 Gdiplus::PointF(static_cast<Gdiplus::REAL>(g_chrome.map_inner.x + 6),
-                                 static_cast<Gdiplus::REAL>((std::max)(g_chrome.map_inner.y + 2, plotT - 16))),
-                 &muted);
-    g.DrawString(kAxisRate, -1, &axis_bold,
-                 Gdiplus::PointF(static_cast<Gdiplus::REAL>((std::max)(plotL + 4, plotL + plotW - 116)),
-                                 static_cast<Gdiplus::REAL>(plotT + plotH + 22)),
-                 &muted);
+    FillGlyphs(g, kAxisNotice, family, Gdiplus::FontStyleBold, kFontAxis,
+               Gdiplus::RectF(static_cast<Gdiplus::REAL>(g_chrome.map_inner.x + 6),
+                              static_cast<Gdiplus::REAL>((std::max)(g_chrome.map_inner.y + 2, plotT - 16)), 200.0f,
+                              16.0f),
+               Gdiplus::StringAlignmentNear, Gdiplus::StringAlignmentNear, kSubtleTextArgb);
+    FillGlyphs(g, kAxisRate, family, Gdiplus::FontStyleBold, kFontAxis,
+               Gdiplus::RectF(static_cast<Gdiplus::REAL>((std::max)(plotL + 4, plotL + plotW - 116)),
+                              static_cast<Gdiplus::REAL>(plotT + plotH + 22), 120.0f, 16.0f),
+               Gdiplus::StringAlignmentNear, Gdiplus::StringAlignmentNear, kSubtleTextArgb);
     for (int col = 0; col <= cols; col += 10) {
         const int x = plotL + (col * cell) - g_chart.view.scroll_x + cell / 2;
         if (x < plotL - 8 || x > plotL + plotW) {
@@ -1110,39 +1631,54 @@ void PaintChart(HDC hdc, RECT client) {
         } else {
             swprintf_s(tick, L"%.2f", rate);
         }
-        g.DrawString(tick, -1, &axis_font,
-                     Gdiplus::PointF(static_cast<Gdiplus::REAL>(x - 18), static_cast<Gdiplus::REAL>(plotT + plotH + 6)),
-                     &muted);
+        FillGlyphs(g, tick, family, Gdiplus::FontStyleRegular, kFontAxis,
+                   Gdiplus::RectF(static_cast<Gdiplus::REAL>(x - 18), static_cast<Gdiplus::REAL>(plotT + plotH + 6),
+                                  36.0f, 14.0f),
+                   Gdiplus::StringAlignmentCenter, Gdiplus::StringAlignmentNear, kSubtleTextArgb);
     }
 
     g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
     const Gdiplus::RectF toolbar = ToRectF(g_chrome.reset_toolbar);
     const Gdiplus::RectF reset = ToRectF(g_chrome.reset_btn);
-    DrawOffsetShadow(g, toolbar, static_cast<float>(kToolbarRadius), kToolbarShadowDepth, kResetShadowArgb);
+    DrawOffsetShadow(g, toolbar, static_cast<float>(kToolbarRadius), kToolbarShadowDepth, kToolbarShadowBlur,
+                     kResetShadowArgb);
     FillRoundRect(g, toolbar, static_cast<float>(kToolbarRadius), kGlassFillArgb, kStrokeSubtleArgb, 1.0f);
-    DrawOffsetShadow(g, reset, static_cast<float>(kResetBtnRadius), kResetShadowDepth, kResetShadowArgb);
+    DrawOffsetShadow(g, reset, static_cast<float>(kResetBtnRadius), kResetShadowDepth, kResetShadowBlur,
+                     kResetShadowArgb);
     FillRoundRect(g, reset, static_cast<float>(kResetBtnRadius), kGlassFillArgb,
                   g_hotReset ? kAccentArgb : kStrokeStrongArgb, 1.0f);
-    Gdiplus::Font reset_font(&family, kFontReset, Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
-    g.DrawString(kResetLabel, -1, &reset_font, reset, &center, &ink);
+    FillGlyphs(g, kResetLabel, family, Gdiplus::FontStyleBold, kFontReset, reset, Gdiplus::StringAlignmentCenter,
+               Gdiplus::StringAlignmentCenter, kTextArgb);
+
+    const Gdiplus::RectF rank1 = ToRectF(g_chrome.rank1_btn);
+    DrawOffsetShadow(g, rank1, static_cast<float>(kResetBtnRadius), kResetShadowDepth, kResetShadowBlur,
+                     kResetShadowArgb);
+    const uint32_t rank1_fill = g_rank1Only ? chart_theme::kAccentArgb : kGlassFillArgb;
+    const uint32_t rank1_text = g_rank1Only ? 0xFFFFFFFFu : kTextArgb;
+    FillRoundRect(g, rank1, static_cast<float>(kResetBtnRadius), rank1_fill,
+                  (g_hotRank1 || g_rank1Only) ? kAccentArgb : kStrokeStrongArgb, 1.0f);
+    FillGlyphs(g, kRank1Label, family, Gdiplus::FontStyleBold, kFontReset, rank1, Gdiplus::StringAlignmentCenter,
+               Gdiplus::StringAlignmentCenter, rank1_text);
 
     const Gdiplus::RectF dock = ToRectF(g_chrome.dock);
-    DrawOffsetShadow(g, dock, static_cast<float>(kDockRadius), kCardShadowDepth, kCardShadowArgb);
+    DrawOffsetShadow(g, dock, static_cast<float>(kDockRadius), kCardShadowDepth, kCardShadowBlur, kCardShadowArgb);
     FillRoundRect(g, dock, static_cast<float>(kDockRadius), kDockFillArgb, kStrokeSubtleArgb, 1.0f);
     Gdiplus::Pen divider(Argb(kStrokeSubtleArgb), 1.0f);
     g.DrawLine(&divider, static_cast<Gdiplus::REAL>(g_chrome.divider.x), static_cast<Gdiplus::REAL>(g_chrome.divider.y),
                static_cast<Gdiplus::REAL>(g_chrome.divider.x), static_cast<Gdiplus::REAL>(g_chrome.divider.Bottom()));
 
     auto caption_at = [&](const RectI& combo, const wchar_t* label) {
-        g.DrawString(label, -1, &caption,
-                     Gdiplus::PointF(static_cast<Gdiplus::REAL>(combo.x),
-                                     static_cast<Gdiplus::REAL>(combo.y - kCaptionH)),
-                     &caption_brush);
+        FillGlyphs(g, label, family, Gdiplus::FontStyleRegular, kFontCaption,
+                   Gdiplus::RectF(static_cast<Gdiplus::REAL>(combo.x),
+                                  static_cast<Gdiplus::REAL>(combo.y - kCaptionH),
+                                  static_cast<Gdiplus::REAL>((std::max)(48, combo.w)),
+                                  static_cast<Gdiplus::REAL>(kCaptionH)),
+                   Gdiplus::StringAlignmentNear, Gdiplus::StringAlignmentCenter, kMutedCaptionArgb);
     };
-    g.DrawString(kRangeLabel, -1, &eyebrow,
-                 Gdiplus::PointF(static_cast<Gdiplus::REAL>(g_chrome.range_pane.x),
-                                 static_cast<Gdiplus::REAL>(g_chrome.range_pane.y)),
-                 &copper);
+    FillGlyphs(g, kRangeLabel, family, Gdiplus::FontStyleBold, kFontEyebrow,
+               Gdiplus::RectF(static_cast<Gdiplus::REAL>(g_chrome.range_pane.x),
+                              static_cast<Gdiplus::REAL>(g_chrome.range_pane.y), 120.0f, 16.0f),
+               Gdiplus::StringAlignmentNear, Gdiplus::StringAlignmentNear, chart_theme::kAccentStrongArgb);
     caption_at(g_chrome.combo_period, kPeriodLabel);
     caption_at(g_chrome.combo_precision, kPrecisionLabel);
     caption_at(g_chrome.combo_region, kRegionLabel);
@@ -1150,17 +1686,17 @@ void PaintChart(HDC hdc, RECT client) {
     caption_at(g_chrome.combo_min, kMinLabel);
     caption_at(g_chrome.combo_max, kMaxLabel);
 
-    g.DrawString(kCompanyLabel, -1, &eyebrow,
-                 Gdiplus::PointF(static_cast<Gdiplus::REAL>(g_chrome.company_pane.x),
-                                 static_cast<Gdiplus::REAL>(CompanyHeaderLabelY(g_chrome.company_pane.y))),
-                 &copper);
+    FillGlyphs(g, kCompanyLabel, family, Gdiplus::FontStyleBold, kFontEyebrow,
+               Gdiplus::RectF(static_cast<Gdiplus::REAL>(g_chrome.company_pane.x),
+                              static_cast<Gdiplus::REAL>(CompanyHeaderLabelY(g_chrome.company_pane.y)), 80.0f, 16.0f),
+               Gdiplus::StringAlignmentNear, Gdiplus::StringAlignmentNear, chart_theme::kAccentStrongArgb);
     const auto all_look = MainButtonLook(MainButtonKind::Ghost);
     if (g_hotAll) {
         FillRoundRect(g, ToRectF(g_chrome.company_all), 8.0f, kHoverFillArgb, 0, 0);
     }
-    Gdiplus::Font all_font(&family, kFontCompanyAll, Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
-    Gdiplus::SolidBrush all_ink(Argb(g_hotAll ? kAccentArgb : all_look.text));
-    g.DrawString(kCompanyAllLabel, -1, &all_font, ToRectF(g_chrome.company_all), &center, &all_ink);
+    FillGlyphs(g, kCompanyAllLabel, family, Gdiplus::FontStyleBold, kFontCompanyAll, ToRectF(g_chrome.company_all),
+               Gdiplus::StringAlignmentCenter, Gdiplus::StringAlignmentCenter,
+               g_hotAll ? kAccentArgb : all_look.text);
 
     FillRoundRect(g, ToRectF(g_chrome.company_wrap), static_cast<float>(kCompanyPanelRadius), kCompanyPanelArgb,
                   kStrokeSubtleArgb, 1.0f);
@@ -1184,32 +1720,36 @@ void PaintChart(HDC hdc, RECT client) {
                       on ? chart_theme::kAccentArgb : kCheckFillArgb,
                       on || hot ? chart_theme::kAccentStrongArgb : kStrokeStrongArgb, 1.0f);
         if (on) {
-            Gdiplus::SolidBrush mark(Argb(kCheckMarkArgb));
-            g.DrawString(L"✓", -1, &check_font, ToRectF(box), &center, &mark);
+            nara::dwrite_text::QueueBox(static_cast<float>(box.x), static_cast<float>(box.y),
+                                        static_cast<float>(box.w), static_cast<float>(box.h), L"✓", 11.0f,
+                                        kCheckMarkArgb, nara::dwrite_text::Align::Center,
+                                        nara::dwrite_text::Align::Center, true);
         }
         Gdiplus::RectF label_box(static_cast<Gdiplus::REAL>(box.Right() + kCheckGap), static_cast<Gdiplus::REAL>(cell.y),
                                  static_cast<Gdiplus::REAL>((std::max)(8, cell.Right() - box.Right() - kCheckGap)),
                                  static_cast<Gdiplus::REAL>(cell.h));
-        g.SetClip(label_box);
-        g.DrawString(g_companyItems[static_cast<size_t>(i)].display.c_str(), -1, &company_font, label_box, &wrap_fmt,
-                     &ink);
-        g.ResetClip();
+        nara::dwrite_text::QueueBox(label_box.X, label_box.Y, label_box.Width, label_box.Height,
+                                    g_companyItems[static_cast<size_t>(i)].display.c_str(), kFontCompany, kTextArgb,
+                                    nara::dwrite_text::Align::Near, nara::dwrite_text::Align::Center, true, true,
+                                    true);
     }
     }
 
     if (CanCacheStaticLayer(g_chart.panning)) {
         g_staticKey = view_key;
         g_hasStatic = true;
+        g_staticScrollX = g_chart.view.scroll_x;
+        g_staticScrollY = g_chart.view.scroll_y;
+        g_staticCell = CellSize(g_chart.view.scale);
     } else {
         g_hasStatic = false;
     }
+    nara::dwrite_text::Flush(mem, width, height, g_dpi_scale);
     PresentChart(hdc, width, height);
 }
 
 void UpdateScroll(HWND hwnd) {
-    RECT rc{};
-    GetClientRect(hwnd, &rc);
-    SyncWorld(rc);
+    SyncWorld(hwnd);
     SCROLLINFO hsi{sizeof(SCROLLINFO), SIF_RANGE | SIF_PAGE | SIF_POS};
     hsi.nMin = -kViewPad;
     hsi.nMax = (std::max)(0, g_chart.view.world_w) + kViewPad;
@@ -1255,45 +1795,38 @@ int ScrollPos(HWND hwnd, int bar, int code, int pos) {
 }
 
 void PaintComboItem(const DRAWITEMSTRUCT* item) {
-    Gdiplus::Graphics dg(item->hDC);
-    dg.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-    dg.SetTextRenderingHint(Gdiplus::TextRenderingHintClearTypeGridFit);
     const RECT& rc = item->rcItem;
-    const Gdiplus::RectF r(static_cast<Gdiplus::REAL>(rc.left) + 0.5f, static_cast<Gdiplus::REAL>(rc.top) + 0.5f,
-                           static_cast<Gdiplus::REAL>(rc.right - rc.left) - 1.0f,
-                           static_cast<Gdiplus::REAL>(rc.bottom - rc.top) - 1.0f);
     const bool edit = (item->itemState & ODS_COMBOBOXEDIT) != 0;
     if (edit) {
         return;
     }
-    const bool selected = (item->itemState & ODS_SELECTED) != 0;
-    uint32_t fill = kPlotBgArgb;
-    if (selected) {
-        fill = kAccentSubtleArgb;
-    }
-    Gdiplus::SolidBrush brush(Argb(fill));
-    dg.FillRectangle(&brush, r);
+    const int pw = rc.right - rc.left;
+    const int ph = rc.bottom - rc.top;
+    const float dip_w = static_cast<float>(ToDip(pw));
+    const float dip_h = static_cast<float>(ToDip(ph));
     wchar_t caption[64] = {};
     if (item->itemID != 0xFFFFFFFFu) {
         SendMessageW(item->hwndItem, CB_GETLBTEXT, item->itemID, reinterpret_cast<LPARAM>(caption));
     }
-    Gdiplus::FontFamily family(kFontFamily);
-    Gdiplus::Font font(&family, kFontBody, Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
-    Gdiplus::SolidBrush text(Argb(kTextArgb));
-    Gdiplus::StringFormat fmt;
-    fmt.SetAlignment(Gdiplus::StringAlignmentNear);
-    fmt.SetLineAlignment(Gdiplus::StringAlignmentCenter);
-    fmt.SetTrimming(Gdiplus::StringTrimmingEllipsisCharacter);
-    fmt.SetFormatFlags(Gdiplus::StringFormatFlagsNoWrap);
-    Gdiplus::RectF text_box(r.X + 10.0f, r.Y, (std::max)(8.0f, r.Width - (edit ? 32.0f : 16.0f)), r.Height);
-    dg.DrawString(caption, -1, &font, text_box, &fmt, &text);
+    {
+        Gdiplus::Graphics dg(item->hDC);
+        ApplyCrispGraphics(dg);
+        ApplyDpiTransform(dg);
+        const Gdiplus::RectF r(static_cast<Gdiplus::REAL>(ToDip(rc.left)) + 0.5f,
+                               static_cast<Gdiplus::REAL>(ToDip(rc.top)) + 0.5f, dip_w - 1.0f, dip_h - 1.0f);
+        const bool selected = (item->itemState & ODS_SELECTED) != 0;
+        Gdiplus::SolidBrush brush(Argb(selected ? kAccentSubtleArgb : kPlotBgArgb));
+        dg.FillRectangle(&brush, r);
+    }
+    nara::dwrite_text::ResetQueue();
+    nara::dwrite_text::QueueBox(10.0f, 0.0f, (std::max)(8.0f, dip_w - 16.0f), dip_h, caption, kFontBody, kTextArgb,
+                                nara::dwrite_text::Align::Near, nara::dwrite_text::Align::Center, false, true, true);
+    nara::dwrite_text::Flush(item->hDC, pw, ph, g_dpi_scale, rc.left, rc.top);
 }
 
 void ResetMapView(HWND hwnd) {
     g_chart.view.scale = 1.0;
-    RECT rc{};
-    GetClientRect(hwnd, &rc);
-    SyncWorld(rc);
+    SyncWorld(hwnd);
     g_chart.view = ShowLatestView(g_chart.view);
     UpdateScroll(hwnd);
     InvalidateRect(hwnd, nullptr, FALSE);
@@ -1314,14 +1847,20 @@ LRESULT CALLBACK ChartProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     case WM_PAINT: {
         PAINTSTRUCT ps{};
         HDC hdc = BeginPaint(hwnd, &ps);
-        RECT rc{};
-        GetClientRect(hwnd, &rc);
-        PaintChart(hdc, rc);
+        PaintChart(hwnd, hdc);
         EndPaint(hwnd, &ps);
         return 0;
     }
     case WM_TIMER:
         if (wParam == kBounceTimer) {
+            InvalidateRect(hwnd, nullptr, FALSE);
+            return 0;
+        }
+        if (wParam == kZoomSettleTimer) {
+            KillTimer(hwnd, kZoomSettleTimer);
+            g_zooming = false;
+            g_hasStatic = false;
+            g_hasPlotCache = false;
             InvalidateRect(hwnd, nullptr, FALSE);
             return 0;
         }
@@ -1332,15 +1871,30 @@ LRESULT CALLBACK ChartProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         InvalidateRect(hwnd, nullptr, FALSE);
         return 0;
     case WM_GETMINMAXINFO: {
+        SyncDpi(hwnd);
         auto* info = reinterpret_cast<MINMAXINFO*>(lParam);
-        info->ptMinTrackSize.x = kWindowMinW;
-        info->ptMinTrackSize.y = kWindowMinH;
+        info->ptMinTrackSize.x = ToPx(kWindowMinW);
+        info->ptMinTrackSize.y = ToPx(kWindowMinH);
+        return 0;
+    }
+    case WM_DPICHANGED: {
+        g_hasStatic = false;
+        ReleaseLayer();
+        if (g_uiFont) {
+            DeleteObject(g_uiFont);
+            g_uiFont = nullptr;
+        }
+        const auto* rec = reinterpret_cast<const RECT*>(lParam);
+        SetWindowPos(hwnd, nullptr, rec->left, rec->top, rec->right - rec->left, rec->bottom - rec->top,
+                     SWP_NOZORDER | SWP_NOACTIVATE);
+        LayoutChartDock(hwnd);
+        InvalidateRect(hwnd, nullptr, FALSE);
         return 0;
     }
     case WM_MEASUREITEM: {
         auto* measure = reinterpret_cast<MEASUREITEMSTRUCT*>(lParam);
         if (measure->CtlType == ODT_COMBOBOX) {
-            measure->itemHeight = 28;
+            measure->itemHeight = static_cast<UINT>(ToPx(28));
             return TRUE;
         }
         return DefWindowProcW(hwnd, msg, wParam, lParam);
@@ -1367,8 +1921,11 @@ LRESULT CALLBACK ChartProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         POINT pt{};
         GetCursorPos(&pt);
         ScreenToClient(hwnd, &pt);
-        if (g_chrome.reset_btn.Contains(pt.x, pt.y) || g_chrome.reset_toolbar.Contains(pt.x, pt.y)
-            || g_chrome.company_all.Contains(pt.x, pt.y) || HitCompanyIndex(pt.x, pt.y) >= 0) {
+        const int hx = ToDip(pt.x);
+        const int hy = ToDip(pt.y);
+        if (g_chrome.reset_btn.Contains(hx, hy) || g_chrome.reset_toolbar.Contains(hx, hy)
+            || g_chrome.rank1_btn.Contains(hx, hy) || g_chrome.company_all.Contains(hx, hy)
+            || HitCompanyIndex(hx, hy) >= 0) {
             SetCursor(LoadCursor(nullptr, IDC_HAND));
             return TRUE;
         }
@@ -1385,17 +1942,21 @@ LRESULT CALLBACK ChartProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         InvalidateRect(hwnd, nullptr, FALSE);
         return 0;
     case WM_LBUTTONDOWN: {
-        const int mx = GET_X_LPARAM(lParam);
-        const int my = GET_Y_LPARAM(lParam);
-        RECT rc{};
-        GetClientRect(hwnd, &rc);
-        SyncWorld(rc);
+        const int mx = ToDip(GET_X_LPARAM(lParam));
+        const int my = ToDip(GET_Y_LPARAM(lParam));
+        SyncWorld(hwnd);
         const auto region_seg = SplitRegionSegment(g_chrome.combo_region);
         const int region_hit = HitRegionSegment(region_seg, mx, my);
         if (region_hit >= 0) {
             if (g_region_handler) {
                 g_region_handler(region_hit == 1 ? "경북" : "전국");
             }
+            return 0;
+        }
+        if (g_chrome.rank1_btn.Contains(mx, my)) {
+            g_rank1Only = !g_rank1Only;
+            g_hasStatic = false;
+            InvalidateRect(hwnd, nullptr, FALSE);
             return 0;
         }
         if (g_chrome.reset_btn.Contains(mx, my) || g_chrome.reset_toolbar.Contains(mx, my)) {
@@ -1427,14 +1988,15 @@ LRESULT CALLBACK ChartProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         return 0;
     }
     case WM_MOUSEMOVE: {
-        const int mx = GET_X_LPARAM(lParam);
-        const int my = GET_Y_LPARAM(lParam);
+        const int mx = ToDip(GET_X_LPARAM(lParam));
+        const int my = ToDip(GET_Y_LPARAM(lParam));
         if (g_chart.drag_armed || g_chart.panning) {
             const int dx = mx - g_chart.last_pt.x;
             const int dy = my - g_chart.last_pt.y;
             if (!g_chart.panning && (std::abs(dx) + std::abs(dy) >= 4)) {
                 g_chart.panning = true;
                 SetCursor(LoadCursor(nullptr, IDC_SIZEALL));
+                BuildPlotCache();
             }
             if (g_chart.panning) {
                 g_chart.view = PanBy(g_chart.view, dx, dy);
@@ -1445,10 +2007,9 @@ LRESULT CALLBACK ChartProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             }
             return 0;
         }
-        RECT rc{};
-        GetClientRect(hwnd, &rc);
-        SyncWorld(rc);
+        SyncWorld(hwnd);
         g_hotReset = g_chrome.reset_btn.Contains(mx, my) || g_chrome.reset_toolbar.Contains(mx, my);
+        g_hotRank1 = g_chrome.rank1_btn.Contains(mx, my);
         g_hotAll = g_chrome.company_all.Contains(mx, my);
         g_hotCompany = HitCompanyIndex(mx, my);
         if (g_chrome.plot.Contains(mx, my)) {
@@ -1480,13 +2041,23 @@ LRESULT CALLBACK ChartProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         POINT pt{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
         ScreenToClient(hwnd, &pt);
         const bool zoom_in = GET_WHEEL_DELTA_WPARAM(wParam) > 0;
-        g_chart.view = ZoomAt(g_chart.view, pt.x - g_chrome.plot.x, pt.y - g_chrome.plot.y, zoom_in);
+        const int zx = ToDip(pt.x) - g_chrome.plot.x;
+        const int zy = ToDip(pt.y) - g_chrome.plot.y;
+        if (!g_zooming) {
+            if (!g_hasPlotCache) {
+                BuildPlotCache();
+            }
+            g_zooming = true;
+        }
+        g_chart.view = ZoomAt(g_chart.view, zx, zy, zoom_in);
+        SetTimer(hwnd, kZoomSettleTimer, static_cast<UINT>(ZoomSettleMs()), nullptr);
         UpdateScroll(hwnd);
         InvalidateRect(hwnd, nullptr, FALSE);
         return 0;
     }
     case WM_DESTROY:
         KillTimer(hwnd, kBounceTimer);
+        KillTimer(hwnd, kZoomSettleTimer);
         g_chartHwnd = nullptr;
         ReleaseLayer();
         if (g_uiFont) {

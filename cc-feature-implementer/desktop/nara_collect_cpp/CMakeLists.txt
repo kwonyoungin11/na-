@@ -90,10 +90,16 @@ add_executable(nara_desktop WIN32
     src/scatter_chart.cpp
     src/company_name.cpp
     src/chart_popup.cpp
-    src/chart_view.cpp)
+    src/chart_view.cpp
+    src/dwrite_text.cpp)
 target_include_directories(nara_desktop PRIVATE include)
 target_compile_definitions(nara_desktop PRIVATE UNICODE _UNICODE)
-target_link_libraries(nara_desktop PRIVATE user32 comctl32 gdi32 gdiplus ole32 uxtheme winsqlite3)
+target_link_libraries(nara_desktop PRIVATE user32 comctl32 gdi32 gdiplus ole32 uxtheme d2d1 dwrite winsqlite3)
+
+add_executable(nara_dwrite_text_tests
+    tests/test_dwrite_text.cpp)
+target_include_directories(nara_dwrite_text_tests PRIVATE include)
+add_test(NAME nara_dwrite_text_tests COMMAND nara_dwrite_text_tests)
 
 target_include_directories(nara_igunsul_convert_tests PRIVATE include third_party/miniz)
 
@@ -120,6 +126,7 @@ if (MSVC)
     target_compile_options(nara_sqlite_store_tests PRIVATE /utf-8 /W3)
     target_compile_options(nara_chart_view_tests PRIVATE /utf-8 /W3)
     target_compile_options(nara_chart_theme_tests PRIVATE /utf-8 /W3)
+    target_compile_options(nara_dwrite_text_tests PRIVATE /utf-8 /W3)
     target_compile_options(nara_scatter_cache_tests PRIVATE /utf-8 /W3)
     target_compile_options(nara_desktop PRIVATE /utf-8 /W3)
     target_compile_options(nara_award_collect PRIVATE /utf-8 /W3)

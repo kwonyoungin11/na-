@@ -145,9 +145,7 @@ std::vector<AwardNoticeRow> BuildAwardNoticeRows(
                 notice_rows.push_back(row);
             }
         }
-        const bool fake_award =
-            LooksLikeOpenApiHundred(*awarded)
-            || (IsLowerLimitAwardRate(*awarded->adjust_rate) && NoticeHasLowerLimitAwardCluster(notice_rows));
+        const bool fake_award = NoticeHasLowerLimitAwardCluster(notice_rows);
         AwardNoticeRow out;
         out.open_date = dongguk->open_date;
         out.notice_number = notice;

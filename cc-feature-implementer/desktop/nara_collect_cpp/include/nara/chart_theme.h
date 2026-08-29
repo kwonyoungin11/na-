@@ -16,10 +16,10 @@ constexpr int kPlotLeft = 220;
 constexpr int kPlotTop = 16;
 constexpr int kPlotRight = 22;
 constexpr int kPlotBottom = 46;
-constexpr int kDockMinH = 168;
+constexpr int kDockMinH = 134;
 constexpr int kDockGap = 10;
 constexpr int kDockPadX = 14;
-constexpr int kDockPadY = 12;
+constexpr int kDockPadY = 10;
 constexpr int kContentML = 16;
 constexpr int kContentMT = 12;
 constexpr int kContentMR = 16;
@@ -28,6 +28,8 @@ constexpr int kCardPad = 10;
 constexpr int kCardInner = 2;
 constexpr int kResetH = 40;
 constexpr int kResetMinW = 124;
+constexpr int kRank1BtnW = 72;
+constexpr int kRank1BtnH = 40;
 constexpr int kResetMarginTop = 12;
 constexpr int kResetMarginRight = 14;
 constexpr int kToolbarPad = 8;
@@ -35,14 +37,14 @@ constexpr int kLeftPanelW = 320;
 constexpr int kColGap = 14;
 constexpr int kFieldGap = 8;
 constexpr int kCaptionGap = 4;
-constexpr int kCaptionH = 16;
-constexpr int kEyebrowGap = 8;
-constexpr int kComboH = 40;
+constexpr int kCaptionH = 12;
+constexpr int kEyebrowGap = 6;
+constexpr int kComboH = 32;
 constexpr int kCheckSize = 18;
 constexpr int kCheckGap = 10;
 constexpr int kCompanyAllW = 64;
-constexpr int kCompanyAllH = 32;
-constexpr int kCompanyHeaderH = 32;
+constexpr int kCompanyAllH = 26;
+constexpr int kCompanyHeaderH = 26;
 constexpr float kFontCompanyAll = 13.0f;
 
 // MainWindow.xaml table-card toolbar (PreviewCard Padding 16,14).
@@ -63,9 +65,9 @@ constexpr int kMainBtnRadius = 14;
 constexpr int kCompanyWrapRows = 5;
 constexpr int kCompanyPadX = 8;
 constexpr int kCompanyPadY = 6;
-constexpr int kCompanyWrapMinH = 128;
+constexpr int kCompanyWrapMinH = 102;
 constexpr int kCompanyMinCellW = 84;
-constexpr int kCompanyRowH = 24;
+constexpr int kCompanyRowH = 20;
 constexpr int kDividerW = 1;
 constexpr int kWindowMinW = 1320;
 constexpr int kWindowMinH = 820;
@@ -88,8 +90,11 @@ constexpr int kRegionSegmentRadius = kComboRadius;
 constexpr int kCompanyPanelRadius = 12;
 constexpr int kHoverRadius = 6;
 constexpr int kRankBadgeRadius = 2;
-constexpr int kChipRadius = 3;
+constexpr int kChipRadius = 0;
 constexpr int kCheckRadius = 6;
+// WPF TextFormattingMode.Ideal is DirectWrite NATURAL_SYMMETRIC + grayscale, not GDI+.
+constexpr int kTextRenderingHintIdeal = 4;
+constexpr bool kTextUsesDirectWrite = true;
 
 // Fonts (px) — Malgun Gothic, matching ScatterLabelTypeface / DesignTokens.
 constexpr float kFontAxis = 10.0f;
@@ -107,7 +112,7 @@ constexpr float kFontBody = 13.0f;
 constexpr float kGridWidth = 1.0f;
 constexpr float kAxisWidth = 1.2f;
 constexpr float kChipBorderWidth = 0.8f;
-constexpr float kChipOutlineDarken = 0.10f;
+constexpr float kChipLabelOutlineWidth = 0.4f;
 constexpr float kGoldWidth = 2.3f;
 constexpr float kGoldOuterWidth = 3.2f;
 constexpr float kHoverChipWidth = 1.8f;
@@ -134,6 +139,7 @@ constexpr uint32_t kRankGoldArgb = 0xFFFACC15;
 constexpr uint32_t kRankGoldOuterArgb = 0xFFCA8A04;
 constexpr uint32_t kRankBadgeArgb = 0xFFC62828;
 constexpr uint32_t kChipBorderArgb = 0xFF21252B;
+constexpr uint32_t kChipLabelOutlineArgb = 0x59000000;
 constexpr uint32_t kPointerArgb = 0xFF2563EB;
 constexpr uint32_t kPointerLabelBgArgb = 0xFFEFF6FF;
 constexpr uint32_t kPointerLabelTextArgb = 0xFF1D4ED8;
@@ -157,6 +163,7 @@ constexpr uint32_t kHoverFillArgb = 0xFFEEF3F8;
 
 constexpr wchar_t kFontFamily[] = L"Malgun Gothic";
 constexpr wchar_t kResetLabel[] = L"맵 초기화";
+constexpr wchar_t kRank1Label[] = L"1위";
 constexpr wchar_t kRangeLabel[] = L"분석 범위";
 constexpr wchar_t kPeriodLabel[] = L"기간";
 constexpr wchar_t kPrecisionLabel[] = L"정밀도";
@@ -180,6 +187,22 @@ constexpr std::array<uint32_t, 32> kCompanyPalette = {
     0xFF0D9488, 0xFF54750A, 0xFF2B6CB0, 0xFF4D7C0F, 0xFF0F76A8, 0xFF5B21B6, 0xFF15893F, 0xFF3B82F6,
 };
 
+// WPF layout is DIP (96dpi). C++ must ScaleTransform(dpi/96), not treat 20 as physical px.
+inline float DpiScaleFromDpi(unsigned dpi) {
+    const unsigned clamped = dpi < 96 ? 96 : (dpi > 384 ? 384 : dpi);
+    return static_cast<float>(clamped) / 96.0f;
+}
+
+inline int DipToPx(int dip, float scale) {
+    const float s = scale > 0.0f ? scale : 1.0f;
+    return static_cast<int>(std::lround(static_cast<double>(dip) * static_cast<double>(s)));
+}
+
+inline int PxToDip(int px, float scale) {
+    const float s = scale > 0.0f ? scale : 1.0f;
+    return static_cast<int>(std::lround(static_cast<double>(px) / static_cast<double>(s)));
+}
+
 inline int ScatterColumnCount(double min_rate, double max_rate, double step) {
     if (!(step > 0.0)) {
         return 1;
@@ -198,7 +221,32 @@ inline uint32_t DarkenArgb(uint32_t argb, float amount) {
            | channel(argb & 0xFFu);
 }
 
-inline uint32_t ChipOutlineArgb() { return DarkenArgb(kChipBorderArgb, kChipOutlineDarken); }
+inline uint32_t ChipOutlineArgb() { return kChipBorderArgb; }
+
+// GDI+ sub-1px pens rasterize fat. Stroke first, then fill, so Hangul stays C#-clean.
+inline bool ChipLabelStrokeBehindFill() { return true; }
+
+inline int BlurShadowLayerCount(int blur) {
+    if (blur <= 0) {
+        return 1;
+    }
+    return (std::min)(6, (std::max)(3, (blur + 3) / 4));
+}
+
+inline float BlurShadowInflate(int blur, int layer, int layers) {
+    const int safe_layers = (std::max)(1, layers);
+    const float t = static_cast<float>(layer + 1) / static_cast<float>(safe_layers);
+    return static_cast<float>((std::max)(0, blur)) * t * 0.32f;
+}
+
+inline uint32_t BlurShadowArgb(uint32_t argb, int layer, int layers) {
+    const int safe_layers = (std::max)(1, layers);
+    const uint32_t a = (argb >> 24) & 0xFFu;
+    const double falloff = 1.0 - (static_cast<double>(layer) / static_cast<double>(safe_layers));
+    const uint32_t na = static_cast<uint32_t>(
+        std::lround(static_cast<double>(a) * falloff / (static_cast<double>(safe_layers) * 0.62)));
+    return ((std::min)(255u, na) << 24) | (argb & 0x00FFFFFFu);
+}
 
 inline float ChipRadiusPx(int cell) {
     return static_cast<float>(kChipRadius) * (static_cast<float>((std::max)(1, cell)) / static_cast<float>(kCellPx));
@@ -228,6 +276,10 @@ inline float ChipLabelScreenPx(int cell, int char_count) {
         return kFontChipMin;
     }
     return scaled;
+}
+
+inline float ChipLabelOutlineWidthPx(int cell) {
+    return kChipLabelOutlineWidth * (static_cast<float>((std::max)(1, cell)) / static_cast<float>(kCellPx));
 }
 
 inline std::string FormatNoticeYLabel(const std::string& notice, const std::string& open_date) {
@@ -396,6 +448,7 @@ struct ChartChrome {
     RectI plot;
     RectI reset_toolbar;
     RectI reset_btn;
+    RectI rank1_btn;
     RectI dock;
     RectI dock_inner;
     RectI range_pane;
@@ -450,11 +503,15 @@ inline ChartChrome LayoutChartChrome(int client_w, int client_h, int company_cou
     c.plot.w = (std::max)(120, c.map_inner.w - kPlotLeft - kPlotRight);
     c.plot.h = (std::max)(120, c.map_inner.h - kPlotTop - kPlotBottom);
 
-    c.reset_toolbar.w = kToolbarPad * 2 + kResetMinW;
+    c.reset_toolbar.w = kToolbarPad * 2 + kRank1BtnW + kFieldGap + kResetMinW;
     c.reset_toolbar.h = kToolbarPad * 2 + kResetH;
     c.reset_toolbar.x = c.map_inner.x + c.map_inner.w - kResetMarginRight - c.reset_toolbar.w;
     c.reset_toolbar.y = c.map_inner.y + kResetMarginTop;
-    c.reset_btn.x = c.reset_toolbar.x + kToolbarPad;
+    c.rank1_btn.x = c.reset_toolbar.x + kToolbarPad;
+    c.rank1_btn.y = c.reset_toolbar.y + kToolbarPad;
+    c.rank1_btn.w = kRank1BtnW;
+    c.rank1_btn.h = kRank1BtnH;
+    c.reset_btn.x = c.rank1_btn.Right() + kFieldGap;
     c.reset_btn.y = c.reset_toolbar.y + kToolbarPad;
     c.reset_btn.w = kResetMinW;
     c.reset_btn.h = kResetH;
@@ -509,6 +566,13 @@ inline bool CompanyChipVisible(bool any_checked, bool this_checked) {
         return true;
     }
     return this_checked;
+}
+
+inline bool ChipPassesRank1Filter(bool rank1_only, bool is_rank1) {
+    if (!rank1_only) {
+        return true;
+    }
+    return is_rank1;
 }
 
 inline void ApplyCompanyClick(std::vector<char>& checked, int index, bool click_all) {

@@ -21,6 +21,7 @@
 #include "nara/chart_theme.h"
 #include "nara/notice_rules.h"
 #include "nara/scatter_chart.h"
+#include "nara/dwrite_text.h"
 #include "nara/sqlite_store.h"
 
 #pragma comment(lib, "comctl32.lib")
@@ -53,6 +54,33 @@ int g_notice_count = 0;
 int g_lookback_months = nara::kCollectLookbackMonths;
 std::string g_status;
 RECT g_tableRect{};
+float g_dpi_scale = 1.0f;
+
+unsigned WindowDpi(HWND hwnd) {
+    using Fn = UINT(WINAPI*)(HWND);
+    static Fn fn =
+        reinterpret_cast<Fn>(GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForWindow"));
+    UINT dpi = 96;
+    if (fn != nullptr && hwnd != nullptr) {
+        dpi = fn(hwnd);
+    }
+    if (dpi < 96) {
+        dpi = 96;
+    }
+    if (dpi > 384) {
+        dpi = 384;
+    }
+    return dpi;
+}
+
+void SyncDpi(HWND hwnd) {
+    g_dpi_scale = nara::chart_theme::DpiScaleFromDpi(WindowDpi(hwnd));
+}
+
+int ToPx(int dip) { return nara::chart_theme::DipToPx(dip, g_dpi_scale); }
+int ToDip(int px) { return nara::chart_theme::PxToDip(px, g_dpi_scale); }
+
+void ApplyDpiTransform(Gdiplus::Graphics& g) { g.ScaleTransform(g_dpi_scale, g_dpi_scale); }
 
 std::wstring Utf8ToWide(const std::string& text) {
     if (text.empty()) {
@@ -79,12 +107,65 @@ std::string Today() {
 }
 
 void RoundRectPath(Gdiplus::GraphicsPath& path, Gdiplus::RectF r, float radius) {
-    const float d = radius * 2.0f;
+    const float rad = (std::min)(radius, (std::min)(r.Width, r.Height) / 2.0f);
+    if (rad < 0.5f) {
+        path.AddRectangle(r);
+        return;
+    }
+    const float d = rad * 2.0f;
     path.AddArc(r.X, r.Y, d, d, 180, 90);
     path.AddArc(r.X + r.Width - d, r.Y, d, d, 270, 90);
     path.AddArc(r.X + r.Width - d, r.Y + r.Height - d, d, d, 0, 90);
     path.AddArc(r.X, r.Y + r.Height - d, d, d, 90, 90);
     path.CloseFigure();
+}
+
+void FillRoundRect(Gdiplus::Graphics& g, const Gdiplus::RectF& r, float radius, uint32_t fill) {
+    Gdiplus::GraphicsPath path;
+    RoundRectPath(path, r, radius);
+    Gdiplus::SolidBrush fill_brush(static_cast<Gdiplus::ARGB>(fill));
+    g.FillPath(&fill_brush, &path);
+}
+
+void DrawBlurShadow(Gdiplus::Graphics& g, const Gdiplus::RectF& r, float radius, int depth, int blur, uint32_t argb) {
+    const int layers = nara::chart_theme::BlurShadowLayerCount(blur);
+    for (int i = layers - 1; i >= 0; --i) {
+        const float inf = nara::chart_theme::BlurShadowInflate(blur, i, layers);
+        FillRoundRect(g,
+                      Gdiplus::RectF(r.X - inf + 1.0f, r.Y - inf + static_cast<Gdiplus::REAL>(depth),
+                                     r.Width + inf * 2.0f, r.Height + inf * 2.0f),
+                      radius + inf, nara::chart_theme::BlurShadowArgb(argb, i, layers));
+    }
+}
+
+nara::dwrite_text::Align DwAlign(Gdiplus::StringAlignment a) {
+    if (a == Gdiplus::StringAlignmentCenter) {
+        return nara::dwrite_text::Align::Center;
+    }
+    if (a == Gdiplus::StringAlignmentFar) {
+        return nara::dwrite_text::Align::Far;
+    }
+    return nara::dwrite_text::Align::Near;
+}
+
+void FillGlyphs(Gdiplus::Graphics&, const wchar_t* text, const Gdiplus::FontFamily&, int style, float size,
+                const Gdiplus::RectF& box, Gdiplus::StringAlignment h, Gdiplus::StringAlignment v, uint32_t argb) {
+    nara::dwrite_text::QueueBox(box.X, box.Y, box.Width, box.Height, text, size, argb, DwAlign(h), DwAlign(v),
+                                style == Gdiplus::FontStyleBold);
+}
+
+void QueuePoint(const wchar_t* text, float x, float y, float w, float h, float size, uint32_t argb, bool bold) {
+    nara::dwrite_text::QueueBox(x, y, w, h, text, size, argb, nara::dwrite_text::Align::Near,
+                                nara::dwrite_text::Align::Near, bold);
+}
+
+void ApplyCrispGraphics(Gdiplus::Graphics& g) {
+    g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    g.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
+    g.SetCompositingQuality(Gdiplus::CompositingQualityHighQuality);
+    g.SetInterpolationMode(Gdiplus::InterpolationModeNearestNeighbor);
+    g.SetTextRenderingHint(
+        static_cast<Gdiplus::TextRenderingHint>(nara::chart_theme::kTextRenderingHintIdeal));
 }
 
 void ReloadTable(HWND hwnd) {
@@ -238,29 +319,52 @@ void PaintRegionSegment(Gdiplus::Graphics& g, const nara::chart_theme::RectI& sl
                          static_cast<Gdiplus::REAL>(box.w), static_cast<Gdiplus::REAL>(box.h));
         Gdiplus::SolidBrush text(Gdiplus::Color(index == on ? nara::chart_theme::kAccentStrongArgb
                                                            : nara::chart_theme::kSubtleTextArgb));
-        g.DrawString(nara::chart_theme::RegionLabelAt(index), -1, &font, r, &center, &text);
+        nara::dwrite_text::QueueBox(r.X, r.Y, r.Width, r.Height, nara::chart_theme::RegionLabelAt(index),
+                                    nara::chart_theme::kFontCaption,
+                                    index == on ? nara::chart_theme::kAccentStrongArgb
+                                                : nara::chart_theme::kSubtleTextArgb,
+                                    nara::dwrite_text::Align::Center, nara::dwrite_text::Align::Center, true);
     };
     label(seg.nationwide, 0);
     label(seg.gyeongbuk, 1);
 }
 
 void LayoutMain(HWND hwnd) {
+    SyncDpi(hwnd);
     RECT rc{};
     GetClientRect(hwnd, &rc);
-    const auto tb = nara::chart_theme::LayoutMainToolbar(rc.right, kTableCardY);
-    MoveWindow(g_btnChart, tb.chart.x, tb.chart.y, tb.chart.w, tb.chart.h, TRUE);
-    MoveWindow(g_btnStop, tb.stop.x, tb.stop.y, tb.stop.w, tb.stop.h, TRUE);
-    MoveWindow(g_btnUpdate, tb.update.x, tb.update.y, tb.update.w, tb.update.h, TRUE);
+    const auto tb = nara::chart_theme::LayoutMainToolbar(ToDip(rc.right), kTableCardY);
+    MoveWindow(g_btnChart, ToPx(tb.chart.x), ToPx(tb.chart.y), ToPx(tb.chart.w), ToPx(tb.chart.h), TRUE);
+    MoveWindow(g_btnStop, ToPx(tb.stop.x), ToPx(tb.stop.y), ToPx(tb.stop.w), ToPx(tb.stop.h), TRUE);
+    MoveWindow(g_btnUpdate, ToPx(tb.update.x), ToPx(tb.update.y), ToPx(tb.update.w), ToPx(tb.update.h), TRUE);
 }
 
-void PaintMain(HDC hdc, RECT rc) {
-    const int w = rc.right;
-    const int h = rc.bottom;
+void PaintMain(HWND hwnd, HDC hdc) {
+    SyncDpi(hwnd);
+    RECT rc{};
+    GetClientRect(hwnd, &rc);
+    const int pixel_w = (std::max)(1, static_cast<int>(rc.right));
+    const int pixel_h = (std::max)(1, static_cast<int>(rc.bottom));
+    const int w = ToDip(pixel_w);
+    const int h = ToDip(pixel_h);
     HDC mem = CreateCompatibleDC(hdc);
-    HBITMAP bmp = CreateCompatibleBitmap(hdc, w, h);
+    BITMAPINFO bmi{};
+    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth = pixel_w;
+    bmi.bmiHeader.biHeight = -pixel_h;
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
+    void* bits = nullptr;
+    HBITMAP bmp = CreateDIBSection(hdc, &bmi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    if (!bmp) {
+        bmp = CreateCompatibleBitmap(hdc, pixel_w, pixel_h);
+    }
     HGDIOBJ old = SelectObject(mem, bmp);
+    nara::dwrite_text::ResetQueue();
     Gdiplus::Graphics g(mem);
-    g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    ApplyCrispGraphics(g);
+    ApplyDpiTransform(g);
     Gdiplus::LinearGradientBrush page(
         Gdiplus::Point(0, 0), Gdiplus::Point(w, h),
         Gdiplus::Color(255, 234, 242, 247), Gdiplus::Color(255, 238, 243, 248));
@@ -269,7 +373,6 @@ void PaintMain(HDC hdc, RECT rc) {
     g.FillRectangle(&accent, 0, 0, w, 3);
 
     Gdiplus::FontFamily family(L"Malgun Gothic");
-    Gdiplus::Font title(&family, 22.0f, Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
     Gdiplus::Font eyebrow(&family, 12.0f, Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
     Gdiplus::Font body(&family, 13.0f, Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
     Gdiplus::Font bodyBold(&family, 13.0f, Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
@@ -285,14 +388,20 @@ void PaintMain(HDC hdc, RECT rc) {
     Gdiplus::Pen copperPen(Gdiplus::Color(255, 231, 196, 140), 1.5f);
 
     Gdiplus::RectF hero(20, 16, static_cast<Gdiplus::REAL>(w - 40), 318);
+    DrawBlurShadow(g, hero, 18.0f, nara::chart_theme::kCardShadowDepth, nara::chart_theme::kCardShadowBlur,
+                   nara::chart_theme::kCardShadowArgb);
     Gdiplus::GraphicsPath heroPath;
     RoundRectPath(heroPath, hero, 18);
     g.FillPath(&white, &heroPath);
     g.DrawPath(&copperPen, &heroPath);
     Gdiplus::SolidBrush accentBar(Gdiplus::Color(255, 217, 119, 6));
     g.FillRectangle(&accentBar, 28, 28, 3, 44);
-    g.DrawString(L"낙찰분석프로그램", -1, &eyebrow, Gdiplus::PointF(44, 28), &copper);
-    g.DrawString(L"동국문화유산연구원", -1, &title, Gdiplus::PointF(44, 46), &ink);
+    FillGlyphs(g, L"낙찰분석프로그램", family, Gdiplus::FontStyleBold, 12.0f,
+               Gdiplus::RectF(44, 28, 280, 18), Gdiplus::StringAlignmentNear, Gdiplus::StringAlignmentNear,
+               0xFFB45309u);
+    FillGlyphs(g, L"동국문화유산연구원", family, Gdiplus::FontStyleBold, 22.0f,
+               Gdiplus::RectF(44, 46, 420, 32), Gdiplus::StringAlignmentNear, Gdiplus::StringAlignmentNear,
+               0xFF111111u);
     wchar_t status_chip[80];
     swprintf_s(status_chip, L"%s · 공고 %d건", nara::chart_theme::RegionLabelAt(nara::chart_theme::RegionIndexFromToken(g_region_token)),
                g_notice_count > 0 ? g_notice_count : static_cast<int>(g_table.size()));
@@ -306,7 +415,9 @@ void PaintMain(HDC hdc, RECT rc) {
     Gdiplus::StringFormat chipFmt;
     chipFmt.SetAlignment(Gdiplus::StringAlignmentCenter);
     chipFmt.SetLineAlignment(Gdiplus::StringAlignmentCenter);
-    g.DrawString(status_chip, -1, &eyebrow, chip_rect, &chipFmt, &muted);
+    nara::dwrite_text::QueueBox(chip_rect.X, chip_rect.Y, chip_rect.Width, chip_rect.Height, status_chip, 12.0f,
+                                0xFF6B7280u, nara::dwrite_text::Align::Center, nara::dwrite_text::Align::Center,
+                                false);
 
     if (g_table.size() >= 2) {
         const float plot_x = 56;
@@ -329,7 +440,8 @@ void PaintMain(HDC hdc, RECT rc) {
             g.DrawLine(&axis, plot_x, y, plot_x + plot_w, y);
             wchar_t lab[16];
             swprintf_s(lab, L"%.1f", t);
-            g.DrawString(lab, -1, &eyebrow, Gdiplus::PointF(plot_x - 36, y - 8), &muted);
+            nara::dwrite_text::QueueBox(plot_x - 36, y - 8, 36, 16, lab, 12.0f, 0xFF6B7280u,
+                                        nara::dwrite_text::Align::Far, nara::dwrite_text::Align::Near, false);
         }
         const int n = static_cast<int>(g_table.size());
         std::vector<Gdiplus::PointF> dongguk;
@@ -363,9 +475,11 @@ void PaintMain(HDC hdc, RECT rc) {
         g.FillPath(&white, &legendPath);
         g.DrawPath(&chipPen, &legendPath);
         g.FillEllipse(&blueFill, legend.X + 12, legend.Y + 10, 8.0f, 8.0f);
-        g.DrawString(L"동국문화재연구원 기초대비사정율", -1, &eyebrow, Gdiplus::PointF(legend.X + 26, legend.Y + 6), &ink);
+        nara::dwrite_text::QueueBox(legend.X + 26, legend.Y + 6, 280, 16, L"동국문화재연구원 기초대비사정율", 12.0f,
+                                    0xFF111111u, nara::dwrite_text::Align::Near, nara::dwrite_text::Align::Near, false);
         g.FillEllipse(&pinkFill, legend.X + 12, legend.Y + 26, 8.0f, 8.0f);
-        g.DrawString(L"같은 공고 실제 낙찰 사정율", -1, &eyebrow, Gdiplus::PointF(legend.X + 26, legend.Y + 22), &copper);
+        nara::dwrite_text::QueueBox(legend.X + 26, legend.Y + 22, 280, 16, L"같은 공고 실제 낙찰 사정율", 12.0f,
+                                    0xFFB45309u, nara::dwrite_text::Align::Near, nara::dwrite_text::Align::Near, false);
         const int ticks = 6;
         for (int i = 0; i <= ticks; ++i) {
             const int idx = (n - 1) * i / ticks;
@@ -373,7 +487,8 @@ void PaintMain(HDC hdc, RECT rc) {
             auto d = g_table[n - 1 - idx].open_date;
             if (d.size() >= 10) {
                 const auto label = Utf8ToWide(d.substr(5, 5));
-                g.DrawString(label.c_str(), -1, &eyebrow, Gdiplus::PointF(x - 14, plot_y + plot_h + 4), &muted);
+                nara::dwrite_text::QueueBox(x - 14, plot_y + plot_h + 4, 40, 16, label.c_str(), 12.0f, 0xFF6B7280u,
+                                            nara::dwrite_text::Align::Near, nara::dwrite_text::Align::Near, false);
             }
         }
     }
@@ -386,20 +501,16 @@ void PaintMain(HDC hdc, RECT rc) {
     Gdiplus::Font section(&family, 18.0f, Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
     const auto tb = nara::chart_theme::LayoutMainToolbar(w, kTableCardY);
     const float title_y = static_cast<float>(tb.update.y + (tb.update.h - 18) / 2);
-    g.DrawString(L"동국 참여 낙찰공고", -1, &section,
-                 Gdiplus::PointF(static_cast<Gdiplus::REAL>(nara::chart_theme::kMainCardInset
-                                                            + nara::chart_theme::kMainTablePadX),
-                                 title_y),
-                 &ink);
+    nara::dwrite_text::QueueBox(static_cast<float>(nara::chart_theme::kMainCardInset + nara::chart_theme::kMainTablePadX),
+                                title_y, 280, 24, L"동국 참여 낙찰공고", 18.0f, 0xFF111111u,
+                                nara::dwrite_text::Align::Near, nara::dwrite_text::Align::Near, true);
     Gdiplus::StringFormat label_fmt;
     label_fmt.SetAlignment(Gdiplus::StringAlignmentFar);
     label_fmt.SetLineAlignment(Gdiplus::StringAlignmentCenter);
-    g.DrawString(L"지역", -1, &eyebrow,
-                 Gdiplus::RectF(static_cast<Gdiplus::REAL>(tb.region_label.x),
-                                static_cast<Gdiplus::REAL>(tb.region_label.y),
-                                static_cast<Gdiplus::REAL>(tb.region_label.w),
-                                static_cast<Gdiplus::REAL>(tb.region_label.h)),
-                 &label_fmt, &muted);
+    nara::dwrite_text::QueueBox(static_cast<float>(tb.region_label.x), static_cast<float>(tb.region_label.y),
+                                static_cast<float>(tb.region_label.w), static_cast<float>(tb.region_label.h), L"지역",
+                                12.0f, 0xFF6B7280u, nara::dwrite_text::Align::Far, nara::dwrite_text::Align::Center,
+                                false);
     PaintRegionSegment(g, tb.region_combo, eyebrow);
     std::string latest = g_table.empty() ? "" : g_table.front().open_date;
     if (latest.size() >= 16) {
@@ -412,7 +523,8 @@ void PaintMain(HDC hdc, RECT rc) {
     Gdiplus::SolidBrush tagFill(Gdiplus::Color(255, 255, 244, 229));
     g.FillPath(&tagFill, &tagPath);
     g.DrawPath(&copperPen, &tagPath);
-    g.DrawString(summary.c_str(), -1, &eyebrow, Gdiplus::PointF(258, tag.Y + 4), &copper);
+    nara::dwrite_text::QueueBox(258, tag.Y + 4, 260, 18, summary.c_str(), 12.0f, 0xFFB45309u,
+                                nara::dwrite_text::Align::Near, nara::dwrite_text::Align::Near, false);
 
     const int table_top = nara::chart_theme::MainTableGridY(kTableCardY);
     const int table_bottom = h - 52;
@@ -421,7 +533,9 @@ void PaintMain(HDC hdc, RECT rc) {
     const wchar_t* headers[] = {L"개찰일", L"공고번호", L"공고명", L"발주처", L"지역", L"동국순위/낙찰"};
     g.FillRectangle(&headerBg, 28, table_top, w - 64, kHeaderH);
     for (int c = 0; c < 6; ++c) {
-        g.DrawString(headers[c], -1, &headerFont, Gdiplus::PointF(static_cast<Gdiplus::REAL>(cols[c] + 8), static_cast<Gdiplus::REAL>(table_top + 8)), &muted);
+        nara::dwrite_text::QueueBox(static_cast<float>(cols[c] + 8), static_cast<float>(table_top + 8),
+                                    static_cast<float>(cols[c + 1] - cols[c] - 12), 20, headers[c], 12.0f, 0xFF6B7280u,
+                                    nara::dwrite_text::Align::Near, nara::dwrite_text::Align::Near, true);
     }
     g.SetClip(Gdiplus::Rect(28, table_top + kHeaderH, w - 64, table_bottom - table_top - kHeaderH));
     const int visible = (std::max)(1, (table_bottom - table_top - kHeaderH) / kRowH);
@@ -451,7 +565,9 @@ void PaintMain(HDC hdc, RECT rc) {
             Gdiplus::RectF clip(static_cast<Gdiplus::REAL>(cols[c] + 6), static_cast<Gdiplus::REAL>(y + 8),
                                 static_cast<Gdiplus::REAL>(cols[c + 1] - cols[c] - 12), 20);
             g.SetClip(clip);
-            g.DrawString(cells[c].c_str(), -1, &body, Gdiplus::PointF(clip.X, clip.Y), &ink);
+            nara::dwrite_text::QueueBox(clip.X, clip.Y, clip.Width, clip.Height, cells[c].c_str(), 13.0f, 0xFF111111u,
+                                        nara::dwrite_text::Align::Near, nara::dwrite_text::Align::Near, false, true,
+                                        true);
             g.SetClip(Gdiplus::Rect(28, table_top + kHeaderH, w - 64, table_bottom - table_top - kHeaderH));
         }
     }
@@ -460,9 +576,13 @@ void PaintMain(HDC hdc, RECT rc) {
     const auto footer = Utf8ToWide(period_label + " · " + g_start + "~" + g_end + " · " + g_region_token
                                    + " · 사정률 99.00000~101.00000"
                                    + (g_status.empty() ? "" : " · " + g_status));
-    g.DrawString(footer.c_str(), -1, &eyebrow, Gdiplus::PointF(28, static_cast<Gdiplus::REAL>(h - 36)), &muted);
+    nara::dwrite_text::QueueBox(28, static_cast<float>(h - 36), static_cast<float>(w - 56), 18, footer.c_str(), 12.0f,
+                                0xFF6B7280u, nara::dwrite_text::Align::Near, nara::dwrite_text::Align::Near, false,
+                                true, true);
+    g.Flush();
+    nara::dwrite_text::Flush(mem, pixel_w, pixel_h, g_dpi_scale);
 
-    BitBlt(hdc, 0, 0, w, h, mem, 0, 0, SRCCOPY);
+    BitBlt(hdc, 0, 0, pixel_w, pixel_h, mem, 0, 0, SRCCOPY);
     SelectObject(mem, old);
     DeleteObject(bmp);
     DeleteDC(mem);
@@ -491,6 +611,21 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         LayoutMain(hwnd);
         InvalidateRect(hwnd, nullptr, FALSE);
         return 0;
+    case WM_DPICHANGED: {
+        const auto* rec = reinterpret_cast<const RECT*>(lParam);
+        SetWindowPos(hwnd, nullptr, rec->left, rec->top, rec->right - rec->left, rec->bottom - rec->top,
+                     SWP_NOZORDER | SWP_NOACTIVATE);
+        LayoutMain(hwnd);
+        InvalidateRect(hwnd, nullptr, FALSE);
+        return 0;
+    }
+    case WM_GETMINMAXINFO: {
+        SyncDpi(hwnd);
+        auto* info = reinterpret_cast<MINMAXINFO*>(lParam);
+        info->ptMinTrackSize.x = ToPx(nara::chart_theme::kWindowMinW);
+        info->ptMinTrackSize.y = ToPx(nara::chart_theme::kWindowMinH);
+        return 0;
+    }
     case WM_ERASEBKGND:
         return 1;
     case WM_PAINT: {
@@ -498,7 +633,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         HDC hdc = BeginPaint(hwnd, &ps);
         RECT rc{};
         GetClientRect(hwnd, &rc);
-        PaintMain(hdc, rc);
+        PaintMain(hwnd, hdc);
         EndPaint(hwnd, &ps);
         return 0;
     }
@@ -511,11 +646,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         InvalidateRect(hwnd, nullptr, FALSE);
         return 0;
     case WM_LBUTTONDOWN: {
-        const int mx = GET_X_LPARAM(lParam);
-        const int y = GET_Y_LPARAM(lParam);
+        const int mx = ToDip(GET_X_LPARAM(lParam));
+        const int y = ToDip(GET_Y_LPARAM(lParam));
         RECT client{};
         GetClientRect(hwnd, &client);
-        const auto tb = nara::chart_theme::LayoutMainToolbar(client.right, kTableCardY);
+        const auto tb = nara::chart_theme::LayoutMainToolbar(ToDip(client.right), kTableCardY);
         const auto seg = nara::chart_theme::SplitRegionSegment(tb.region_combo);
         const int region_hit = nara::chart_theme::HitRegionSegment(seg, mx, y);
         if (region_hit == 0) {
@@ -544,41 +679,41 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             kind = nara::chart_theme::MainStopKind(false);
         }
         const auto look = nara::chart_theme::MainButtonLook(kind);
-        Gdiplus::Graphics g(item->hDC);
-        g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-        g.SetTextRenderingHint(Gdiplus::TextRenderingHintAntiAliasGridFit);
-        Gdiplus::RectF r(0, 0, static_cast<Gdiplus::REAL>(item->rcItem.right - item->rcItem.left),
-                         static_cast<Gdiplus::REAL>(item->rcItem.bottom - item->rcItem.top));
-        Gdiplus::SolidBrush card(Gdiplus::Color(255, 255, 255, 255));
-        g.FillRectangle(&card, r);
-        Gdiplus::RectF inner(r.X + 0.5f, r.Y + 0.5f, r.Width - 1.0f, r.Height - 1.0f);
-        Gdiplus::GraphicsPath path;
-        RoundRectPath(path, inner, static_cast<float>(nara::chart_theme::kMainBtnRadius));
-        if (!look.transparent) {
-            if (look.gradient) {
-                Gdiplus::LinearGradientBrush fill(
-                    Gdiplus::PointF(inner.X, inner.Y),
-                    Gdiplus::PointF(inner.X + inner.Width, inner.Y + inner.Height),
-                    Gdiplus::Color(look.fill0), Gdiplus::Color(look.fill2));
-                g.FillPath(&fill, &path);
-            } else {
-                Gdiplus::SolidBrush fill(Gdiplus::Color(look.fill0));
-                g.FillPath(&fill, &path);
-            }
-            if ((look.border & 0xFF000000u) != 0) {
-                Gdiplus::Pen border(Gdiplus::Color(look.border), 1.0f);
-                g.DrawPath(&border, &path);
+        const int pw = item->rcItem.right - item->rcItem.left;
+        const int ph = item->rcItem.bottom - item->rcItem.top;
+        Gdiplus::RectF r(0, 0, static_cast<Gdiplus::REAL>(ToDip(pw)), static_cast<Gdiplus::REAL>(ToDip(ph)));
+        {
+            Gdiplus::Graphics g(item->hDC);
+            ApplyCrispGraphics(g);
+            ApplyDpiTransform(g);
+            Gdiplus::SolidBrush card(Gdiplus::Color(255, 255, 255, 255));
+            g.FillRectangle(&card, r);
+            Gdiplus::RectF inner(r.X + 0.5f, r.Y + 0.5f, r.Width - 1.0f, r.Height - 1.0f);
+            Gdiplus::GraphicsPath path;
+            RoundRectPath(path, inner, static_cast<float>(nara::chart_theme::kMainBtnRadius));
+            if (!look.transparent) {
+                if (look.gradient) {
+                    Gdiplus::LinearGradientBrush fill(
+                        Gdiplus::PointF(inner.X, inner.Y),
+                        Gdiplus::PointF(inner.X + inner.Width, inner.Y + inner.Height),
+                        Gdiplus::Color(look.fill0), Gdiplus::Color(look.fill2));
+                    g.FillPath(&fill, &path);
+                } else {
+                    Gdiplus::SolidBrush fill(Gdiplus::Color(look.fill0));
+                    g.FillPath(&fill, &path);
+                }
+                if ((look.border & 0xFF000000u) != 0) {
+                    Gdiplus::Pen border(Gdiplus::Color(look.border), 1.0f);
+                    g.DrawPath(&border, &path);
+                }
             }
         }
-        Gdiplus::FontFamily family(nara::chart_theme::kFontFamily);
-        Gdiplus::Font font(&family, nara::chart_theme::kFontBody, Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
-        Gdiplus::SolidBrush text(Gdiplus::Color(look.text));
         wchar_t caption[32] = {};
         GetWindowTextW(item->hwndItem, caption, 32);
-        Gdiplus::StringFormat fmt;
-        fmt.SetAlignment(Gdiplus::StringAlignmentCenter);
-        fmt.SetLineAlignment(Gdiplus::StringAlignmentCenter);
-        g.DrawString(caption, -1, &font, r, &fmt, &text);
+        nara::dwrite_text::ResetQueue();
+        nara::dwrite_text::QueueBox(r.X, r.Y, r.Width, r.Height, caption, nara::chart_theme::kFontBody, look.text,
+                                    nara::dwrite_text::Align::Center, nara::dwrite_text::Align::Center, true);
+        nara::dwrite_text::Flush(item->hDC, pw, ph, g_dpi_scale);
         return TRUE;
     }
     case WM_COMMAND:
@@ -599,6 +734,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 }  // namespace
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
+    using SetDpiCtxFn = BOOL(WINAPI*)(DPI_AWARENESS_CONTEXT);
+    if (const auto set_dpi = reinterpret_cast<SetDpiCtxFn>(
+            GetProcAddress(GetModuleHandleW(L"user32.dll"), "SetProcessDpiAwarenessContext"))) {
+        set_dpi(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    }
     Gdiplus::GdiplusStartupInput gdiplus_input;
     ULONG_PTR gdiplus_token = 0;
     Gdiplus::GdiplusStartup(&gdiplus_token, &gdiplus_input, nullptr);

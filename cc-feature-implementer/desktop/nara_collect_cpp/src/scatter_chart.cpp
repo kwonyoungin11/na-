@@ -142,6 +142,10 @@ bool NoticeHasLowerLimitAwardCluster(const std::vector<ParticipantRow>& rows) {
     return usable >= 2 && near100 == usable && (hi - lo) <= 0.25;
 }
 
+bool IsMappedRank1(const ParticipantRow& chip, const std::vector<ParticipantRow>& notice_chips) {
+    return chip.rank == 1 && !NoticeHasLowerLimitAwardCluster(notice_chips);
+}
+
 void PreferChartAdjustRates(
     std::vector<ParticipantRow>& live,
     const std::vector<ParticipantRow>& reference) {

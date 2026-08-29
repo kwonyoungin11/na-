@@ -164,8 +164,11 @@ int main() {
     if (shot_table.size() != 1) {
         return Fail("screenshot notice must remain on the 동국 table");
     }
-    if (shot_table[0].has_award_rate || shot_table[0].rank_label.find("100.051") != std::string::npos) {
-        return Fail("예가대비÷하한 100.051 is not 기초대비사정률");
+    if (!shot_table[0].has_award_rate || std::fabs(shot_table[0].award_rate - 100.051) > 0.0001) {
+        return Fail("spread chips keep 100.051 1위 as 기초대비 낙찰");
+    }
+    if (shot_table[0].rank_label.find("100.051") == std::string::npos) {
+        return Fail("표 낙찰 문구에 퍼진 창의 1위 100.051을 넣는다");
     }
     return 0;
 }
