@@ -8,6 +8,7 @@
 #include <iomanip>
 #include <iostream>
 #include <map>
+#include <set>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -156,6 +157,7 @@ int main(int argc, char** argv) {
 
     int kept = 0;
     int notices = 0;
+    std::set<std::string> written_notices;
     struct BidNoticeMeta {
         std::optional<double> lower_rate;
         std::optional<double> base_amount;
@@ -197,6 +199,9 @@ int main(int argc, char** argv) {
                 const auto ord = nara::JsonString(item, "bidNtceOrd");
                 if (!ord.empty() && notice.notice_number.find('-') == std::string::npos) {
                     notice.notice_number += "-" + ord;
+                }
+                if (written_notices.count(notice.notice_number) != 0) {
+                    continue;
                 }
                 notice.notice_name = nara::JsonString(item, "bidNtceNm");
                 notice.agency = nara::JsonString(item, "dminsttNm");
@@ -303,6 +308,7 @@ int main(int argc, char** argv) {
                 if (!nara::PassesCollectRules(notice)) {
                     continue;
                 }
+                written_notices.insert(notice.notice_number);
                 for (const auto& company : notice.companies) {
                     out << "{\"notice_number\":\"" << JsonEscape(notice.notice_number)
                         << "\",\"notice_name\":\"" << JsonEscape(notice.notice_name)

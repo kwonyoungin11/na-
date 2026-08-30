@@ -86,6 +86,58 @@ int main() {
         return 1;
     }
 
+    std::vector<nara::ParticipantRow> twice = {
+        Row("DUP", 1, "춘추문화재연구원", 99.72),
+        Row("DUP", 1, "춘추문화재연구원", 99.72),
+        Row("DUP", 7, "경상문화유산연구원", 99.83248),
+        Row("DUP", 7, "경상문화유산연구원", 99.83248),
+        Row("DUP", 8, "새론문화유산연구원", 99.83292),
+        Row("DUP", 8, "새론문화유산연구원", 99.83292),
+        Row("DUP", 62, "동국문화재연구원", 99.60),
+    };
+    const auto dup_scatter = nara::BuildScatterNotice(twice, "DUP", 99.0, 101.0);
+    if (dup_scatter.chip_count != 4) {
+        std::cerr << "FAIL: duplicate sqlite rows must collapse to one chip each, got " << dup_scatter.chip_count
+                  << "\n";
+        return 1;
+    }
+    int gold_count = 0;
+    for (const auto& chip : dup_scatter.chips) {
+        if (nara::IsMappedRank1(chip, dup_scatter.chips)) {
+            ++gold_count;
+        }
+    }
+    if (gold_count != 1) {
+        std::cerr << "FAIL: mapped 1위 count " << gold_count << "\n";
+        return Fail("한 공고에 금테 1위는 한 칩만");
+    }
+
+    std::vector<nara::ParticipantRow> two_first = {
+        Row("GOLD2", 1, "문유문화재연구원", 99.72000),
+        Row("GOLD2", 1, "문유문화학연구원", 99.72100),
+        Row("GOLD2", 62, "동국문화재연구원", 99.60000),
+    };
+    const auto two_scatter = nara::BuildScatterNotice(two_first, "GOLD2", 99.0, 101.0);
+    if (two_scatter.chip_count != 3) {
+        std::cerr << "FAIL: two rank1 identities stay two chips, got " << two_scatter.chip_count << "\n";
+        return 1;
+    }
+    int two_gold = 0;
+    const nara::ParticipantRow* gold_chip = nullptr;
+    for (const auto& chip : two_scatter.chips) {
+        if (nara::IsMappedRank1(chip, two_scatter.chips)) {
+            ++two_gold;
+            gold_chip = &chip;
+        }
+    }
+    if (two_gold != 1) {
+        std::cerr << "FAIL: two rank1 identities gold " << two_gold << "\n";
+        return Fail("서로 다른 업체라도 한 공고 금테 1위는 한 칩만");
+    }
+    if (!gold_chip || gold_chip->company_name.find("문유문화재연구원") == std::string::npos) {
+        return Fail("금테는 사정률이 더 낮은 rank1만");
+    }
+
     nara::ParticipantRow feb = Row("FEB", 1, "동국문화재연구원", 99.5);
     feb.open_date = "2026-02-20 11:00:00";
     nara::ParticipantRow jun = Row("JUN", 1, "동국문화재연구원", 99.6);

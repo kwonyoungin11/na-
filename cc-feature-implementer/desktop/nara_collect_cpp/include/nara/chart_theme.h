@@ -14,8 +14,9 @@ namespace chart_theme {
 constexpr int kCellPx = 20;
 constexpr int kPlotLeft = 220;
 constexpr int kPlotTop = 16;
+constexpr int kBandRank1GutterW = 0;
 constexpr int kPlotRight = 22;
-constexpr int kPlotBottom = 46;
+constexpr int kPlotBottom = 62;
 constexpr int kDockMinH = 134;
 constexpr int kDockGap = 10;
 constexpr int kDockPadX = 14;
@@ -30,6 +31,7 @@ constexpr int kResetH = 40;
 constexpr int kResetMinW = 124;
 constexpr int kRank1BtnW = 72;
 constexpr int kRank1BtnH = 40;
+constexpr int kMapDesignW = 124;
 constexpr int kResetMarginTop = 12;
 constexpr int kResetMarginRight = 14;
 constexpr int kToolbarPad = 8;
@@ -63,6 +65,7 @@ constexpr int kMainBtnH = 40;
 constexpr int kMainUpdateW = 124;
 constexpr int kMainStopW = 108;
 constexpr int kMainChartW = 132;
+constexpr int kMainDesignW = 0;
 constexpr int kMainRegionComboW = 148;
 constexpr int kMainBtnGap = 8;
 constexpr int kMainComboGap = 12;
@@ -167,13 +170,54 @@ constexpr uint32_t kCheckFillArgb = 0xFFFFFFFF;
 constexpr uint32_t kCheckMarkArgb = 0xFFFFFFFF;
 constexpr uint32_t kAccentSubtleArgb = 0xFFFFF4E5;
 constexpr uint32_t kHoverFillArgb = 0xFFEEF3F8;
+constexpr uint32_t kMapDesignFillArgb = 0xFF2563EBu;
+constexpr uint32_t kMapDesignHotArgb = 0xFF3B82F6u;
+constexpr uint32_t kMapDesignTextArgb = 0xFFFFFFFFu;
 
 constexpr int kChartTabH = 34;
 constexpr int kChartTabW = 112;
 constexpr int kChartTabGap = 6;
 constexpr int kChartTabPad = 12;
 constexpr int kChartTabCount = 2;
+constexpr int kChartTabMap = 0;
+constexpr int kChartTabHist = 1;
 constexpr int kChartTabRadius = 12;
+constexpr int kPrincipleMinW = 840;
+constexpr int kPrincipleMinH = 960;
+constexpr int kPrincipleFigureW = 0;
+constexpr int kPrincipleFigureH = 168;
+constexpr int kPrincipleStackedFigureH = 100;
+constexpr int kPrinciplePad = 12;
+constexpr int kPrincipleGapX = 20;
+constexpr int kPrincipleBlockGap = 16;
+constexpr int kPrincipleTitleH = 24;
+constexpr int kPrincipleLineH = 20;
+constexpr float kPrincipleTitleSize = 16.0f;
+constexpr float kPrincipleBodySize = 13.0f;
+constexpr int kDesignPadX = 28;
+constexpr int kDesignPadY = 22;
+constexpr int kDesignMeasureMax = 720;
+constexpr int kDesignSectionGap = 22;
+constexpr int kDesignParaGap = 12;
+constexpr int kDesignQuotePad = 14;
+constexpr int kDesignRuleH = 1;
+constexpr int kDesignLeadBarW = 3;
+constexpr int kDesignWheelStep = 48;
+constexpr float kDesignLeadSize = 18.0f;
+constexpr float kDesignHeadingSize = 15.0f;
+constexpr float kDesignBodySize = 13.0f;
+constexpr float kDesignLineHeight = 1.55f;
+constexpr uint32_t kDesignLeadArgb = kAccentStrongArgb;
+constexpr uint32_t kDesignHeadingArgb = kTextArgb;
+constexpr uint32_t kDesignBodyArgb = kTextArgb;
+constexpr uint32_t kDesignMutedArgb = kSubtleTextArgb;
+constexpr uint32_t kDesignQuoteFillArgb = kAccentSubtleArgb;
+constexpr uint32_t kDesignRuleArgb = kStrokeSubtleArgb;
+constexpr int kEpilogueLeadBarW = 3;
+constexpr int kEpilogueQuotePad = 12;
+constexpr uint32_t kEpilogueAccentArgb = kMapDesignFillArgb;
+constexpr uint32_t kEpilogueQuoteFillArgb = 0x152563EBu;
+constexpr wchar_t kEpilogueEyebrow[] = L"설계원칙";
 constexpr int kHistogramBinCount = 40;
 constexpr int kHistogramMaxSeries = 8;
 constexpr int kHistPadL = 52;
@@ -196,6 +240,87 @@ constexpr uint32_t kHistTabOffFillArgb = kGlassFillArgb;
 constexpr uint32_t kHistTabOffTextArgb = kSubtleTextArgb;
 constexpr uint32_t kHistMarketGhostA = 0x66u;
 
+constexpr bool kBandPaintSelfHouse = false;
+constexpr bool kBandPaintRivalHouse = false;
+constexpr bool kBandPaintCling = false;
+constexpr bool kBandPaintTerritory = true;
+constexpr bool kBandPaintUseStages = true;
+constexpr bool kBandPaintPreyChips = false;
+constexpr bool kBandPaintThreatChips = false;
+constexpr bool kBandPaintThreat = true;
+constexpr bool kBandPaintMedian = false;
+constexpr bool kBandPaintOnStaticScatter = true;
+constexpr bool kBandPaintWatch = true;
+constexpr bool kBandPaintHome = true;
+constexpr bool kBandPaintSit = true;
+constexpr uint32_t kBandTerritoryArgb = 0x182563EBu;
+constexpr uint32_t kBandPreyChipArgb = 0xFFEA580Cu;
+constexpr uint32_t kBandThreatChipArgb = 0xFF7C3AEDu;
+constexpr uint32_t kBandThreatFillArgb = 0x227C3AEDu;
+constexpr int kBandUseStageCount = 7;
+constexpr uint32_t kBandUseArgb = 0x1822C55Eu;
+constexpr uint32_t kBandWatchFillArgb = 0x28475569u;
+constexpr uint32_t kBandHomeArgb = 0x28F59E0Bu;
+constexpr uint32_t kBandSitArgb = 0x5522D3EEu;
+constexpr uint32_t kWatchRegularMarkArgb = 0xFF1E293Bu;
+constexpr uint32_t kWatchOnceMarkArgb = 0xFF64748Bu;
+constexpr unsigned kSitPulsePeriodMs = 1400;
+constexpr unsigned kSitPulseTimerMs = 120;
+
+inline uint32_t SitPulseAlpha(unsigned elapsed_ms) {
+    const unsigned period = (std::max)(1u, kSitPulsePeriodMs);
+    const double t = static_cast<double>(elapsed_ms % period) / static_cast<double>(period);
+    const double wave = 0.5 + 0.5 * std::sin(t * 6.283185307179586);
+    return static_cast<uint32_t>(0x38 + static_cast<int>(wave * 0x61));
+}
+
+inline uint32_t SitPulseArgb(uint32_t base, unsigned elapsed_ms) {
+    return (SitPulseAlpha(elapsed_ms) << 24) | (base & 0x00FFFFFFu);
+}
+constexpr std::array<uint32_t, kBandUseStageCount> kBandUseStageArgb = {
+    0x1822C55Eu, 0x1822C55Eu, 0x1822C55Eu, 0x1822C55Eu, 0x1822C55Eu, 0x1822C55Eu, 0x1822C55Eu,
+};
+constexpr uint32_t kBandSelfHouseArgb = 0x00DC2626u;
+constexpr uint32_t kBandHouseArgb = 0x003256EBu;
+constexpr uint32_t kBandClingArgb = 0x00B45309u;
+constexpr uint32_t kBandMedianArgb = 0xFF111827u;
+constexpr float kBandMedianWidth = 1.2f;
+constexpr int kBandStatusPad = 12;
+constexpr int kBandLegendSwatchW = 12;
+constexpr int kBandLegendSwatchH = 10;
+constexpr int kBandLegendSwatchGap = 0;
+constexpr int kBandLegendPadX = 8;
+constexpr int kBandLegendTextGap = 8;
+constexpr uint32_t kBandLegendFillArgb = kGlassFillArgb;
+constexpr uint32_t kBandLegendStrokeArgb = kStrokeSubtleArgb;
+constexpr wchar_t kBandLegendTitle[] = L"동국구간";
+constexpr wchar_t kBandRank1Label[] = L"1위";
+
+inline uint32_t BandUseStageArgbAt(int i) {
+    int idx = i;
+    if (idx < 0) {
+        idx = 0;
+    }
+    if (idx >= kBandUseStageCount) {
+        idx = kBandUseStageCount - 1;
+    }
+    return kBandUseStageArgb[static_cast<size_t>(idx)];
+}
+
+inline void BandUseStageInterval(double lo, double hi, int i, double& s_lo, double& s_hi) {
+    const int n = kBandUseStageCount;
+    int idx = i;
+    if (idx < 0) {
+        idx = 0;
+    }
+    if (idx >= n) {
+        idx = n - 1;
+    }
+    const double w = (hi - lo) / static_cast<double>(n);
+    s_lo = lo + w * static_cast<double>(idx);
+    s_hi = lo + w * static_cast<double>(idx + 1);
+}
+
 constexpr wchar_t kFontFamily[] = L"Malgun Gothic";
 constexpr wchar_t kResetLabel[] = L"맵 초기화";
 constexpr wchar_t kRank1Label[] = L"1위";
@@ -212,8 +337,13 @@ constexpr wchar_t kCompanyLabel[] = L"업체";
 constexpr wchar_t kCompanyAllLabel[] = L"전체";
 constexpr wchar_t kAxisNotice[] = L"공고(개찰일시)";
 constexpr wchar_t kAxisRate[] = L"기초대비사정률(%)";
+constexpr wchar_t kAxisRank1Pct[] = L"1위 (%)";
 constexpr wchar_t kChartTabMapLabel[] = L"전장맵";
 constexpr wchar_t kChartTabHistLabel[] = L"히스토그램";
+constexpr wchar_t kMainDesignLabel[] = L"";
+constexpr wchar_t kMapDesignLabel[] = L"설계원칙";
+constexpr wchar_t kDesignPrinciplesTitle[] = L"동국문화유산연구원 낙찰분석프로그램 - 설계원칙";
+constexpr wchar_t kDesignPrinciplesClass[] = L"NaraDesignPrinciples";
 constexpr wchar_t kHistAxisCount[] = L"투찰 건수";
 constexpr wchar_t kHistMarketLabel[] = L"전체";
 constexpr wchar_t kHistRank1Label[] = L"1위";
@@ -483,6 +613,10 @@ struct RectI {
     int Right() const { return x + w; }
     int Bottom() const { return y + h; }
     bool Contains(int px, int py) const { return px >= x && py >= y && px < Right() && py < Bottom(); }
+    bool Intersects(const RectI& o) const {
+        return w > 0 && h > 0 && o.w > 0 && o.h > 0 && x < o.Right() && Right() > o.x && y < o.Bottom()
+               && Bottom() > o.y;
+    }
 };
 
 enum class MainButtonKind { Primary, Secondary, Ghost, Danger };
@@ -520,6 +654,7 @@ struct MainToolbar {
     RectI region_combo;
     RectI update;
     RectI stop;
+    RectI design;
     RectI chart;
 };
 
@@ -559,8 +694,21 @@ inline const wchar_t* RegionLabelAt(int index) {
 }
 
 inline const wchar_t* ChartTabLabelAt(int index) {
-    return index == 1 ? kChartTabHistLabel : kChartTabMapLabel;
+    if (index == kChartTabHist) {
+        return kChartTabHistLabel;
+    }
+    return kChartTabMapLabel;
 }
+
+inline bool ChartShowsScatter(int tab) { return tab == kChartTabMap; }
+inline bool ChartShowsHistogram(int tab) { return tab == kChartTabHist; }
+inline bool ChartShowsDesign(int tab) {
+    (void)tab;
+    return false;
+}
+inline bool ChartShowsMapToolbar(int tab) { return tab == kChartTabMap || tab == kChartTabHist; }
+inline bool ChartPageUsesFullCard(int tab) { return tab == kChartTabHist; }
+inline bool ChartDesignOpensWindow() { return true; }
 
 inline int RegionIndexFromToken(const std::string& token) {
     return token == "경북" ? 1 : 0;
@@ -572,6 +720,7 @@ inline MainToolbar LayoutMainToolbar(int client_w, int card_y) {
     const int shift = static_cast<int>(std::lround(static_cast<double>(client_w) * static_cast<double>(kMainToolbarShift)));
     const int right = client_w - kMainCardInset - kMainTablePadX - shift;
     t.chart = {right - kMainChartW, y, kMainChartW, kMainBtnH};
+    t.design = {0, 0, 0, 0};
     t.stop = {t.chart.x - kMainBtnGap - kMainStopW, y, kMainStopW, kMainBtnH};
     t.update = {t.stop.x - kMainBtnGap - kMainUpdateW, y, kMainUpdateW, kMainBtnH};
     t.region_combo = {t.update.x - kMainComboGap - kMainRegionComboW, y, kMainRegionComboW, kMainBtnH};
@@ -613,12 +762,14 @@ struct ChartChrome {
     RectI map_inner;
     RectI tab_strip;
     RectI tab_map;
+    RectI tab_design;
     RectI tab_hist;
     RectI plot;
     RectI hist_plot;
     RectI reset_toolbar;
     RectI reset_btn;
     RectI rank1_btn;
+    RectI design_btn;
     RectI dock;
     RectI dock_inner;
     RectI range_pane;
@@ -669,6 +820,7 @@ inline ChartChrome LayoutChartChrome(int client_w, int client_h, int company_cou
     c.map_inner.h = (std::max)(40, c.map_card.h - 2 * (kCardPad + kCardInner));
 
     c.tab_map = {c.map_inner.x + kChartTabPad, c.map_inner.y + kChartTabPad, kChartTabW, kChartTabH};
+    c.tab_design = {0, 0, 0, 0};
     c.tab_hist = {c.tab_map.Right() + kChartTabGap, c.tab_map.y, kChartTabW, kChartTabH};
     c.tab_strip = {c.tab_map.x, c.tab_map.y, c.tab_hist.Right() - c.tab_map.x, kChartTabH};
 
@@ -678,7 +830,7 @@ inline ChartChrome LayoutChartChrome(int client_w, int client_h, int company_cou
     c.plot.h = (std::max)(120, c.map_inner.h - kPlotBottom - (c.plot.y - c.map_inner.y));
     c.hist_plot = {c.map_inner.x + 12, c.plot.y, (std::max)(120, c.map_inner.w - 24), c.plot.h};
 
-    c.reset_toolbar.w = kToolbarPad * 2 + kRank1BtnW + kFieldGap + kResetMinW;
+    c.reset_toolbar.w = kToolbarPad * 2 + kRank1BtnW + kFieldGap + kResetMinW + kFieldGap + kMapDesignW;
     c.reset_toolbar.h = kToolbarPad * 2 + kResetH;
     c.reset_toolbar.x = c.map_inner.x + c.map_inner.w - kResetMarginRight - c.reset_toolbar.w;
     c.reset_toolbar.y = c.map_inner.y + kResetMarginTop;
@@ -690,6 +842,10 @@ inline ChartChrome LayoutChartChrome(int client_w, int client_h, int company_cou
     c.reset_btn.y = c.reset_toolbar.y + kToolbarPad;
     c.reset_btn.w = kResetMinW;
     c.reset_btn.h = kResetH;
+    c.design_btn.x = c.reset_btn.Right() + kFieldGap;
+    c.design_btn.y = c.reset_toolbar.y + kToolbarPad;
+    c.design_btn.w = kMapDesignW;
+    c.design_btn.h = kResetH;
 
     c.dock_inner.x = c.dock.x + kDockPadX;
     c.dock_inner.y = c.dock.y + kDockPadY;
@@ -719,6 +875,47 @@ inline ChartChrome LayoutChartChrome(int client_w, int client_h, int company_cou
     c.combo_min = {c.range_pane.x, fy + kCaptionH, half, kComboH};
     c.combo_max = {c.range_pane.x + half + kFieldGap, fy + kCaptionH, half, kComboH};
     return c;
+}
+
+struct DesignPrinciplesChrome {
+    RectI window;
+    RectI accent;
+    RectI content;
+    RectI card;
+    RectI page;
+    RectI dock;
+    RectI company_pane;
+    RectI range_pane;
+};
+
+inline DesignPrinciplesChrome LayoutDesignPrinciplesChrome(int client_w, int client_h) {
+    DesignPrinciplesChrome c;
+    c.window = {0, 0, client_w, client_h};
+    c.accent = {0, 0, client_w, static_cast<int>(kAccentBarH)};
+    c.card = {0, c.accent.h, client_w, (std::max)(1, client_h - c.accent.h)};
+    c.content = c.card;
+    c.dock = {0, 0, 0, 0};
+    c.company_pane = {0, 0, 0, 0};
+    c.range_pane = {0, 0, 0, 0};
+    c.page.x = kPrinciplePad;
+    c.page.y = c.accent.h + 4;
+    c.page.w = (std::max)(40, client_w - 2 * kPrinciplePad);
+    c.page.h = (std::max)(40, client_h - c.page.y - kPrinciplePad);
+    return c;
+}
+
+inline RectI BandLegendRect(const ChartChrome& c) {
+    const int pad = kBandStatusPad;
+    const int x = c.tab_hist.Right() + pad;
+    const int right = c.reset_toolbar.x - pad;
+    const int w = (std::max)(0, right - x);
+    return {x, c.tab_map.y, w, c.tab_map.h};
+}
+
+inline RectI BandRank1GutterRect(const ChartChrome& c) {
+    const int y = (std::max)(c.plot.y, c.reset_toolbar.Bottom() + 4);
+    const int h = (std::max)(0, c.plot.Bottom() - y);
+    return {c.plot.Right(), y, kBandRank1GutterW, h};
 }
 
 inline RectI CompanyCheckBoxRect(const RectI& wrap, int index, int count) {
@@ -780,12 +977,19 @@ inline RectI CompanyCheckCellRect(const RectI& wrap, int index, int count) {
             (std::max)(8, rh - 2)};
 }
 
+inline RectI ChartTabRect(const ChartChrome& chrome, int index) {
+    if (index == kChartTabHist) {
+        return chrome.tab_hist;
+    }
+    return chrome.tab_map;
+}
+
 inline int HitChartTab(const ChartChrome& chrome, int x, int y) {
     if (chrome.tab_map.Contains(x, y)) {
-        return 0;
+        return kChartTabMap;
     }
     if (chrome.tab_hist.Contains(x, y)) {
-        return 1;
+        return kChartTabHist;
     }
     return -1;
 }

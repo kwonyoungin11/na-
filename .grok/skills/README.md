@@ -22,6 +22,15 @@ Project skills for Grok. Discovered from `.grok/skills/<name>/SKILL.md`.
 | `cpp-design-scatter` | Battlefield map, chips, 1위 gold |
 | `cpp-design-layout` | Main window, popup, dock, toolbar, DIP |
 
+## Forced (hooks)
+
+| Skill | When |
+|-------|------|
+| `superpowers` | Production `.cpp` / `.h` / `.cs` — TDD iron law |
+| `unlazy` | Substantial work — `GATES.md` before claiming done |
+
+Supporting: `test-driven-development`, `using-superpowers`, `verification-before-completion`.
+
 ## Meta
 
 | Skill | When |

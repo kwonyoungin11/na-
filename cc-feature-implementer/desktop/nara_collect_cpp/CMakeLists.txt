@@ -83,12 +83,24 @@ add_executable(nara_chart_theme_tests
 target_include_directories(nara_chart_theme_tests PRIVATE include)
 add_test(NAME nara_chart_theme_tests COMMAND nara_chart_theme_tests)
 
+add_executable(nara_design_page_tests
+    tests/test_design_page.cpp)
+target_include_directories(nara_design_page_tests PRIVATE include)
+add_test(NAME nara_design_page_tests COMMAND nara_design_page_tests)
+
 add_executable(nara_histogram_chart_tests
     tests/test_histogram_chart.cpp
     src/company_name.cpp
     src/scatter_chart.cpp)
 target_include_directories(nara_histogram_chart_tests PRIVATE include)
 add_test(NAME nara_histogram_chart_tests COMMAND nara_histogram_chart_tests)
+
+add_executable(nara_dongguk_band_tests
+    tests/test_dongguk_band.cpp
+    src/dongguk_band.cpp
+    src/company_name.cpp)
+target_include_directories(nara_dongguk_band_tests PRIVATE include)
+add_test(NAME nara_dongguk_band_tests COMMAND nara_dongguk_band_tests)
 
 add_executable(nara_scatter_cache_tests
     tests/test_scatter_cache.cpp)
@@ -105,7 +117,9 @@ add_executable(nara_desktop WIN32
     src/company_name.cpp
     src/chart_popup.cpp
     src/chart_view.cpp
-    src/dwrite_text.cpp)
+    src/dwrite_text.cpp
+    src/dongguk_band.cpp
+    src/design_principles_window.cpp)
 target_include_directories(nara_desktop PRIVATE include)
 target_compile_definitions(nara_desktop PRIVATE UNICODE _UNICODE)
 target_link_libraries(nara_desktop PRIVATE user32 comctl32 gdi32 gdiplus ole32 uxtheme d2d1 dwrite winsqlite3)
@@ -141,7 +155,9 @@ if (MSVC)
     target_compile_options(nara_sqlite_store_tests PRIVATE /utf-8 /W3)
     target_compile_options(nara_chart_view_tests PRIVATE /utf-8 /W3)
     target_compile_options(nara_chart_theme_tests PRIVATE /utf-8 /W3)
+    target_compile_options(nara_design_page_tests PRIVATE /utf-8 /W3)
     target_compile_options(nara_histogram_chart_tests PRIVATE /utf-8 /W3)
+    target_compile_options(nara_dongguk_band_tests PRIVATE /utf-8 /W3)
     target_compile_options(nara_dwrite_text_tests PRIVATE /utf-8 /W3)
     target_compile_options(nara_scatter_cache_tests PRIVATE /utf-8 /W3)
     target_compile_options(nara_desktop PRIVATE /utf-8 /W3)

@@ -29,4 +29,9 @@ void OpenChartWindow(
     const std::string& end_date,
     const std::string& region);
 
+void SetChartFocusNotice(const std::string& notice_id);
+
+void OpenDesignPrinciplesWindow(HINSTANCE instance, HWND owner);
+bool DesignPrinciplesWindowIsOpen();
+
 }  // namespace nara

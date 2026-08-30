@@ -67,8 +67,11 @@ nul
 !/nara-workspace/scripts/
 !/nara-workspace/scripts/**
 
-# grok hooks removed; ignore leftover state if recreated
-.grok/hooks/
+# grok hook runtime (project hooks in .grok/hooks/*.json are tracked)
+.grok/hooks/state/
+.unlazy/
+.unlazy-hook-state.json
+/GATES.md
 
 # local runtime scratch
 /.omc/

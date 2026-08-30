@@ -1,35 +1,23 @@
-# Hooks and MCP stay off.
-# C++ / design skills live in .grok/skills and must load.
+# Project Grok config (mcp_servers / plugins / permission / mcp.max_output_bytes).
+# Skills: .grok/skills/   Hooks: .grok/hooks/
 
-[skills]
-paths = []
-ignore = [
-  ".agents/skills",
+[mcp]
+max_output_bytes = 40000
+
+[mcp_servers.sequential-thinking]
+command = "npx.cmd"
+args = [
+    "-y",
+    "@modelcontextprotocol/server-sequential-thinking",
 ]
-disabled = [
-  "api",
-  "bidder-visualization",
-  "data-preprocessing",
-  "fixed-bidder-map",
-  "graph-engineering",
-  "karpathy-guidelines",
-  "korean-font-fixer",
-  "logic",
-  "loop-engineering",
-  "nara-award-analysis-program",
-  "optimal-position",
-  "report",
-  "shadow-strategy",
+enabled = true
+startup_timeout_sec = 60
+
+[mcp_servers.context7]
+command = "npx.cmd"
+args = [
+    "-y",
+    "@upstash/context7-mcp",
 ]
-server_skill_dirs = []
-bundled_skill_dirs = []
-
-[compat.cursor]
-skills = false
-mcps = false
-hooks = false
-
-[compat.claude]
-skills = false
-mcps = false
-hooks = false
+enabled = true
+startup_timeout_sec = 60

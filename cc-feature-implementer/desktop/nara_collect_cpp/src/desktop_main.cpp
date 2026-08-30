@@ -652,6 +652,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             const int row = g_scroll + (y - g_tableRect.top - kHeaderH) / kRowH;
             if (row >= 0 && row < static_cast<int>(g_table.size())) {
                 g_selected = row;
+                if (nara::ChartWindowIsOpen()) {
+                    nara::SetChartFocusNotice(g_table[static_cast<size_t>(row)].notice_number);
+                }
                 InvalidateRect(hwnd, nullptr, FALSE);
             }
         }
@@ -706,6 +709,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     case WM_COMMAND:
         if (LOWORD(wParam) == kIdChart) {
             nara::OpenChartWindow(GetModuleHandleW(nullptr), hwnd, g_snapshot, g_start, g_end, g_region_token);
+            if (!g_table.empty() && g_selected >= 0 && g_selected < static_cast<int>(g_table.size())) {
+                nara::SetChartFocusNotice(g_table[static_cast<size_t>(g_selected)].notice_number);
+            }
         } else if (LOWORD(wParam) == kIdUpdate) {
             OnUpdate(hwnd);
         }

@@ -11,9 +11,16 @@ This file contains durable repository instructions only.
 
 ## Tooling
 
-Grok **hooks** and **MCP servers** stay off.
+Grok **skills**, **hooks**, and **MCP** are on in this project.
 
 C++ and design skills live in `.grok/skills/`. Load the matching skill for C++ work. Add more with `/create-skill`.
+
+Forced at usage points (hooks in `.grok/hooks/`):
+
+- Production `.cpp` / `.h` / `.cs` → `superpowers` + `test-driven-development` + `cpp-tdd-cmake`
+- Substantial completion → `unlazy` (`GATES.md` with `CHECK`/`EXPECT`)
+
+MCP: `search_tool` then `use_tool`. Project servers are in `.grok/config.toml`.
 
 Canonical domain text: `.grok/rules/00-dev-engineering.md`.
 

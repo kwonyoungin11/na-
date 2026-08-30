@@ -234,6 +234,62 @@ int main(int argc, char** argv) {
         return Fail("경상북도 jsonl must store as 경북");
     }
 
+    {
+        const auto dup_jsonl = dir / "dup.jsonl";
+        const auto dup_db = dir / "dup.db";
+        if (!nara::EnsureParticipantsSchema(dup_db)) {
+            return Fail("dup schema");
+        }
+        {
+            std::ofstream out(dup_jsonl, std::ios::binary);
+            WriteSixCompanyNotice(
+                out, "DUP1-000", "중복 정밀발굴조사 용역", "울산광역시", "2026-08-14 11:00:00", "99.65000");
+            WriteSixCompanyNotice(
+                out, "DUP1-000", "중복 정밀발굴조사 용역", "울산광역시", "2026-08-14 11:00:00", "99.65000");
+        }
+        const auto dup_merged = nara::MergeJsonlIntoStore(dup_jsonl, dup_db);
+        if (!dup_merged.ok) {
+            std::cerr << "FAIL: dup merge " << dup_merged.error << "\n";
+            return 1;
+        }
+        const auto dup_rows = nara::LoadParticipants(dup_db);
+        int dup_count = 0;
+        int dup_rank1 = 0;
+        std::string last_rank1;
+        for (const auto& row : dup_rows) {
+            if (row.notice_number != "DUP1-000") {
+                continue;
+            }
+            ++dup_count;
+            if (row.rank == 1) {
+                ++dup_rank1;
+                last_rank1 = row.company_name;
+            }
+        }
+        if (dup_count != 6) {
+            std::cerr << "dup_count " << dup_count << "\n";
+            return Fail("keyword-overlap jsonl must store one row per company, not two");
+        }
+        if (dup_rank1 != 1 || last_rank1.find("춘추") == std::string::npos) {
+            std::cerr << "dup_rank1 " << dup_rank1 << " " << last_rank1 << "\n";
+            return Fail("한 공고 rank==1 은 한 업체만");
+        }
+        const auto again = nara::MergeJsonlIntoStore(dup_jsonl, dup_db);
+        if (!again.ok) {
+            return Fail("second merge of the same jsonl must succeed");
+        }
+        int again_count = 0;
+        for (const auto& row : nara::LoadParticipants(dup_db)) {
+            if (row.notice_number == "DUP1-000") {
+                ++again_count;
+            }
+        }
+        if (again_count != 6) {
+            std::cerr << "again_count " << again_count << "\n";
+            return Fail("업데이트 재병합이 참가자를 또 복제하면 안 된다");
+        }
+    }
+
     _putenv_s("NARA_DASHBOARD_DB", "");
     _putenv_s("NARA_ENV", "");
     _putenv_s("NARA_APP_DIR", dir.string().c_str());
@@ -286,7 +342,7 @@ int main(int argc, char** argv) {
 
     const auto live_jsonl =
         std::filesystem::path(R"(A:\c\cc-feature-implementer\desktop\nara_collect_cpp\build\Release\cpp_award_collect.jsonl)");
-    if (std::filesystem::exists(live_jsonl)) {
+    if (std::filesystem::exists(live_jsonl) && std::filesystem::file_size(live_jsonl) > 0) {
         const auto live_db = dir / "live-merge.db";
         if (!nara::EnsureParticipantsSchema(live_db)) {
             return Fail("live-merge schema");

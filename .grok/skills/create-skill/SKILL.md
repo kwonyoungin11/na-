@@ -11,7 +11,7 @@ This repo's skill creator. Output is a Grok skill other sessions can load.
 
 `A:/c/.grok/skills/<name>/SKILL.md`
 
-Never write `SKILL.md` under `.agents/skills` (Python leftovers). Never install hooks or MCP to "make the skill work".
+Never write `SKILL.md` under `.agents/skills` (Python leftovers). Project hooks (`.grok/hooks/force-two-skills.json`) and MCP already exist — do not add more unless the user asks.
 
 Name: `lowercase-hyphens`, 2–64 chars, start/end letter or digit.
 
@@ -47,5 +47,4 @@ New C++ procedure → also add a row to `.grok/skills/README.md` and a route lin
 ## Do not
 
 - Generic "be a 15-agent team" skills
-- Skills that tell the agent to use MCP
 - Duplicate the 1위 toggle as a new visual skill

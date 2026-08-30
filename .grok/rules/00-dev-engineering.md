@@ -1,6 +1,6 @@
 # 개발 게이트
 
-훅·MCP는 쓰지 않는다. C++ / 디자인 작업은 `.grok/skills` 해당 스킬을 로드한다.
+훅·MCP·스킬은 이 프로젝트에서 켠다. C++ / 디자인 작업은 `.grok/skills` 해당 스킬을 로드한다. 구현 전에는 `superpowers` TDD, 큰 일의 완료 전에는 `unlazy`를 훅이 강제한다.
 
 ## 루프
 
@@ -33,7 +33,7 @@
 
 ## 쓰지 말 것
 
-- Grok hooks, MCP servers
 - `.agents/skills` Python SKILL.md 복구
 - 분명한 수정을 Plan 모드로 미루기
 - 완료 주장 전에 검증 명령을 안 돌리기. 명령·pass/fail을 적는다.
+- 훅 `command`에 `${GROK_WORKSPACE_ROOT}` 넣기 (cwd 상대 `.grok\hooks\...`만)

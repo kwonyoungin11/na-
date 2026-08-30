@@ -55,6 +55,43 @@ const char* kCreateParticipantsSql =
     "updated_at TEXT NOT NULL"
     ");";
 
+const char* kDedupeParticipantsSql =
+    "DELETE FROM participants WHERE rowid NOT IN ("
+    "SELECT MIN(rowid) FROM participants GROUP BY notice_number, company_name);";
+
+const char* kUniqueNoticeCompanySql =
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_participants_notice_company "
+    "ON participants(notice_number, company_name);";
+
+std::vector<ParticipantRow> UniqueByNoticeCompany(std::vector<ParticipantRow> rows) {
+    std::map<std::string, ParticipantRow> unique;
+    for (auto& row : rows) {
+        auto id = CompanyIdentity(row);
+        if (id.empty()) {
+            id = CanonicalizeCompany(row.company_name);
+        }
+        if (id.empty()) {
+            continue;
+        }
+        const auto notice = row.notice_number.empty() ? row.notice_no : row.notice_number;
+        const auto key = notice + "\x1f" + id;
+        auto found = unique.find(key);
+        if (found == unique.end()) {
+            unique.emplace(key, std::move(row));
+            continue;
+        }
+        if (row.rank > 0 && (found->second.rank <= 0 || row.rank < found->second.rank)) {
+            found->second = std::move(row);
+        }
+    }
+    std::vector<ParticipantRow> out;
+    out.reserve(unique.size());
+    for (auto& pair : unique) {
+        out.push_back(std::move(pair.second));
+    }
+    return out;
+}
+
 const char* EnvOrNull(const char* name) {
     const char* value = std::getenv(name);
     if (value == nullptr || value[0] == '\0') {
@@ -322,7 +359,15 @@ bool EnsureParticipantsSchema(const std::filesystem::path& db_path) {
         }
         return false;
     }
-    const bool ok = ExecSql(db, kCreateParticipantsSql, nullptr);
+    if (!ExecSql(db, kCreateParticipantsSql, nullptr)) {
+        sqlite3_close(db);
+        return false;
+    }
+    if (!ExecSql(db, kDedupeParticipantsSql, nullptr)) {
+        sqlite3_close(db);
+        return false;
+    }
+    const bool ok = ExecSql(db, kUniqueNoticeCompanySql, nullptr);
     sqlite3_close(db);
     return ok;
 }
@@ -397,7 +442,7 @@ std::vector<ParticipantRow> LoadParticipants(const std::filesystem::path& db_pat
     }
     sqlite3_finalize(stmt);
     sqlite3_close(db);
-    return rows;
+    return UniqueByNoticeCompany(std::move(rows));
 }
 
 JsonlMergeResult MergeJsonlIntoStore(
@@ -458,7 +503,8 @@ JsonlMergeResult MergeJsonlIntoStore(
 
     const auto stamp = NowStamp();
     int row_count = 0;
-    for (const auto& [notice, items] : by_notice) {
+    for (const auto& [notice, raw_items] : by_notice) {
+        const auto items = UniqueByNoticeCompany(raw_items);
         const auto notice_no = items.empty() ? NoticeNoOf(notice) : items.front().notice_no;
         sqlite3_reset(del);
         sqlite3_bind_text(del, 1, notice.c_str(), -1, SQLITE_TRANSIENT);

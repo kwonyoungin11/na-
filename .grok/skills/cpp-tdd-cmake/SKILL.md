@@ -5,6 +5,8 @@ description: Use when adding or changing C++ behavior, before writing production
 
 # C++ TDD (CMake test exe)
 
+Also load `.grok/skills/superpowers/SKILL.md` and `.grok/skills/test-driven-development/SKILL.md` (forced on production edits).
+
 Write a failing test. Watch it fail. Smallest production fix. Run the **same** test.
 
 No exceptions: do not keep untested production code as "reference". Delete it and start from the test.

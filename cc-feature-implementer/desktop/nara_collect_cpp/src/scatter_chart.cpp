@@ -142,7 +142,33 @@ bool NoticeHasLowerLimitAwardCluster(const std::vector<ParticipantRow>& rows) {
 }
 
 bool IsMappedRank1(const ParticipantRow& chip, const std::vector<ParticipantRow>& notice_chips) {
-    return chip.rank == 1 && !NoticeHasLowerLimitAwardCluster(notice_chips);
+    if (chip.rank != 1 || NoticeHasLowerLimitAwardCluster(notice_chips)) {
+        return false;
+    }
+    const ParticipantRow* winner = nullptr;
+    auto better = [](const ParticipantRow& a, const ParticipantRow& b) {
+        if (a.is_awarded != b.is_awarded) {
+            return a.is_awarded;
+        }
+        const double ra = a.adjust_rate ? *a.adjust_rate : 1e9;
+        const double rb = b.adjust_rate ? *b.adjust_rate : 1e9;
+        if (std::fabs(ra - rb) > 1e-12) {
+            return ra < rb;
+        }
+        return CompanyKey(a) < CompanyKey(b);
+    };
+    for (const auto& row : notice_chips) {
+        if (row.rank != 1) {
+            continue;
+        }
+        if (!winner || better(row, *winner)) {
+            winner = &row;
+        }
+    }
+    if (!winner) {
+        return false;
+    }
+    return CompanyKey(chip) == CompanyKey(*winner);
 }
 
 void PreferChartAdjustRates(
