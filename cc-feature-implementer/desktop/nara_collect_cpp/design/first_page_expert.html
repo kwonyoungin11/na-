@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>동국 낙찰 — 전문가 첫 페이지 목업</title>
+<style>
+  :root {
+    --bg: #F3F5F8;
+    --card: #FFFFFF;
+    --text: #111111;
+    --muted: #5A6473;
+    --accent: #D97706;
+    --gold: #CA8A04;
+    --font: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #D8DEE7; }
+  body { font-family: var(--font); color: var(--text); }
+  .frame { width: 1600px; margin: 0 auto; background: #2B3340; overflow: hidden; }
+  .caption { height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 12px; color: #E5E7EB; font-size: 12px; }
+  .dots { display: flex; gap: 6px; }
+  .dots i { width: 10px; height: 10px; border-radius: 50%; background: #64748B; display: block; }
+  .win { background: var(--bg); padding: 16px 20px 14px; }
+  .top { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .brand { font-size: 18px; font-weight: 800; letter-spacing: -0.03em; }
+  .brand em { font-style: normal; color: var(--muted); font-weight: 500; font-size: 12px; margin-left: 8px; }
+  .grow { flex: 1; }
+  .btn { height: 40px; border: 0; border-radius: 14px; padding: 0 16px; font: 700 13px var(--font); }
+  .btn-update { width: 124px; background: var(--accent); color: #fff; }
+  .btn-stop { width: 108px; background: #fff; color: #334155; box-shadow: inset 0 0 0 1px #E2E8F0; }
+  .btn-map { width: 132px; background: #0F172A; color: #fff; }
+  .seg { display: flex; height: 40px; width: 148px; border-radius: 12px; overflow: hidden; background: #fff; box-shadow: inset 0 0 0 1px #E2E8F0; }
+  .seg div { flex: 1; display: flex; align-items: center; justify-content: center; font: 700 13px var(--font); }
+  .seg .on { background: #111; color: #fff; }
+  .seg .off { color: var(--muted); }
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px; }
+  .kpi, .card { background: var(--card); border-radius: 18px; box-shadow: 0 10px 28px rgba(15,23,42,.07); }
+  .kpi { padding: 11px 14px; }
+  .cap { font-size: 11px; color: var(--muted); }
+  .val { font-size: 20px; font-weight: 800; margin-top: 2px; letter-spacing: -.03em; }
+  .hint { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .intel { display: grid; grid-template-columns: 1.35fr 1fr 0.9fr; gap: 12px; margin-bottom: 12px; }
+  .card { padding: 12px 14px 12px; }
+  h3 { margin: 0 0 8px; font-size: 13px; }
+  .bars { display: flex; align-items: flex-end; gap: 3px; height: 88px; padding: 4px 0 0; }
+  .bar { flex: 1; border-radius: 3px 3px 0 0; background: #CBD5E1; position: relative; }
+  .bar.hot { background: #0E7490; }
+  .bar.mid { background: #94A3B8; }
+  .bar .n { position: absolute; top: -14px; left: 50%; transform: translateX(-50%); font-size: 9px; color: var(--muted); }
+  .axis { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin-top: 4px; }
+  .note { font-size: 11px; color: var(--muted); margin-top: 6px; line-height: 1.4; }
+  .houses { display: flex; flex-direction: column; gap: 6px; }
+  .house { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+  .mark { width: 8px; height: 8px; border-radius: 2px; }
+  .house b { flex: 1; }
+  .house .cnt { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .ranks { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .rbox { background: #F8FAFC; border-radius: 12px; padding: 8px 10px; }
+  .rbox .val { font-size: 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: var(--muted); font-size: 11px; padding: 7px 8px; border-bottom: 1px solid #EEF2F6; }
+  td { padding: 8px; border-bottom: 1px solid #F1F5F9; }
+  tr.sel td { background: #FFF7ED; }
+  .gold { font-weight: 800; color: #A16207; }
+  .replay {
+    margin-top: 8px; background: #0F172A; color: #E2E8F0; border-radius: 12px; padding: 8px 12px;
+    font-size: 12px; display: flex; gap: 18px; align-items: center;
+  }
+  .replay b { color: #22D3EE; font-size: 14px; }
+  .footer { margin-top: 8px; font-size: 11px; color: var(--muted); }
+  .table-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="caption"><div class="dots"><i></i><i></i><i></i></div>동국문화유산연구원 낙찰분석프로그램</div>
+  <div class="win">
+    <div class="top">
+      <div class="brand">동국문화유산연구원 낙찰분석프로그램 <em>낙찰만 · 동국 참여 · 6개사+</em></div>
+      <div class="grow"></div>
+      <button class="btn btn-update">업데이트</button>
+      <button class="btn btn-stop">중지</button>
+      <button class="btn btn-map">전장 맵</button>
+      <div class="seg"><div class="on">전국</div><div class="off">경북</div></div>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><div class="cap">낙찰공고</div><div class="val">124</div><div class="hint">동국 참여 · 1년</div></div>
+      <div class="kpi"><div class="cap">최신 개찰</div><div class="val">08-28</div><div class="hint">14:20</div></div>
+      <div class="kpi"><div class="cap">동국 1위</div><div class="val">5</div><div class="hint">1년 · 99–101</div></div>
+      <div class="kpi"><div class="cap">동국 순위 중앙</div><div class="val">48위</div><div class="hint">Q1 31 · Q3 62</div></div>
+    </div>
+    <div class="intel">
+      <div class="card">
+        <h3>1년 1위가 떨어진 칸 <span class="cap">건수 비중 · 넣을 자리가 아님</span></h3>
+        <div class="bars">
+          <div class="bar" style="height:18%"><span class="n">1</span></div>
+          <div class="bar" style="height:28%"><span class="n">3</span></div>
+          <div class="bar" style="height:38%"><span class="n">5</span></div>
+          <div class="bar" style="height:32%"><span class="n">4</span></div>
+          <div class="bar mid" style="height:42%"><span class="n">5</span></div>
+          <div class="bar mid" style="height:30%"><span class="n">4</span></div>
+          <div class="bar hot" style="height:100%"><span class="n">13</span></div>
+          <div class="bar mid" style="height:62%"><span class="n">8</span></div>
+          <div class="bar mid" style="height:70%"><span class="n">9</span></div>
+          <div class="bar" style="height:54%"><span class="n">7</span></div>
+          <div class="bar" style="height:92%"><span class="n">12</span></div>
+          <div class="bar" style="height:46%"><span class="n">6</span></div>
+          <div class="bar" style="height:46%"><span class="n">6</span></div>
+        </div>
+        <div class="axis"><span>99.10</span><span>99.60</span><span>100.00</span><span>100.30</span></div>
+        <div class="note">99.60–99.70에 13건(11%). 칩이 몰리는 100.20과는 다릅니다. 전장 맵에서 칸을 봅니다.</div>
+      </div>
+      <div class="card">
+        <h3>고정 감시 <span class="cap">1년 · 99.50–99.70 · 3공고+</span></h3>
+        <div class="houses">
+          <div class="house"><i class="mark" style="background:#0F766E"></i><b>미래</b><span class="cnt">18공고</span></div>
+          <div class="house"><i class="mark" style="background:#2563EB"></i><b>한울</b><span class="cnt">14공고</span></div>
+          <div class="house"><i class="mark" style="background:#7C3AED"></i><b>해동</b><span class="cnt">11공고</span></div>
+          <div class="house"><i class="mark" style="background:#B45309"></i><b>고대</b><span class="cnt">9공고</span></div>
+          <div class="house"><i class="mark" style="background:#94A3B8"></i><b>한번 52곳</b><span class="cnt">1–2공고</span></div>
+        </div>
+        <div class="note">다음에 같은 집이 앞에 붙는지 보는 명단입니다. 끝난 공고에 넣는 칸이 아닙니다.</div>
+      </div>
+      <div class="card">
+        <h3>동국 1년</h3>
+        <div class="ranks">
+          <div class="rbox"><div class="cap">1위</div><div class="val">5</div></div>
+          <div class="rbox"><div class="cap">10위 안</div><div class="val">12</div></div>
+          <div class="rbox"><div class="cap">사정률 중앙</div><div class="val">99.61</div></div>
+          <div class="rbox"><div class="cap">Q1–Q3</div><div class="val">99.56–99.65</div></div>
+        </div>
+        <div class="note">동국 점의 집입니다. 전장 맵 T와 같습니다.</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="table-head">
+        <h3 style="margin:0">동국 참여 낙찰공고</h3>
+        <div class="cap">이미 개찰된 결과 · 행을 고르면 아래 복기</div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>개찰일</th><th>공고번호</th><th>공고명</th><th>발주처</th><th>지역</th>
+            <th>1위 사정률</th><th>1위 업체</th><th>동국순위</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="sel">
+            <td>2026-08-28</td><td>R26BK00001234</td><td>문화재 발굴조사</td><td>경북교육청</td><td>전국</td>
+            <td class="gold">99.672</td><td>고대</td><td>62위</td>
+          </tr>
+          <tr>
+            <td>2026-08-21</td><td>R26BK00001190</td><td>사적 정비 용역</td><td>문화재청</td><td>전국</td>
+            <td class="gold">99.814</td><td>한울</td><td>48위</td>
+          </tr>
+          <tr>
+            <td>2026-08-14</td><td>R26BK00001002</td><td>유적 시굴조사</td><td>경주시</td><td>경북</td>
+            <td class="gold">99.608</td><td>미래</td><td>31위</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="replay">
+        <span>복기 · 이 공고 개찰</span>
+        <span>1위 <b>고대 99.672</b></span>
+        <span>동국 <b>99.658 · 62위</b></span>
+        <span>바로 왼쪽 고정 <b>미래 99.620</b></span>
+        <span>전장 맵에서 칸을 봅니다</span>
+      </div>
+      <div class="footer">최근 1년 · 2025-08-27~2026-08-28 · 전국 · 사정률 99.000~101.000 · 표와 맵은 같은 스냅샷</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

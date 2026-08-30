@@ -51,7 +51,9 @@ constexpr float kFontCompanyAll = 13.0f;
 
 // MainWindow.xaml table-card toolbar (PreviewCard Padding 16,14).
 constexpr int kMainCardInset = 20;
-constexpr int kTableCardY = 128;
+constexpr int kTableCardY = 306;
+constexpr int kMainIntelY = 128;
+constexpr int kMainIntelH = 168;
 constexpr float kMainToolbarShift = 0.20f;
 constexpr int kMainKpiY = 60;
 constexpr int kMainKpiH = 56;
@@ -754,17 +756,38 @@ inline MainToolbar LayoutMainToolbar(int client_w, int card_y) {
 struct MainKpiRow {
     RectI notices;
     RectI latest;
-    RectI period;
+    RectI dong_wins;
+    RectI dong_median;
 };
 
 inline MainKpiRow LayoutMainKpis(int client_w) {
     MainKpiRow row;
     const int x = kMainCardInset + kMainTablePadX;
-    const int inner = (std::max)(120, client_w - 2 * x);
-    const int w = (std::max)(80, (inner - 2 * kMainKpiGap) / 3);
+    const int inner = (std::max)(160, client_w - 2 * x);
+    const int w = (std::max)(72, (inner - 3 * kMainKpiGap) / 4);
     row.notices = {x, kMainKpiY, w, kMainKpiH};
     row.latest = {row.notices.Right() + kMainKpiGap, kMainKpiY, w, kMainKpiH};
-    row.period = {row.latest.Right() + kMainKpiGap, kMainKpiY, w, kMainKpiH};
+    row.dong_wins = {row.latest.Right() + kMainKpiGap, kMainKpiY, w, kMainKpiH};
+    row.dong_median = {row.dong_wins.Right() + kMainKpiGap, kMainKpiY, w, kMainKpiH};
+    return row;
+}
+
+struct MainIntel {
+    RectI win_bars;
+    RectI houses;
+    RectI dong;
+};
+
+inline MainIntel LayoutMainIntel(int client_w) {
+    MainIntel row;
+    const int x = kMainCardInset + kMainTablePadX;
+    const int inner = (std::max)(240, client_w - 2 * x);
+    const int left = (inner * 54) / 100;
+    const int right = (inner * 22) / 100;
+    const int mid = inner - left - right - 2 * kMainKpiGap;
+    row.win_bars = {x, kMainIntelY, left, kMainIntelH};
+    row.houses = {row.win_bars.Right() + kMainKpiGap, kMainIntelY, mid, kMainIntelH};
+    row.dong = {row.houses.Right() + kMainKpiGap, kMainIntelY, right, kMainIntelH};
     return row;
 }
 

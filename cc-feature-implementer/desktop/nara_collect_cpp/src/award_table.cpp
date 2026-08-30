@@ -156,6 +156,7 @@ std::vector<AwardNoticeRow> BuildAwardNoticeRows(
         out.has_award_rate = !fake_award;
         if (out.has_award_rate) {
             out.award_rate = *awarded->adjust_rate;
+            out.award_company = awarded->company_name.empty() ? awarded->normalized_company_name : awarded->company_name;
             out.rank_label = FormatDonggukRankLabel(scatter, *dongguk->adjust_rate, *awarded->adjust_rate);
         } else {
             out.rank_label = FormatDonggukRankLabel(scatter, *dongguk->adjust_rate);

@@ -65,6 +65,9 @@ int main() {
     if (table[0].rank_label.find("개사") == std::string::npos) {
         return Fail("rank label must use chip count N개사");
     }
+    if (table[1].award_company.find("다른") == std::string::npos || std::fabs(table[1].award_rate - 99.456) > 1e-6) {
+        return Fail("table stores 1위 업체 and 1위 사정률, not 넣을 곳");
+    }
 
     if (nara::CanonicalizeRegion("경상북도") != "경북" || nara::CanonicalizeRegion("경상북") != "경북") {
         return Fail("경상북도/경상북 canonicalize to 경북");

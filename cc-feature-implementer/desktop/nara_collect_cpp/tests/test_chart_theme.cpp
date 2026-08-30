@@ -464,17 +464,25 @@ int main() {
     if (status.y != 410 || status.h != 28 || status.x != kMainCardInset + kMainTablePadX) {
         return Fail("status banner sits under 업데이트");
     }
-    if (kTableCardY != 128 || std::fabs(kMainToolbarShift - 0.20f) > 0.001f || kMainKpiH != 56) {
-        return Fail("first screen is a compact KPI strip, table at 128, toolbar shifted 20% left");
+    if (kTableCardY != 306 || std::fabs(kMainToolbarShift - 0.20f) > 0.001f || kMainKpiH != 56) {
+        return Fail("first screen KPIs, intel row, table at 306");
     }
     const auto tb1600 = LayoutMainToolbar(1600, kTableCardY);
     if (tb1600.chart.Right() != 1600 - kMainCardInset - kMainTablePadX - 320) {
         return Fail("지역/업데이트 cluster moves 20% of width left");
     }
     const auto kpis = LayoutMainKpis(1600);
-    if (kpis.notices.y != 60 || kpis.latest.x <= kpis.notices.x || kpis.period.x <= kpis.latest.x
-        || kpis.notices.h != 56) {
-        return Fail("three KPI tiles sit above the 낙찰공고 table");
+    if (kpis.notices.y != 60 || kpis.latest.x <= kpis.notices.x || kpis.dong_wins.x <= kpis.latest.x
+        || kpis.dong_median.x <= kpis.dong_wins.x || kpis.notices.h != 56) {
+        return Fail("four KPI tiles: 낙찰공고 최신 동국1위 순위중앙");
+    }
+    const auto intel = LayoutMainIntel(1600);
+    if (intel.win_bars.y != 128 || intel.houses.x <= intel.win_bars.x || intel.dong.x <= intel.houses.x
+        || intel.win_bars.h != 168) {
+        return Fail("intel row is 1위 bars + 고정 감시 + 동국 1년");
+    }
+    if (intel.win_bars.Bottom() + kMainKpiGap != kTableCardY) {
+        return Fail("table card sits under intel, not 넣을 곳");
     }
     const auto tb = LayoutMainToolbar(1600, 348);
     if (tb.chart.y != 362 || tb.stop.y != 362 || tb.update.y != 362 || tb.region_combo.y != 362

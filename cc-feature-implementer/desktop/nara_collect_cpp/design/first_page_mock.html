@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>동국 낙찰 — 첫 페이지 목업 v2</title>
+<style>
+  :root {
+    --bg: #F3F5F8;
+    --card: #FFFFFF;
+    --text: #111111;
+    --muted: #5A6473;
+    --accent: #D97706;
+    --sit: #22D3EE;
+    --home: #F59E0B;
+    --watch: #64748B;
+    --dong: #FF0000;
+    --gold: #FACC15;
+    --radius: 22px;
+    --shadow: 0 12px 32px rgba(15, 23, 42, 0.07);
+    --font: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #D8DEE7; }
+  body { font-family: var(--font); color: var(--text); }
+  .frame {
+    width: 1600px;
+    margin: 0 auto;
+    background: #2B3340;
+    border-radius: 10px 10px 0 0;
+    overflow: hidden;
+  }
+  .caption {
+    height: 36px;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    color: #E5E7EB;
+    font-size: 12px;
+    gap: 8px;
+  }
+  .dots { display: flex; gap: 6px; }
+  .dots i { width: 10px; height: 10px; border-radius: 50%; display: block; background: #64748B; }
+  .win { background: var(--bg); padding: 18px 20px 16px; }
+  .top { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .brand { font-size: 19px; font-weight: 800; letter-spacing: -0.03em; }
+  .brand em { font-style: normal; color: var(--muted); font-weight: 500; font-size: 12px; margin-left: 8px; }
+  .grow { flex: 1; }
+  .btn {
+    height: 40px; border: 0; border-radius: 14px; padding: 0 16px;
+    font: 700 13px var(--font);
+  }
+  .btn-update { width: 124px; background: var(--accent); color: #fff; }
+  .btn-stop { width: 108px; background: #fff; color: #334155; box-shadow: inset 0 0 0 1px #E2E8F0; }
+  .btn-map { width: 132px; background: #0F172A; color: #fff; }
+  .seg {
+    display: flex; height: 40px; width: 148px; border-radius: 12px; overflow: hidden;
+    background: #fff; box-shadow: inset 0 0 0 1px #E2E8F0;
+  }
+  .seg div { flex: 1; display: flex; align-items: center; justify-content: center; font: 700 13px var(--font); }
+  .seg .on { background: #111; color: #fff; }
+  .seg .off { color: var(--muted); }
+  .status {
+    height: 28px; border-radius: 10px; background: #FFF7ED; color: #B45309;
+    display: flex; align-items: center; padding: 0 12px; font-size: 12px; font-weight: 700;
+    margin-bottom: 12px;
+  }
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px; }
+  .kpi { background: var(--card); border-radius: 16px; padding: 11px 14px; box-shadow: var(--shadow); }
+  .kpi .cap { font-size: 11px; color: var(--muted); }
+  .kpi .val { font-size: 20px; font-weight: 800; margin-top: 2px; letter-spacing: -0.03em; }
+  .kpi .hint { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .hero { display: grid; grid-template-columns: 340px 1fr 220px; gap: 12px; margin-bottom: 12px; }
+  .card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); }
+  .sit { padding: 16px 18px 14px; position: relative; overflow: hidden; }
+  .sit::after {
+    content: ""; position: absolute; right: -30px; top: -50px; width: 200px; height: 240px;
+    background: radial-gradient(circle, rgba(34,211,238,0.42), transparent 68%);
+  }
+  .eyebrow { font-size: 11px; color: var(--muted); }
+  .sit-num { font-size: 48px; font-weight: 800; letter-spacing: -0.04em; color: #0E7490; margin: 4px 0 2px; position: relative; }
+  .sit-num small { font-size: 16px; font-weight: 700; color: #22D3EE; margin-left: 4px; }
+  .cover { font-size: 13px; color: var(--text); font-weight: 700; margin-top: 4px; }
+  .cover span { color: var(--muted); font-weight: 500; }
+  .pills { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+  .pill { font-size: 11px; font-weight: 700; border-radius: 999px; padding: 4px 9px; }
+  .p1 { background: #ECFEFF; color: #0E7490; }
+  .p2 { background: #111; color: #fff; }
+  .p3 { background: #F1F5F9; color: #64748B; }
+  .p4 { background: #FEF3C7; color: #92400E; }
+  .strip { padding: 12px 14px 10px; }
+  .notice { font-size: 13px; font-weight: 700; margin: 2px 0 8px; }
+  .notice span { font-weight: 500; color: var(--muted); margin-left: 8px; }
+  .axis {
+    height: 118px; border-radius: 16px; position: relative; overflow: hidden;
+    background:
+      linear-gradient(90deg, rgba(71,85,105,0.18) 0 50%, rgba(245,158,11,0.32) 50% 100%),
+      repeating-linear-gradient(90deg, transparent 0 9px, rgba(15,23,42,0.05) 9px 10px);
+  }
+  .glow {
+    position: absolute; left: calc(50% + 9.5%); top: 6px; width: 12px; height: 106px;
+    border-radius: 7px; background: #22D3EE;
+    box-shadow: 0 0 10px 4px rgba(34,211,238,0.7), 0 0 28px 10px rgba(34,211,238,0.35);
+    animation: breathe 1.4s ease-in-out infinite;
+  }
+  @keyframes breathe {
+    0%, 100% { box-shadow: 0 0 8px 3px rgba(34,211,238,0.45), 0 0 20px 8px rgba(34,211,238,0.2); }
+    50% { box-shadow: 0 0 16px 7px rgba(34,211,238,0.85), 0 0 36px 14px rgba(34,211,238,0.4); }
+  }
+  .chip {
+    position: absolute; width: 28px; height: 18px; border: 1px solid #21252B;
+    font: 800 10px var(--font); color: #fff; display: flex; align-items: center; justify-content: center;
+  }
+  .chip::before {
+    content: ""; position: absolute; left: 1px; right: 1px; top: 1px; height: 3px; background: #1E293B;
+  }
+  .chip.once::before { background: #94A3B8; height: 2px; }
+  .chip.dong { background: #FF0000; }
+  .chip.dong::before { display: none; }
+  .chip.c1 { background: #2563EB; left: 18%; top: 22px; }
+  .chip.c2 { background: #7C3AED; left: 31%; top: 48px; }
+  .chip.c3 { background: #0F766E; left: 54%; top: 28px; }
+  .chip.c4 { background: #B45309; left: 62%; top: 58px; }
+  .chip.c5 { background: #BE123C; left: 71%; top: 36px; }
+  .chip.dong { left: 58%; top: 78px; }
+  .axis-labels { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: var(--muted); }
+  .legend { display: flex; gap: 12px; margin-top: 6px; font-size: 11px; color: var(--muted); }
+  .sw { width: 9px; height: 9px; display: inline-block; margin-right: 3px; vertical-align: -1px; }
+  .meta { padding: 14px 14px 12px; }
+  .meta h3 { margin: 0 0 10px; font-size: 13px; }
+  .kv { display: flex; justify-content: space-between; font-size: 12px; padding: 6px 0; border-bottom: 1px solid #F1F5F9; }
+  .kv b { font-weight: 800; }
+  .kv .cyan { color: #0E7490; }
+  .table-card { padding: 12px 14px 8px; }
+  .table-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: var(--muted); font-size: 11px; padding: 7px 8px; border-bottom: 1px solid #EEF2F6; }
+  td { padding: 8px; border-bottom: 1px solid #F1F5F9; }
+  tr.sel td { background: #FFF7ED; }
+  .sitcol { font-weight: 800; color: #0E7490; font-variant-numeric: tabular-nums; }
+  .rank { font-weight: 800; }
+  .footer { margin-top: 8px; font-size: 11px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="caption"><div class="dots"><i></i><i></i><i></i></div>동국문화유산연구원 낙찰분석프로그램</div>
+  <div class="win">
+    <div class="top">
+      <div class="brand">동국문화유산연구원 낙찰분석프로그램 <em>낙찰만 · 동국 참여 · 6개사+</em></div>
+      <div class="grow"></div>
+      <button class="btn btn-update">업데이트</button>
+      <button class="btn btn-stop">중지</button>
+      <button class="btn btn-map">전장 맵</button>
+      <div class="seg"><div class="on">전국</div><div class="off">경북</div></div>
+    </div>
+    <div class="status">업데이트는 없는 개찰일만 조회합니다. · sqlite 공고+업체 중복 없음</div>
+    <div class="kpis">
+      <div class="kpi"><div class="cap">낙찰공고</div><div class="val">124</div><div class="hint">동국 참여 · 1년</div></div>
+      <div class="kpi"><div class="cap">최신 개찰</div><div class="val">08-28</div><div class="hint">14:20</div></div>
+      <div class="kpi"><div class="cap">이 공고 고정</div><div class="val">3</div><div class="hint">1년 3공고 이상</div></div>
+      <div class="kpi"><div class="cap">이 공고 한번</div><div class="val">2</div><div class="hint">감시 99.50–99.70</div></div>
+    </div>
+    <div class="hero">
+      <div class="card sit">
+        <div class="eyebrow">선택한 공고 · 넣을 곳</div>
+        <div class="sit-num">99.619<small>0.001</small></div>
+        <div class="cover">가림 대상 <b>미래 99.620</b><span> · 바로 왼쪽</span></div>
+        <div class="pills">
+          <span class="pill p1">넣을 곳</span>
+          <span class="pill p2">고정 미래</span>
+          <span class="pill p3">한번 나그네</span>
+          <span class="pill p4">동국 62위</span>
+        </div>
+      </div>
+      <div class="card strip">
+        <div class="eyebrow">이번 공고 99.50–99.70</div>
+        <div class="notice">문화재 발굴조사 <span>R26BK00001234 · 2026-08-28</span></div>
+        <div class="axis">
+          <div class="glow"></div>
+          <div class="chip c1 once">나그</div>
+          <div class="chip c2">한울</div>
+          <div class="chip c3">미래</div>
+          <div class="chip c4 once">춘추</div>
+          <div class="chip c5">고대</div>
+          <div class="chip dong">동국</div>
+        </div>
+        <div class="axis-labels"><span>99.50 감시</span><span>99.60 홈</span><span>99.70</span></div>
+        <div class="legend">
+          <span><i class="sw" style="background:#64748B"></i>감시</span>
+          <span><i class="sw" style="background:#F59E0B"></i>홈</span>
+          <span><i class="sw" style="background:#22D3EE"></i>넣을 곳</span>
+          <span><i class="sw" style="background:#FF0000"></i>동국</span>
+          <span>위 막대 = 고정</span>
+        </div>
+      </div>
+      <div class="card meta">
+        <h3>이번 칸</h3>
+        <div class="kv"><span>넣을 곳</span><b class="cyan">99.619</b></div>
+        <div class="kv"><span>가린 업체</span><b>미래</b></div>
+        <div class="kv"><span>그 사정률</span><b>99.620</b></div>
+        <div class="kv"><span>왼쪽 간격</span><b>0.001</b></div>
+        <div class="kv"><span>동국</span><b>99.658 · 62위</b></div>
+        <div class="kv"><span>기간</span><b>1년 고정</b></div>
+      </div>
+    </div>
+    <div class="card table-card">
+      <div class="table-head">
+        <div class="brand" style="font-size:15px">동국 참여 낙찰공고</div>
+        <div class="eyebrow">행을 고르면 넣을 곳과 띠가 바뀝니다</div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>개찰일</th><th>공고번호</th><th>공고명</th><th>발주처</th><th>지역</th><th>동국순위/낙찰</th><th>넣을 곳</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="sel">
+            <td>2026-08-28</td><td>R26BK00001234</td><td>문화재 발굴조사</td><td>경북교육청</td><td>전국</td>
+            <td class="rank">62 / 고대</td><td class="sitcol">99.619</td>
+          </tr>
+          <tr>
+            <td>2026-08-21</td><td>R26BK00001190</td><td>사적 정비 용역</td><td>문화재청</td><td>전국</td>
+            <td class="rank">48 / 한울</td><td class="sitcol">99.607</td>
+          </tr>
+          <tr>
+            <td>2026-08-14</td><td>R26BK00001002</td><td>유적 시굴조사</td><td>경주시</td><td>경북</td>
+            <td class="rank">31 / 미래</td><td class="sitcol">99.600</td>
+          </tr>
+          <tr>
+            <td>2026-08-06</td><td>R26BK00000941</td><td>매장문화재 조사</td><td>안동시</td><td>경북</td>
+            <td class="rank">55 / 성림</td><td class="sitcol">99.622</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="footer">최근 1년 · 2025-08-27~2026-08-28 · 전국 · 사정률 99.000~101.000 · 전장 맵은 같은 스냅샷</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

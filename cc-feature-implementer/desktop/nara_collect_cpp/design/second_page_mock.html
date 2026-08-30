@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>전장맵 둘째 페이지 — 설계원칙 목업</title>
+<style>
+  :root {
+    --bg: #F3F5F8;
+    --card: #FFFFFF;
+    --paper: #FBFCFF;
+    --text: #111111;
+    --muted: #5A6473;
+    --accent: #D97706;
+    --accent-strong: #B45309;
+    --blue: #2563EB;
+    --blue-hot: #3B82F6;
+    --blue-wash: rgba(37, 99, 235, 0.08);
+    --dong: #FF0000;
+    --prey: #EA580C;
+    --threat: #7C3AED;
+    --use: #22C55E;
+    --t-fill: rgba(37, 99, 235, 0.14);
+    --threat-fill: rgba(124, 58, 237, 0.14);
+    --use-fill: rgba(34, 197, 94, 0.14);
+    --stroke: #D8E0EA;
+    --radius: 22px;
+    --inner: 16px;
+    --font: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+    --shadow: 0 8px 28px rgba(8, 16, 24, 0.08);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #C9D0DA; }
+  body { font-family: var(--font); color: var(--text); }
+  .stage { padding: 24px 0 40px; }
+  .frame {
+    width: 1600px;
+    margin: 0 auto;
+    background: #2B3340;
+    border-radius: 10px 10px 8px 8px;
+    overflow: hidden;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+  }
+  .caption {
+    height: 36px;
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    color: #E5E7EB;
+    font-size: 12px;
+    gap: 8px;
+  }
+  .dots { display: flex; gap: 6px; }
+  .dots i { width: 10px; height: 10px; border-radius: 50%; display: block; background: #64748B; }
+  .win { background: var(--bg); }
+  .gold { height: 3px; background: linear-gradient(90deg, #F59E0B, #B45309); }
+  .pad { padding: 14px 16px 16px; }
+
+  .map-card {
+    background: var(--card);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    border: 1px solid var(--stroke);
+    min-height: 620px;
+    display: flex;
+    flex-direction: column;
+  }
+  .map-inner {
+    margin: 12px;
+    background: #F6F8FB;
+    border-radius: var(--inner);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    min-height: 596px;
+  }
+  .chrome {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 40px;
+    margin-bottom: 10px;
+  }
+  .tab {
+    height: 34px;
+    min-width: 112px;
+    padding: 0 16px;
+    border-radius: 12px;
+    font: 700 13px var(--font);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+    color: #5A6473;
+    box-shadow: inset 0 0 0 1px #BAC6D5;
+  }
+  .tab.on {
+    background: var(--blue);
+    color: #fff;
+    box-shadow: none;
+  }
+  .tab.idle-map {
+    background: #FFF7ED;
+    color: var(--accent-strong);
+    box-shadow: inset 0 0 0 1px #FDBA74;
+  }
+  .legend {
+    flex: 1;
+    height: 34px;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: inset 0 0 0 1px var(--stroke);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 0 14px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 5px; vertical-align: -1px; }
+  .pill {
+    height: 40px;
+    border-radius: 14px;
+    padding: 0 14px;
+    font: 700 13px var(--font);
+    background: rgba(255,255,255,0.84);
+    box-shadow: 0 4px 16px rgba(8,16,24,0.12);
+    display: flex;
+    align-items: center;
+    color: var(--text);
+  }
+  .pill.ghost { color: #94A3B8; }
+
+  .page {
+    flex: 1;
+    background: var(--paper);
+    border-radius: 14px;
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    min-height: 520px;
+    overflow: hidden;
+  }
+  .rail {
+    background: linear-gradient(180deg, #EFF4FF 0%, #FBFCFF 42%);
+    border-right: 1px solid #E8EEF6;
+    padding: 22px 20px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .kicker {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: var(--blue);
+  }
+  .one-line {
+    font-size: 18px;
+    font-weight: 800;
+    line-height: 1.45;
+    letter-spacing: -0.03em;
+  }
+  .one-line span { color: var(--blue); }
+  .key {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .key .row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .band {
+    width: 28px;
+    height: 14px;
+    border-radius: 3px;
+  }
+  .axis-mini {
+    height: 72px;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: inset 0 0 0 1px var(--stroke);
+    position: relative;
+    overflow: hidden;
+  }
+  .axis-mini .track {
+    position: absolute;
+    left: 10px; right: 10px; top: 36px; height: 2px;
+    background: #CBD5E1;
+  }
+  .axis-mini .t {
+    position: absolute;
+    left: 22%; width: 16%; top: 14px; height: 44px;
+    background: var(--t-fill);
+    border-left: 2px solid var(--blue);
+    border-right: 2px solid var(--blue);
+  }
+  .axis-mini .th {
+    position: absolute;
+    left: 8%; width: 14%; top: 22px; height: 28px;
+    background: var(--threat-fill);
+  }
+  .axis-mini .use {
+    position: absolute;
+    left: 22%; width: 7%; top: 26px; height: 20px;
+    background: var(--use-fill);
+  }
+  .axis-mini .dot {
+    position: absolute; width: 10px; height: 10px; border-radius: 1px; top: 32px; border: 1px solid #21252B;
+  }
+  .axis-mini .lab {
+    position: absolute; top: 4px; font-size: 10px; font-weight: 800; color: var(--blue);
+    left: 24%;
+  }
+  .axis-labs {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--muted);
+    padding: 0 8px;
+  }
+  .note {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.55;
+  }
+  .note b { color: var(--text); }
+
+  .essay {
+    padding: 22px 28px 24px 24px;
+    overflow: auto;
+  }
+  .lead {
+    margin: 6px 0 16px;
+  }
+  .lead p {
+    margin: 0;
+    padding-left: 14px;
+    border-left: 3px solid var(--blue);
+    font-size: 22px;
+    font-weight: 800;
+    line-height: 1.4;
+    letter-spacing: -0.03em;
+  }
+  .essay p {
+    margin: 0 0 11px;
+    font-size: 13.5px;
+    line-height: 1.7;
+    color: #1F2937;
+  }
+  .essay p.quiet { color: var(--muted); }
+  .quote {
+    margin: 14px 0 16px;
+    padding: 14px 16px 14px 18px;
+    background: var(--blue-wash);
+    border-radius: 12px;
+    border-left: 3px solid var(--blue);
+    font-size: 16px;
+    font-weight: 800;
+    line-height: 1.5;
+    color: #1D4ED8;
+  }
+  .close {
+    margin-top: 8px;
+    padding-top: 12px;
+    border-top: 1px solid var(--stroke);
+    font-size: 14px;
+    font-weight: 800;
+  }
+  .rule { height: 1px; background: var(--stroke); margin: 4px 0 14px; }
+
+  .dock {
+    margin-top: 12px;
+    background: rgba(255,255,255,0.95);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--stroke);
+    display: grid;
+    grid-template-columns: 320px 14px 1fr;
+    min-height: 148px;
+    padding: 12px 14px;
+  }
+  .range h4, .cos h4 {
+    margin: 0 0 8px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
+  .field label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+  .combo {
+    height: 32px;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: inset 0 0 0 1.2px #BAC6D5;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    font-size: 13px;
+  }
+  .region {
+    grid-column: 1 / -1;
+    display: flex;
+    height: 32px;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: inset 0 0 0 1.2px #BAC6D5;
+  }
+  .region div { flex: 1; display: flex; align-items: center; justify-content: center; font: 700 12px var(--font); }
+  .region .on { background: #FFF7ED; color: var(--accent-strong); }
+  .region .off { background: #fff; color: var(--muted); }
+  .div { width: 1px; background: var(--stroke); margin: 6px 0; }
+  .cos-head { display: flex; justify-content: space-between; align-items: center; }
+  .all {
+    height: 26px; width: 64px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font: 700 13px var(--font); color: #4B5563;
+  }
+  .firms {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 4px 8px;
+    font-size: 12px;
+    color: #334155;
+  }
+  .firms label { display: flex; gap: 6px; align-items: center; }
+  .firms i {
+    width: 18px; height: 18px; border-radius: 4px;
+    box-shadow: inset 0 0 0 1px #BAC6D5; background: #fff;
+  }
+  .tag { font-size: 11px; color: #94A3B8; margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="stage">
+<div class="frame">
+  <div class="caption"><div class="dots"><i></i><i></i><i></i></div>동국문화유산연구원 낙찰분석프로그램 - 분석 창 · 전국</div>
+  <div class="win">
+    <div class="gold"></div>
+    <div class="pad">
+      <div class="map-card">
+        <div class="map-inner">
+          <div class="chrome">
+            <div class="tab idle-map">전장맵</div>
+            <div class="tab on">설계원칙</div>
+            <div class="tab">히스토그램</div>
+            <div class="legend">
+              <span><i class="sw" style="background:var(--blue)"></i>T 보기 99.56–99.65</span>
+              <span><i class="sw" style="background:var(--use)"></i>사용 왼쪽</span>
+              <span><i class="sw" style="background:var(--prey)"></i>먹이</span>
+              <span><i class="sw" style="background:var(--threat)"></i>위협 0.20</span>
+              <span>이 페이지는 집을 계산하지 않습니다</span>
+            </div>
+          </div>
+
+          <div class="page">
+            <aside class="rail">
+              <div class="kicker">전장맵 · 둘째 페이지</div>
+              <div class="one-line">T에 들어오면 <span>먹이</span>가 되게 보여 T를 비우고, 빈 T를 동국의 칸으로 유지하라.</div>
+              <div class="axis-mini" aria-hidden="true">
+                <div class="lab">T</div>
+                <div class="th"></div>
+                <div class="use"></div>
+                <div class="t"></div>
+                <div class="track"></div>
+                <div class="dot" style="left:26%; background:var(--dong)"></div>
+                <div class="dot" style="left:32%; background:var(--prey)"></div>
+                <div class="dot" style="left:12%; background:var(--threat)"></div>
+              </div>
+              <div class="axis-labs"><span>99</span><span>T 보기</span><span>101</span></div>
+              <div class="key">
+                <div class="row"><i class="band" style="background:var(--t-fill); box-shadow:inset 0 0 0 1px var(--blue)"></i>T · 동국 1년 가운데 절반</div>
+                <div class="row"><i class="band" style="background:var(--threat-fill); box-shadow:inset 0 0 0 1px var(--threat)"></i>위협 · T 왼쪽 0.20</div>
+                <div class="row"><i class="band" style="background:#FFEDD5; box-shadow:inset 0 0 0 1px var(--prey)"></i>먹이 · T 안, 동국 오른쪽</div>
+                <div class="row"><i class="band" style="background:var(--use-fill); box-shadow:inset 0 0 0 1px var(--use)"></i>사용 · 침입 있으면 왼쪽만</div>
+              </div>
+              <div class="note">보기 <b>99.56–99.65</b>. 너비 약 0.08. 영원한 자리가 아니다. 좁으면 집이고, 집은 숨기지 않는다.</div>
+            </aside>
+
+            <article class="essay">
+              <div class="kicker">설계원칙</div>
+              <div class="lead">
+                <p>이 앱을 만든 까닭은 동국의 다음 한 장을 지키기 위해서다.</p>
+              </div>
+              <p>예가를 맞히겠다는 화면이 아니라, 동국이 이미 앉아 버린 칸을 외면하지 않기 위한 화면이다. 위에는 그 칸을 한 점으로 팔아 넘기는 상품을 두고, 아래에는 동국이 그 상품을 거절하는 이유를 둔다.</p>
+              <p>시중의 추천은 슈퍼컴퓨터와 적중률로 한 점을 판다. 그 점의 이름은 대개 사정률이다. 사정률은 예가가 열린 뒤에야 생긴다. 동국이 도장을 찍는 순간에는 그 숫자가 없다. 없는 값을 여러 곳이 같이 받으면 그 값이 집이 된다. 집이 된 칸에 표가 쌓이면 1등은 그 칸에서 나오지 않는다. 적중이라는 말은 대부분 낙찰이 아니라 사정률과의 거리다. 동국이 가져가야 하는 것은 거리가 아니라 계약이다.</p>
+              <p>그 한 점이 사람을 모으는 자리는 기초대비사정률 100 근처다. 표가 이미 두꺼운 산이다. 그 산을 안전이라고 부르는 것은 하한에 안 걸린다는 말일 뿐이다. 안 걸리고 남는 표는 서로 비싸게 붙는다. 동국이 그 산에 같이 앉으면, 분석을 한 것이 아니라 남이 만든 집에 세를 든 것이다.</p>
+              <p>그래서 이 앱은 예측기가 아니다. 동국이 로드한 1년의 전체 업체, 전체 순위, 전체 투찰 점을 같은 점으로 찍는다. 1등만 모아 동국에게 칸을 주지 않는다. 공고를 열면 그 개찰일로 1년을 다시 자른다. 동국 담당자에게 한 점을 투찰값으로 건네지 않는다. 한 점을 받는 습관이 바로 저 산으로 가는 길이다.</p>
+              <p>동국 구간 T는 동국이 그 1년에 넣은 전체 점의 가운데 절반이다. 지금 창의 보기는 99.56에서 99.65다. 보기일 뿐, 동국의 영원한 자리가 아니다. 너비가 0.15보다 좁으면 그 구간은 이미 집이다. 자랑할 자리가 아니다. 남이 볼 수 있는 동국의 좌표다. 이 앱은 그 좌표를 숨기지 않는다. 숨기는 순간 동국만 모르고 남은 안다.</p>
+              <p>그 집 안에 들어와 동국보다 오른쪽에 앉은 표는 먹이다. T에 들어가면 동국에게 먹힌다는 것이 보이면, 그 칸을 기피하게 된다. 기피가 생기면 T는 비로소 동국의 칸이 된다. 기피가 생기기 전에 T 전체를 사용 구간으로 칠하면, 이 앱이 동국의 집을 시장에 공표하는 일이 된다.</p>
+              <p>위험한 쪽은 T의 오른쪽이 아니라 왼쪽이다. T 왼쪽 0.20에 붙는 집이 있으면 동국이 먹이가 된다. 좁아진 자사 좌표를 화면 한가운데에 “추천”으로 두지 않는다. 금지로 두고, 왼쪽을 본다.</p>
+              <p>이번 판에서 동국이 볼 칸은 한 점이 아니다. T 안에 아직 침입이 있으면 왼쪽 변만 지킨다. 남이 T를 비우기 시작한 뒤에야 T 안을 쓴다. 그때도 직전과 같은 네 자리는 구멍으로 남긴다. 남은 폭이 너무 좁으면 숫자를 만들지 않고 겹침이라고만 적는다.</p>
+              <p>계산은 공고마다 다시 한다. 기준일은 그 공고의 개찰일이다. 점은 앱에 있는 1년만 쓴다. 어제 구간을 오늘 공고에 붙이지 않는다. 판이 크면 한 집 가리기의 이득은 작다. 칸 0.02보다 이번 판에 몇 곳이 붙는지를 먼저 본다.</p>
+              <p class="quiet">동국이 이 앱에 요구하는 것은 한 줄이다.</p>
+              <div class="quote">T에 들어오면 먹이가 되게 보여 T를 비우고, 빈 T를 동국의 칸으로 유지하라.</div>
+              <p>예측하지 마라. 1년 전체 점을 봐라. 좁으면 집이다. 움직일 때는 왼쪽만 봐라. 공고가 바뀌면 다시 그려라.</p>
+              <p>이 창은 차트의 집을 계산하지 않는다. 차트가 동국의 집을 그리고, 이 창은 왜 그 집을 숨기지 않는지만 말한다.</p>
+              <div class="close">숨기지 않는 것이 동국에게 최선을 다하는 일이다.</div>
+            </article>
+          </div>
+        </div>
+      </div>
+
+      <div class="dock">
+        <div class="range">
+          <h4>분석 범위</h4>
+          <div class="fields">
+            <div class="field"><label>기간</label><div class="combo">최근 1년</div></div>
+            <div class="field"><label>정밀도</label><div class="combo">0.01</div></div>
+            <div class="field" style="grid-column:1/-1"><label>지역</label>
+              <div class="region"><div class="on">전국</div><div class="off">경북</div></div>
+            </div>
+            <div class="field"><label>최소</label><div class="combo">99.00000</div></div>
+            <div class="field"><label>최대</label><div class="combo">101.00000</div></div>
+          </div>
+        </div>
+        <div class="div"></div>
+        <div class="cos">
+          <div class="cos-head"><h4>업체</h4><div class="all">전체</div></div>
+          <div class="firms">
+            <label><i></i>가경</label><label><i></i>가디</label><label><i></i>가람</label><label><i></i>가문</label>
+            <label><i></i>가역</label><label><i></i>가온</label><label><i></i>강산</label><label><i></i>강고</label>
+            <label><i></i>고려</label><label><i></i>고운</label><label><i></i>국고</label><label><i></i>국문</label>
+            <label><i></i>금강</label><label><i></i>나라</label><label><i></i>동국</label><label><i></i>미래</label>
+          </div>
+          <div class="tag">설계원칙 페이지는 집을 다시 그리지 않습니다. 전장맵 탭이 집을 그립니다.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</body>
+</html>

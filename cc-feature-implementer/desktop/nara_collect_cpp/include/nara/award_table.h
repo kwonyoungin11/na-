@@ -14,6 +14,7 @@ struct AwardNoticeRow {
     std::string ordering_agency;
     std::string region;
     std::string rank_label;
+    std::string award_company;
     double dongguk_rate = 0;
     double award_rate = 0;
     bool has_award_rate = false;
