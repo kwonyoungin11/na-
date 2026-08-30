@@ -619,8 +619,11 @@ int main() {
     if (kBandHomeArgb == 0 || kBandWatchFillArgb == 0 || kBandSitArgb == 0 || kWatchRegularMarkArgb == 0) {
         return Fail("home/watch/sit/고정 mark colors are set");
     }
-    if (kSitPulseTimerMs < 100 || kSitPulseTimerMs == 50) {
-        return Fail("sit pulse must not be the 50ms full-map bounce timer");
+    if (kSitPulseTimerMs != 16 || kSitPulseTimerMs == 50) {
+        return Fail("sit glow is vsync-ish 16ms overlay, not 50ms bounce");
+    }
+    if (kSitGlowLayerCount != 3 || SitGlowPadDip(0) <= SitGlowPadDip(2)) {
+        return Fail("sit glow is 3 D2D layers, outer pad bigger than core");
     }
     if (kSitPulsePeriodMs < 800) {
         return Fail("sit pulse period is a slow breath, not a flicker");

@@ -125,8 +125,10 @@ target_compile_definitions(nara_desktop PRIVATE UNICODE _UNICODE)
 target_link_libraries(nara_desktop PRIVATE user32 comctl32 gdi32 gdiplus ole32 uxtheme d2d1 dwrite winsqlite3)
 
 add_executable(nara_dwrite_text_tests
-    tests/test_dwrite_text.cpp)
+    tests/test_dwrite_text.cpp
+    src/dwrite_text.cpp)
 target_include_directories(nara_dwrite_text_tests PRIVATE include)
+target_link_libraries(nara_dwrite_text_tests PRIVATE d2d1 dwrite ole32)
 add_test(NAME nara_dwrite_text_tests COMMAND nara_dwrite_text_tests)
 
 target_include_directories(nara_igunsul_convert_tests PRIVATE include third_party/miniz)

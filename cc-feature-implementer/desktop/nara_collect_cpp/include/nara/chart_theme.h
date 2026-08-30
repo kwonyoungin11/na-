@@ -265,7 +265,8 @@ constexpr uint32_t kBandSitArgb = 0x5522D3EEu;
 constexpr uint32_t kWatchRegularMarkArgb = 0xFF1E293Bu;
 constexpr uint32_t kWatchOnceMarkArgb = 0xFF64748Bu;
 constexpr unsigned kSitPulsePeriodMs = 1400;
-constexpr unsigned kSitPulseTimerMs = 120;
+constexpr unsigned kSitPulseTimerMs = 16;
+constexpr int kSitGlowLayerCount = 3;
 
 inline uint32_t SitPulseAlpha(unsigned elapsed_ms) {
     const unsigned period = (std::max)(1u, kSitPulsePeriodMs);
@@ -276,6 +277,28 @@ inline uint32_t SitPulseAlpha(unsigned elapsed_ms) {
 
 inline uint32_t SitPulseArgb(uint32_t base, unsigned elapsed_ms) {
     return (SitPulseAlpha(elapsed_ms) << 24) | (base & 0x00FFFFFFu);
+}
+
+inline float SitGlowPadDip(int layer) {
+    if (layer <= 0) {
+        return 10.0f;
+    }
+    if (layer == 1) {
+        return 5.0f;
+    }
+    return 1.0f;
+}
+
+inline uint32_t SitGlowLayerArgb(uint32_t core, int layer, unsigned elapsed_ms) {
+    const uint32_t pulse = SitPulseAlpha(elapsed_ms);
+    unsigned weight = 40u;
+    if (layer == 1) {
+        weight = 100u;
+    } else if (layer >= 2) {
+        weight = 200u;
+    }
+    const uint32_t a = (pulse * weight) / 255u;
+    return (a << 24) | (core & 0x00FFFFFFu);
 }
 constexpr std::array<uint32_t, kBandUseStageCount> kBandUseStageArgb = {
     0x1822C55Eu, 0x1822C55Eu, 0x1822C55Eu, 0x1822C55Eu, 0x1822C55Eu, 0x1822C55Eu, 0x1822C55Eu,

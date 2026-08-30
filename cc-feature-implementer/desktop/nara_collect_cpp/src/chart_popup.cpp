@@ -152,6 +152,9 @@ using chart_theme::kBandSitArgb;
 using chart_theme::kWatchRegularMarkArgb;
 using chart_theme::kWatchOnceMarkArgb;
 using chart_theme::kSitPulseTimerMs;
+using chart_theme::kSitGlowLayerCount;
+using chart_theme::SitGlowLayerArgb;
+using chart_theme::SitGlowPadDip;
 using chart_theme::SitPulseArgb;
 using chart_theme::kChartTabPad;
 using chart_theme::kEmptyMessage;
@@ -871,14 +874,29 @@ void PaintBandLayer(Gdiplus::Graphics& g, int plotL, int plotT, int plotW, int p
     }
 }
 
-void PaintSitPulse(Gdiplus::Graphics& g) {
+void PaintSitPulse(Gdiplus::Graphics&) {
     if (!kBandPaintSit || !g_band.has_sit || !ChartShowsScatter(g_chartTab)) {
         return;
     }
     const int cell = CellSize(g_chart.view.scale);
+    const int plotL = g_chrome.plot.x;
+    const int plotT = g_chrome.plot.y;
+    const int plotH = g_chrome.plot.h;
+    const int x0 = RateToX(g_band.sit_rate, plotL, g_chart.view.scroll_x, cell);
+    const int x1 = RateToX(g_band.sit_rate + 0.01, plotL, g_chart.view.scroll_x, cell);
+    int left = (std::min)(x0, x1);
+    int right = (std::max)(x0, x1);
+    if (right - left < 3) {
+        right = left + 3;
+    }
     const unsigned elapsed = GetTickCount() - g_bounceOrigin;
-    FillBand(g, g_band.sit_rate, g_band.sit_rate + 0.01, SitPulseArgb(kBandSitArgb, elapsed), g_chrome.plot.x,
-             g_chrome.plot.y, g_chrome.plot.w, g_chrome.plot.h, g_chart.view.scroll_x, cell);
+    for (int layer = 0; layer < kSitGlowLayerCount; ++layer) {
+        const float pad = SitGlowPadDip(layer);
+        nara::dwrite_text::QueueGlow(static_cast<float>(left) - pad, static_cast<float>(plotT) - pad * 0.15f,
+                                     static_cast<float>(right - left) + pad * 2.0f,
+                                     static_cast<float>(plotH) + pad * 0.3f, SitGlowLayerArgb(kBandSitArgb, layer, elapsed),
+                                     6.0f + pad * 0.35f);
+    }
 }
 
 void PaintBandLegend(Gdiplus::Graphics& g) {

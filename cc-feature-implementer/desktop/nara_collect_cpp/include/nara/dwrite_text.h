@@ -45,6 +45,8 @@ inline int OutlineNeighborCount() { return 8; }
 
 void ResetQueue();
 void Queue(Job job);
+void QueueGlow(float x, float y, float w, float h, uint32_t argb, float radius);
+int QueuedGlowCount();
 void SetPlotClip(float x, float y, float w, float h);
 
 inline void QueueBox(float x, float y, float w, float h, const wchar_t* text, float size, uint32_t argb, Align ha,

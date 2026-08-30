@@ -26,6 +26,15 @@ int main() {
     if (OutlineNeighborCount() != 8) {
         return Fail("glyph outline is 8-neighbor like geometry stroke");
     }
+    ResetQueue();
+    QueueGlow(10.0f, 10.0f, 8.0f, 100.0f, 0x8822D3EEu, 4.0f);
+    if (QueuedGlowCount() != 1) {
+        return Fail("sit glow queues a D2D rounded fill, not GDI+ FillBand");
+    }
+    ResetQueue();
+    if (QueuedGlowCount() != 0) {
+        return Fail("reset clears glow queue");
+    }
     if (std::fabs(kDwriteClearTypeLevel - 1.0f) > 0.001f || kDwriteTextAntialiasClearType != 1
         || kDwritePixelGeometryRgb != 1 || kDwriteRenderingNaturalSymmetric != 5
         || std::fabs(kDwriteEnhancedContrast - 0.5f) > 0.001f) {

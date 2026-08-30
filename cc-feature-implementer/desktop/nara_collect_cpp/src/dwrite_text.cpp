@@ -20,6 +20,15 @@ namespace {
 using Microsoft::WRL::ComPtr;
 
 std::vector<Job> g_jobs;
+struct GlowJob {
+    float x = 0;
+    float y = 0;
+    float w = 0;
+    float h = 0;
+    uint32_t argb = 0;
+    float radius = 0;
+};
+std::vector<GlowJob> g_glows;
 D2D1_RECT_F g_plot_clip{0, 0, 0, 0};
 bool g_has_plot_clip = false;
 
@@ -96,7 +105,26 @@ DWRITE_PARAGRAPH_ALIGNMENT VAlign(Align a) {
 
 }  // namespace
 
-void ResetQueue() { g_jobs.clear(); }
+void ResetQueue() {
+    g_jobs.clear();
+    g_glows.clear();
+}
+
+void QueueGlow(float x, float y, float w, float h, uint32_t argb, float radius) {
+    if (w < 0.5f || h < 0.5f || argb == 0) {
+        return;
+    }
+    GlowJob job;
+    job.x = x;
+    job.y = y;
+    job.w = w;
+    job.h = h;
+    job.argb = argb;
+    job.radius = radius;
+    g_glows.push_back(job);
+}
+
+int QueuedGlowCount() { return static_cast<int>(g_glows.size()); }
 
 void SetPlotClip(float x, float y, float w, float h) {
     g_plot_clip = D2D1::RectF(x, y, x + w, y + h);
@@ -112,24 +140,42 @@ void Queue(Job job) {
 
 void Flush(void* hdc_void, int pixel_w, int pixel_h, float dpi_scale, int origin_x, int origin_y) {
     HDC hdc = static_cast<HDC>(hdc_void);
-    if (hdc == nullptr || pixel_w < 1 || pixel_h < 1 || g_jobs.empty()) {
+    if (hdc == nullptr || pixel_w < 1 || pixel_h < 1 || (g_jobs.empty() && g_glows.empty())) {
         g_jobs.clear();
+        g_glows.clear();
         return;
     }
     if (!EnsureFactories()) {
         g_jobs.clear();
+        g_glows.clear();
         return;
     }
     const float scale = dpi_scale > 0.0f ? dpi_scale : 1.0f;
     RECT bind{origin_x, origin_y, origin_x + pixel_w, origin_y + pixel_h};
     if (FAILED(g_rt->BindDC(hdc, &bind))) {
         g_jobs.clear();
+        g_glows.clear();
         return;
     }
     g_rt->SetDpi(96.0f * scale, 96.0f * scale);
     g_rt->SetTextAntialiasMode(static_cast<D2D1_TEXT_ANTIALIAS_MODE>(kDwriteTextAntialiasClearType));
     g_rt->SetTextRenderingParams(g_params.Get());
     g_rt->BeginDraw();
+    if (g_has_plot_clip && !g_glows.empty()) {
+        g_rt->PushAxisAlignedClip(g_plot_clip, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+    }
+    for (const auto& glow : g_glows) {
+        ComPtr<ID2D1SolidColorBrush> brush;
+        if (FAILED(g_rt->CreateSolidColorBrush(ToColor(glow.argb), brush.GetAddressOf()))) {
+            continue;
+        }
+        const D2D1_ROUNDED_RECT rr =
+            D2D1::RoundedRect(D2D1::RectF(glow.x, glow.y, glow.x + glow.w, glow.y + glow.h), glow.radius, glow.radius);
+        g_rt->FillRoundedRectangle(rr, brush.Get());
+    }
+    if (g_has_plot_clip && !g_glows.empty()) {
+        g_rt->PopAxisAlignedClip();
+    }
     for (const auto& job : g_jobs) {
         ComPtr<IDWriteTextFormat> format;
         const DWRITE_FONT_WEIGHT weight = job.bold ? DWRITE_FONT_WEIGHT_BOLD : DWRITE_FONT_WEIGHT_REGULAR;
@@ -219,6 +265,7 @@ void Flush(void* hdc_void, int pixel_w, int pixel_h, float dpi_scale, int origin
     }
     g_rt->EndDraw();
     g_jobs.clear();
+    g_glows.clear();
 }
 
 }  // namespace dwrite_text
