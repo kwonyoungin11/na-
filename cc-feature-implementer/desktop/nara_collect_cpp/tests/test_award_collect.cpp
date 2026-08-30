@@ -127,6 +127,24 @@ int main() {
     if (six.start_month != "2026-02") {
         return Fail("6-month helper is only for range math, not the app default");
     }
+    if (nara::AddDaysYmd("2026-08-20", 1) != "2026-08-21" || nara::AddDaysYmd("2026-08-31", 1) != "2026-09-01") {
+        return Fail("gap collect starts the day after the last stored open_date");
+    }
+    if (nara::YmdToInqryBegin("2026-08-21") != "202608210000" || nara::YmdToInqryEnd("2026-08-29") != "202608292359") {
+        return Fail("OpenAPI inqry dates are YYYYMMDD0000..2359");
+    }
+    const auto gap = nara::PlanMissingCollect("2026-08-20 11:00:00", "2026-08-29", 12);
+    if (gap.need != nara::CollectNeed::GapFromStore || gap.from_date != "2026-08-21" || gap.to_date != "2026-08-29") {
+        return Fail("업데이트 must query only the missing days after sqlite max open_date");
+    }
+    const auto current = nara::PlanMissingCollect("2026-08-29", "2026-08-29", 12);
+    if (current.need != nara::CollectNeed::AlreadyCurrent) {
+        return Fail("already-current store must not hit OpenAPI again");
+    }
+    const auto empty = nara::PlanMissingCollect("", "2026-08-29", 12);
+    if (empty.need != nara::CollectNeed::FullLookback || empty.from_date != "2025-08-29") {
+        return Fail("empty sqlite still uses the 12-month lookback");
+    }
     const auto windows = nara::CollectThreeMonthWindows(span.start_month, span.end_month);
     if (windows.size() != 5) {
         std::cerr << "FAIL: 1년은 3개월 창 5개여야 한다 got " << windows.size() << "\n";

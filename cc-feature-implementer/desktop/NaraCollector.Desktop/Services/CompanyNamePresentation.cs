@@ -39,7 +39,11 @@ public static class CompanyNamePresentation
             output = Regex.Replace(output, pattern, string.Empty, RegexOptions.IgnoreCase);
         }
 
-        output = Regex.Replace(output, "문화유산연구원", "문화재연구원", RegexOptions.IgnoreCase);
+        var collapsed = Regex.Replace(output, @"\s+", "", RegexOptions.None);
+        if (!collapsed.Contains("한국문화유산연구원", StringComparison.OrdinalIgnoreCase))
+        {
+            output = Regex.Replace(output, "문화유산연구원", "문화재연구원", RegexOptions.IgnoreCase);
+        }
         output = Regex.Replace(output, @"[()（）]+", " ");
         output = Regex.Replace(output, @"\s+", " ", RegexOptions.None);
         return output.Trim();

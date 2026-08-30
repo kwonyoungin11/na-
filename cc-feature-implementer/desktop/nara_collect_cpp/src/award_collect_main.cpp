@@ -110,6 +110,8 @@ int main(int argc, char** argv) {
         nara::LookbackCollectMonthSpan(local.tm_year + 1900, local.tm_mon + 1, nara::kCollectLookbackMonths);
     std::string start_month = default_span.start_month;
     std::string end_month = default_span.end_month;
+    std::string from_date;
+    std::string to_date;
     std::string env_path = ".env";
     std::string out_path = "cpp_award_collect.jsonl";
     for (int i = 1; i < argc; ++i) {
@@ -118,6 +120,10 @@ int main(int argc, char** argv) {
             start_month = argv[++i];
         } else if (arg == "--end-month" && i + 1 < argc) {
             end_month = argv[++i];
+        } else if (arg == "--from-date" && i + 1 < argc) {
+            from_date = argv[++i];
+        } else if (arg == "--to-date" && i + 1 < argc) {
+            to_date = argv[++i];
         } else if (arg == "--env" && i + 1 < argc) {
             env_path = argv[++i];
         } else if (arg == "--out" && i + 1 < argc) {
@@ -131,9 +137,14 @@ int main(int argc, char** argv) {
         return 2;
     }
 
-    const auto months = nara::CollectMonths(start_month, end_month);
-    std::cerr << "cpp collect months=" << months.size() << " " << start_month << "~" << end_month
-              << " (월 단위 OpenAPI)\n";
+    const bool gap = from_date.size() >= 10 && to_date.size() >= 10;
+    const auto months = gap ? std::vector<std::string>{} : nara::CollectMonths(start_month, end_month);
+    if (gap) {
+        std::cerr << "cpp collect gap " << from_date << "~" << to_date << " (stored days skipped)\n";
+    } else {
+        std::cerr << "cpp collect months=" << months.size() << " " << start_month << "~" << end_month
+                  << " (월 단위 OpenAPI)\n";
+    }
     const std::vector<std::string> keywords = {
         "발굴조사", "정밀발굴조사", "시굴조사", "지표조사", "표본조사", "문화재발굴조사"};
 
@@ -151,17 +162,17 @@ int main(int argc, char** argv) {
     };
     std::map<std::string, BidNoticeMeta> bid_notice_cache;
     std::map<std::string, std::string> region_cache;
-    for (const auto& month : months) {
+    auto run_pages = [&](const std::string& begin_dt, const std::string& end_dt, const std::string& label) {
         for (const auto& keyword : keywords) {
           for (int page = 1; page <= 20; ++page) {
             std::ostringstream path;
-            path << nara::BuildOpengListQuery(MonthStart(month), MonthEnd(month), UrlEncode(keyword), page)
+            path << nara::BuildOpengListQuery(begin_dt, end_dt, UrlEncode(keyword), page)
                  << "&ServiceKey=" << UrlEncode(key);
             std::string body;
             try {
                 body = nara::HttpGet("apis.data.go.kr", path.str());
             } catch (const std::exception& ex) {
-                std::cerr << "WARN " << month << " " << keyword << " p" << page << " " << ex.what() << "\n";
+                std::cerr << "WARN " << label << " " << keyword << " p" << page << " " << ex.what() << "\n";
                 break;
             }
             auto items = nara::ParseJsonObjectArray(body, "items");
@@ -169,7 +180,7 @@ int main(int argc, char** argv) {
                 items = nara::ParseJsonObjectArray(body, "item");
             }
             const auto result_msg = nara::JsonString(body, "resultMsg");
-            std::cerr << month << " " << keyword << " p" << page << " items=" << items.size()
+            std::cerr << label << " " << keyword << " p" << page << " items=" << items.size()
                       << " bytes=" << body.size() << " msg=" << result_msg << "\n";
             if (items.empty()) {
                 if (!body.empty() && page == 1) {
@@ -321,6 +332,13 @@ int main(int argc, char** argv) {
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(80));
           }
+        }
+    };
+    if (gap) {
+        run_pages(nara::YmdToInqryBegin(from_date), nara::YmdToInqryEnd(to_date), from_date + "~" + to_date);
+    } else {
+        for (const auto& month : months) {
+            run_pages(MonthStart(month), MonthEnd(month), month);
         }
     }
     out.flush();

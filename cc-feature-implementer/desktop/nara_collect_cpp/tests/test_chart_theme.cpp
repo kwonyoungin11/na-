@@ -258,8 +258,98 @@ int main() {
     if (chrome.company_wrap.h < kCompanyWrapMinH) {
         return Fail("업체 wrap minHeight 102");
     }
-    if (chrome.plot.x != chrome.map_inner.x + kPlotLeft || chrome.plot.y != chrome.map_inner.y + kPlotTop) {
+    if (chrome.plot.x != chrome.map_inner.x + kPlotLeft) {
         return Fail("plot is the inner host rect, not the full popup");
+    }
+    if (chrome.plot.y != chrome.tab_map.Bottom() + kPlotTop) {
+        return Fail("plot sits under the tabs with the original 16dip title inset");
+    }
+    if (chrome.plot.y < chrome.tab_strip.Bottom() + static_cast<int>(kFontAxis)) {
+        return Fail("plot must leave room so 공고(개찰일시) does not run through 전장맵");
+    }
+    const int title_y = AxisNoticeTitleY(chrome.tab_strip.Bottom(), chrome.plot.y);
+    if (title_y < chrome.tab_strip.Bottom() || title_y + static_cast<int>(kFontAxis) > chrome.plot.y) {
+        return Fail("axis title sits between the tabs and the plot");
+    }
+    if (NoticeYLabelFits(chrome.tab_map.y, kCellPx, chrome.plot.y, chrome.plot.Bottom(), chrome.tab_strip.Bottom())) {
+        return Fail("Y labels that cross 전장맵 must be skipped");
+    }
+    if (!NoticeYLabelFits(chrome.plot.y, kCellPx, chrome.plot.y, chrome.plot.Bottom(), chrome.tab_strip.Bottom())) {
+        return Fail("Y labels starting at the plot top are visible");
+    }
+    const int newest_y = chrome.plot.Bottom() - (5 + 1) * kCellPx;
+    if (!NoticeYLabelFits(newest_y, kCellPx, chrome.plot.y, chrome.plot.Bottom(), chrome.tab_strip.Bottom())) {
+        return Fail("newest notice Y label at the bottom of the latest view must stay");
+    }
+    const auto one = LayoutChipDodge(0, 1, 20);
+    if (one.side != 18) {
+        return Fail("single chip stays cell-2");
+    }
+    const auto a = LayoutChipDodge(0, 2, 20);
+    const auto b = LayoutChipDodge(1, 2, 20);
+    if (ChipDodgeRectsOverlap(a, b)) {
+        return Fail("two chips in one 0.01 cell sit side by side, not stacked on 재/륜");
+    }
+    if (ChipGoldInset() < 1.0f || a.side <= static_cast<int>(ChipGoldInset() * 2.0f)) {
+        return Fail("1위 gold stroke stays inside the chip so 국장/국강 do not melt");
+    }
+    if (!ChipDodgeDrawsLabel(8) || !ChipDodgeDrawsLabel(18)) {
+        return Fail("dodged chips keep 2 hangul clipped in the cell; selecting must not drop labels");
+    }
+    std::vector<char> reset_flags = {1, 0, 1};
+    ResetMapFilters(reset_flags);
+    if (reset_flags.size() != 3 || reset_flags[0] || reset_flags[1] || reset_flags[2]) {
+        return Fail("맵 초기화 clears every 업체 check");
+    }
+    if (chrome.hist_plot.y != chrome.plot.y || chrome.hist_plot.w <= chrome.plot.w
+        || chrome.hist_plot.x < chrome.map_inner.x || chrome.hist_plot.Right() > chrome.map_inner.Right()) {
+        return Fail("histogram uses the full map card under the tabs");
+    }
+    if (kChartTabH != 34 || kChartTabW != 112 || kChartTabGap != 6 || kChartTabPad != 12 || kChartTabCount != 2
+        || kChartTabRadius != 12) {
+        return Fail("chart tabs are 112x34 radius 12 beside each other");
+    }
+    if (std::wstring(kChartTabMapLabel) != L"전장맵" || std::wstring(kChartTabHistLabel) != L"히스토그램"
+        || std::wstring(ChartTabLabelAt(0)) != L"전장맵" || std::wstring(ChartTabLabelAt(1)) != L"히스토그램") {
+        return Fail("tabs next to the map are 전장맵 then 히스토그램");
+    }
+    if (std::wstring(kHistRank1Label) != L"1위" || std::wstring(kHistMarketLabel) != L"전체") {
+        return Fail("histogram 1위 toggle reuses the 1위 chip filter, not a second tab");
+    }
+    if (chrome.tab_map.x != chrome.map_inner.x + kChartTabPad || chrome.tab_hist.x != chrome.tab_map.Right() + kChartTabGap
+        || chrome.tab_map.y != chrome.tab_hist.y || chrome.tab_map.h != kChartTabH) {
+        return Fail("히스토그램 tab sits immediately to the right of 전장맵");
+    }
+    if (!chrome.map_inner.Contains(chrome.tab_map.x + 1, chrome.tab_map.y + 1)
+        || !chrome.map_inner.Contains(chrome.tab_hist.Right() - 1, chrome.tab_hist.Bottom() - 1)) {
+        return Fail("chart tabs stay inside the map card");
+    }
+    if (chrome.tab_hist.Right() >= chrome.reset_toolbar.x) {
+        return Fail("tabs must not collide with 1위 / 맵 초기화");
+    }
+    if (HitChartTab(chrome, chrome.tab_map.x + 2, chrome.tab_map.y + 2) != 0
+        || HitChartTab(chrome, chrome.tab_hist.x + 2, chrome.tab_hist.y + 2) != 1
+        || HitChartTab(chrome, chrome.plot.x + 8, chrome.plot.y + 8) != -1) {
+        return Fail("tab hit targets are 전장맵 then 히스토그램");
+    }
+    if (kHistogramBinCount != 40 || kHistogramMaxSeries != 8) {
+        return Fail("histogram is 40 bins with at most 8 company rows");
+    }
+    if (kHistMarketLowArgb != 0xFF22D3EEu || kHistMarketMidArgb != 0xFF818CF8u
+        || kHistMarketPeakArgb != 0xFFFBBF24u || kHistMarketHighArgb != 0xFFF43F5Eu) {
+        return Fail("histogram density is cyan→indigo→amber→rose");
+    }
+    if (std::fabs(kHistDepthX - 0.55f) > 0.001f || std::fabs(kHistDepthY - 0.32f) > 0.001f) {
+        return Fail("3D cabinet depth is 0.55 / 0.32");
+    }
+    if (LightenArgb(0xFF21252Bu, 0.10f) != 0xFF373B40u) {
+        return Fail("#21252B lighten 0.10 is #373B40");
+    }
+    if (WithAlpha(0xFF818CF8u, 0x66u) != 0x66818CF8u) {
+        return Fail("ghost market bars keep the hue and drop alpha");
+    }
+    if (HistDensityArgb(0.0f) != kHistMarketLowArgb || HistDensityArgb(1.0f) != kHistMarketHighArgb) {
+        return Fail("density 0 is cyan and 1 is rose");
     }
     const auto check = CompanyCheckBoxRect(chrome.company_wrap, 5, 20);
     if (check.w != 18 || check.h != 18) {
@@ -324,8 +414,27 @@ int main() {
     if (MainToolbarY(348) != 362) {
         return Fail("toolbar buttons sit on PreviewCard pad-top 14, vertically with the title row");
     }
-    if (MainTableGridY(348) != 414) {
-        return Fail("grid starts after pad 14 + 40px buttons + 12px header gap");
+    if (kMainStatusH != 28 || kMainStatusGap != 8) {
+        return Fail("update status banner is 28px under the toolbar");
+    }
+    if (MainStatusY(348) != 410 || MainTableGridY(348) != 450) {
+        return Fail("grid starts after toolbar + status banner so 수집 중 is visible");
+    }
+    const auto status = LayoutMainStatus(1600, 348);
+    if (status.y != 410 || status.h != 28 || status.x != kMainCardInset + kMainTablePadX) {
+        return Fail("status banner sits under 업데이트");
+    }
+    if (kTableCardY != 128 || std::fabs(kMainToolbarShift - 0.20f) > 0.001f || kMainKpiH != 56) {
+        return Fail("first screen is a compact KPI strip, table at 128, toolbar shifted 20% left");
+    }
+    const auto tb1600 = LayoutMainToolbar(1600, kTableCardY);
+    if (tb1600.chart.Right() != 1600 - kMainCardInset - kMainTablePadX - 320) {
+        return Fail("지역/업데이트 cluster moves 20% of width left");
+    }
+    const auto kpis = LayoutMainKpis(1600);
+    if (kpis.notices.y != 60 || kpis.latest.x <= kpis.notices.x || kpis.period.x <= kpis.latest.x
+        || kpis.notices.h != 56) {
+        return Fail("three KPI tiles sit above the 낙찰공고 table");
     }
     const auto tb = LayoutMainToolbar(1600, 348);
     if (tb.chart.y != 362 || tb.stop.y != 362 || tb.update.y != 362 || tb.region_combo.y != 362
@@ -339,8 +448,8 @@ int main() {
     if (tb.update.w != 124 || tb.stop.w != 108 || tb.chart.w != 132 || tb.region_combo.w != 148) {
         return Fail("toolbar widths 124/108/132/148");
     }
-    if (tb.chart.Right() != 1600 - kMainCardInset - kMainTablePadX) {
-        return Fail("차트 화면 is right-aligned inside card pad 16");
+    if (tb.chart.Right() != 1600 - kMainCardInset - kMainTablePadX - 320) {
+        return Fail("차트 화면 sits 20% of width left of the card's right pad");
     }
     if (tb.stop.Right() + kMainBtnGap != tb.chart.x || tb.update.Right() + kMainBtnGap != tb.stop.x
         || tb.region_combo.Right() + kMainComboGap != tb.update.x

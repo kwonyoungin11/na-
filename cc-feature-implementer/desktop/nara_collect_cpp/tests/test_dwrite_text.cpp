@@ -26,6 +26,11 @@ int main() {
     if (OutlineNeighborCount() != 8) {
         return Fail("glyph outline is 8-neighbor like geometry stroke");
     }
+    if (std::fabs(kDwriteClearTypeLevel - 1.0f) > 0.001f || kDwriteTextAntialiasClearType != 1
+        || kDwritePixelGeometryRgb != 1 || kDwriteRenderingNaturalSymmetric != 5
+        || std::fabs(kDwriteEnhancedContrast - 0.5f) > 0.001f) {
+        return Fail("C++ text must use ClearType like WPF, not grayscale");
+    }
     std::cerr << "ok dwrite text tokens match WPF Ideal\n";
     return 0;
 }

@@ -3,6 +3,7 @@
 #include "nara/xlsx_store.h"
 
 #include <filesystem>
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -37,6 +38,9 @@ bool TryParseSignedParen(const std::string& raw, double& signed_percent, double&
 std::optional<double> ToHundredScaleAdjustRate(std::optional<double> raw);
 std::string CanonicalizeCompany(const std::string& name);
 std::string BuildShortLabel(const std::string& name);
+std::string CompanyIdentity(const ParticipantRow& row);
+std::map<std::string, std::string> BuildDisplayMap(const std::vector<std::string>& names);
+std::string DisplayLabelFor(const std::string& name, const std::map<std::string, std::string>& labels);
 std::string ExtractNoticeNo(const std::string& notice_number);
 
 std::vector<ParticipantRow> ConvertPair(

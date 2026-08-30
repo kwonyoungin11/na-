@@ -1,11 +1,11 @@
-# 금지: Grok hooks / MCP / skills
+# Hooks / MCP / old Python skills
 
-이 저장소와 사용자 Grok 설정에서 hooks, MCP, skills 는 제거되었다.
+Grok **hooks** and **MCP servers** stay off. Do not install, call, or restore them.
 
-- 만들지 마라
-- 설치하지 마라
-- 호출하지 마라
-- 복구하지 마라
-- `search_tool` / `use_tool` / skill `SKILL.md` 로드를 다시 켜지 마라
+Old Python packs under `.agents/skills/*/scripts` are scripts, not Grok skills. Do not add `SKILL.md` there. Run a script only when the task needs that file.
 
-분석 파이썬이 `.agents/skills/*/scripts` 아래에 남아 있어도 그것은 스킬이 아니다. 필요하면 스크립트를 직접 실행한다.
+## Allowed skills
+
+Project skills in `.grok/skills/` are the C++ 2026 and C++ design pack. Load the matching skill for C++ or Win32 UI work.
+
+Create more with `/create-skill`. Put new skills only in `.grok/skills/<name>/SKILL.md`.

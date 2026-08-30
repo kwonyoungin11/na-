@@ -27,6 +27,13 @@ std::string AwardCollectCommandLine(
     const std::string& end_month,
     const std::string& jsonl_path,
     const std::string& env_path);
+std::string AwardCollectGapCommandLine(
+    const std::string& exe_path,
+    const std::string& from_date,
+    const std::string& to_date,
+    const std::string& jsonl_path,
+    const std::string& env_path);
+std::string MaxParticipantOpenDay(const std::filesystem::path& db_path);
 bool EnsureParticipantsSchema(const std::filesystem::path& db_path);
 void EnsurePortableDatabase();
 JsonlMergeResult MergeJsonlIntoStore(

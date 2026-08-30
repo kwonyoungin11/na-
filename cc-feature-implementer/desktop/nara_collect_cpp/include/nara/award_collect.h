@@ -33,8 +33,34 @@ struct CollectWindow {
 };
 
 inline constexpr int kCollectLookbackMonths = 12;
+
+enum class CollectNeed { AlreadyCurrent, GapFromStore, FullLookback };
+
+struct MissingCollectPlan {
+    CollectNeed need = CollectNeed::FullLookback;
+    std::string from_date;
+    std::string to_date;
+};
+
 std::string FormatYmd(int year, int month, int day);
 std::string YmdMinusMonths(int year, int month, int day, int months);
+std::string AddDaysYmd(const std::string& ymd, int days);
+inline std::string YmdToInqryBegin(const std::string& ymd) {
+    if (ymd.size() < 10) {
+        return {};
+    }
+    return ymd.substr(0, 4) + ymd.substr(5, 2) + ymd.substr(8, 2) + "0000";
+}
+inline std::string YmdToInqryEnd(const std::string& ymd) {
+    if (ymd.size() < 10) {
+        return {};
+    }
+    return ymd.substr(0, 4) + ymd.substr(5, 2) + ymd.substr(8, 2) + "2359";
+}
+MissingCollectPlan PlanMissingCollect(
+    const std::string& stored_max_open_day,
+    const std::string& today,
+    int lookback_months = kCollectLookbackMonths);
 CollectWindow LookbackCollectMonthSpan(int year, int month, int lookback_months = kCollectLookbackMonths);
 std::vector<std::string> CollectMonths(const std::string& start_month, const std::string& end_month);
 std::vector<CollectWindow> CollectThreeMonthWindows(const std::string& start_month, const std::string& end_month);

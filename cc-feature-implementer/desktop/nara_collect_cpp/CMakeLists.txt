@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(NARA_CONVERT_SRC
     src/igunsul_convert.cpp
+    src/company_name.cpp
     src/xlsx_store.cpp
     third_party/miniz/miniz.c)
 
@@ -26,6 +27,12 @@ add_executable(nara_scatter_chart_tests
 
 target_include_directories(nara_scatter_chart_tests PRIVATE include third_party/miniz)
 add_test(NAME nara_scatter_chart_tests COMMAND nara_scatter_chart_tests)
+
+add_executable(nara_company_name_tests
+    tests/test_company_name.cpp
+    src/company_name.cpp)
+target_include_directories(nara_company_name_tests PRIVATE include)
+add_test(NAME nara_company_name_tests COMMAND nara_company_name_tests)
 
 add_executable(nara_notice_rules_tests
     tests/test_notice_rules.cpp
@@ -76,6 +83,13 @@ add_executable(nara_chart_theme_tests
 target_include_directories(nara_chart_theme_tests PRIVATE include)
 add_test(NAME nara_chart_theme_tests COMMAND nara_chart_theme_tests)
 
+add_executable(nara_histogram_chart_tests
+    tests/test_histogram_chart.cpp
+    src/company_name.cpp
+    src/scatter_chart.cpp)
+target_include_directories(nara_histogram_chart_tests PRIVATE include)
+add_test(NAME nara_histogram_chart_tests COMMAND nara_histogram_chart_tests)
+
 add_executable(nara_scatter_cache_tests
     tests/test_scatter_cache.cpp)
 target_include_directories(nara_scatter_cache_tests PRIVATE include)
@@ -120,12 +134,14 @@ if (MSVC)
     target_compile_options(nara_igunsul_ingest PRIVATE /utf-8 /W3)
     target_compile_options(nara_igunsul_convert_tests PRIVATE /utf-8 /W3)
     target_compile_options(nara_scatter_chart_tests PRIVATE /utf-8 /W3)
+    target_compile_options(nara_company_name_tests PRIVATE /utf-8 /W3)
     target_compile_options(nara_notice_rules_tests PRIVATE /utf-8 /W3)
     target_compile_options(nara_award_table_tests PRIVATE /utf-8 /W3)
     target_compile_options(nara_dual_snapshot_tests PRIVATE /utf-8 /W3)
     target_compile_options(nara_sqlite_store_tests PRIVATE /utf-8 /W3)
     target_compile_options(nara_chart_view_tests PRIVATE /utf-8 /W3)
     target_compile_options(nara_chart_theme_tests PRIVATE /utf-8 /W3)
+    target_compile_options(nara_histogram_chart_tests PRIVATE /utf-8 /W3)
     target_compile_options(nara_dwrite_text_tests PRIVATE /utf-8 /W3)
     target_compile_options(nara_scatter_cache_tests PRIVATE /utf-8 /W3)
     target_compile_options(nara_desktop PRIVATE /utf-8 /W3)

@@ -1,11 +1,10 @@
-# This repository does not use Grok hooks, MCP servers, or skills.
-# Do not add mcp_servers, [hooks], or skill paths.
+# Hooks and MCP stay off.
+# C++ / design skills live in .grok/skills and must load.
 
 [skills]
 paths = []
 ignore = [
   ".agents/skills",
-  ".grok/skills",
 ]
 disabled = [
   "api",

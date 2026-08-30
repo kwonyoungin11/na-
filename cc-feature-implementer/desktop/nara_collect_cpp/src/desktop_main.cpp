@@ -37,7 +37,7 @@ constexpr int kIdStop = 1002;
 constexpr int kIdChart = 1003;
 constexpr int kRowH = 38;
 constexpr int kHeaderH = 40;
-constexpr int kTableCardY = 348;
+const int kTableCardY = nara::chart_theme::kTableCardY;
 
 HWND g_mainHwnd = nullptr;
 HWND g_btnUpdate = nullptr;
@@ -53,6 +53,7 @@ int g_selected = 0;
 int g_notice_count = 0;
 int g_lookback_months = nara::kCollectLookbackMonths;
 std::string g_status;
+bool g_updating = false;
 RECT g_tableRect{};
 float g_dpi_scale = 1.0f;
 
@@ -161,11 +162,10 @@ void QueuePoint(const wchar_t* text, float x, float y, float w, float h, float s
 
 void ApplyCrispGraphics(Gdiplus::Graphics& g) {
     g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-    g.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
-    g.SetCompositingQuality(Gdiplus::CompositingQualityHighQuality);
+    g.SetPixelOffsetMode(Gdiplus::PixelOffsetModeNone);
+    g.SetCompositingQuality(Gdiplus::CompositingQualityAssumeLinear);
     g.SetInterpolationMode(Gdiplus::InterpolationModeNearestNeighbor);
-    g.SetTextRenderingHint(
-        static_cast<Gdiplus::TextRenderingHint>(nara::chart_theme::kTextRenderingHintIdeal));
+    g.SetTextRenderingHint(Gdiplus::TextRenderingHintClearTypeGridFit);
 }
 
 void ReloadTable(HWND hwnd) {
@@ -189,6 +189,33 @@ void ReloadTable(HWND hwnd) {
     InvalidateRect(hwnd, nullptr, FALSE);
 }
 
+void PumpUi(HWND hwnd) {
+    InvalidateRect(hwnd, nullptr, FALSE);
+    UpdateWindow(hwnd);
+    MSG msg{};
+    while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
+        TranslateMessage(&msg);
+        DispatchMessageW(&msg);
+    }
+}
+
+void SetCollectStatus(HWND hwnd, const std::string& text) {
+    g_status = text;
+    PumpUi(hwnd);
+}
+
+void SetUpdatingUi(HWND hwnd, bool busy) {
+    g_updating = busy;
+    if (g_btnUpdate) {
+        EnableWindow(g_btnUpdate, busy ? FALSE : TRUE);
+        SetWindowTextW(g_btnUpdate, busy ? L"수집 중" : L"업데이트");
+        InvalidateRect(g_btnUpdate, nullptr, FALSE);
+    }
+    if (g_btnStop) {
+        InvalidateRect(g_btnStop, nullptr, FALSE);
+    }
+}
+
 void ApplyMergedSnapshot(HWND hwnd, const nara::JsonlMergeResult& merged) {
     if (merged.ok) {
         if (merged.notices > 0) {
@@ -198,81 +225,101 @@ void ApplyMergedSnapshot(HWND hwnd, const nara::JsonlMergeResult& merged) {
         g_status += " · 병합 실패 " + merged.error;
     }
     ReloadTable(hwnd);
+    PumpUi(hwnd);
+}
+
+bool RunCollectCommand(HWND hwnd, const std::string& cmd_utf8, const std::wstring& dir, const std::string& label,
+                       const std::string& jsonl, const std::string& db) {
+    auto cmd = Utf8ToWide(cmd_utf8);
+    std::vector<wchar_t> buf(cmd.begin(), cmd.end());
+    buf.push_back(0);
+    STARTUPINFOW si{};
+    si.cb = sizeof(si);
+    si.dwFlags = STARTF_USESHOWWINDOW;
+    si.wShowWindow = SW_HIDE;
+    PROCESS_INFORMATION pi{};
+    if (!CreateProcessW(nullptr, buf.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, dir.c_str(), &si,
+                        &pi)) {
+        SetCollectStatus(hwnd, "수집 프로세스 실행 실패 " + label);
+        return false;
+    }
+    while (WaitForSingleObject(pi.hProcess, 200) == WAIT_TIMEOUT) {
+        PumpUi(hwnd);
+    }
+    DWORD code = 1;
+    GetExitCodeProcess(pi.hProcess, &code);
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    if (code != 0) {
+        SetCollectStatus(hwnd, "수집 실패 " + label + " code=" + std::to_string(static_cast<int>(code)));
+        ApplyMergedSnapshot(hwnd, nara::MergeJsonlIntoStore(jsonl, db));
+        return false;
+    }
+    SetCollectStatus(hwnd, "수집 반영 " + label);
+    ApplyMergedSnapshot(hwnd, nara::MergeJsonlIntoStore(jsonl, db));
+    return true;
 }
 
 void OnUpdate(HWND hwnd) {
+    if (g_updating) {
+        return;
+    }
+    SetUpdatingUi(hwnd, true);
     nara::EnsurePortableDatabase();
     const auto db = nara::DefaultDashboardDbPath();
     const auto jsonl = nara::DefaultAwardJsonlPath();
-    const auto pre = nara::MergeJsonlIntoStore(jsonl, db);
-    g_status = pre.notices > 0 ? "기존 수집 반영" : "업데이트 시작";
-    ApplyMergedSnapshot(hwnd, pre);
+    const auto stored = nara::MaxParticipantOpenDay(db);
+    SetCollectStatus(hwnd, stored.empty() ? "업데이트 시작 · 저장된 공고 없음"
+                                          : "업데이트 시작 · 저장 최신 개찰 " + stored);
 
     const auto app_dir = nara::DefaultAppDir();
     const auto exe = std::filesystem::path(app_dir) / "nara_award_collect.exe";
-    const auto exe_wide = Utf8ToWide(exe.string());
-    if (GetFileAttributesW(exe_wide.c_str()) == INVALID_FILE_ATTRIBUTES) {
-        g_status = "nara_award_collect.exe 없음";
-        InvalidateRect(hwnd, nullptr, FALSE);
+    if (GetFileAttributesW(Utf8ToWide(exe.string()).c_str()) == INVALID_FILE_ATTRIBUTES) {
+        SetCollectStatus(hwnd, "nara_award_collect.exe 없음");
+        SetUpdatingUi(hwnd, false);
         return;
     }
     const auto env = nara::DefaultServiceKeyEnvPath();
     if (GetFileAttributesW(Utf8ToWide(env).c_str()) == INVALID_FILE_ATTRIBUTES) {
-        g_status = "SERVICE_KEY 없음: 앱 폴더에 .env를 두세요";
-        InvalidateRect(hwnd, nullptr, FALSE);
+        SetCollectStatus(hwnd, "SERVICE_KEY 없음: 앱 폴더에 .env를 두세요");
+        SetUpdatingUi(hwnd, false);
         return;
     }
-    const auto start_month = TodayMinusMonths(g_lookback_months).substr(0, 7);
-    const auto end_month = Today().substr(0, 7);
-    const auto windows = nara::CollectThreeMonthWindows(start_month, end_month);
+
+    const auto plan = nara::PlanMissingCollect(stored, Today(), g_lookback_months);
     const auto dir = Utf8ToWide(app_dir);
+    if (plan.need == nara::CollectNeed::AlreadyCurrent) {
+        SetCollectStatus(hwnd, "이미 최신 · 개찰 " + stored + " · 나라장터를 다시 받지 않음");
+        SetUpdatingUi(hwnd, false);
+        return;
+    }
+    if (plan.need == nara::CollectNeed::GapFromStore) {
+        SetCollectStatus(hwnd, "빠진 구간만 수집 " + plan.from_date + "~" + plan.to_date + " · 나라장터 조회 중");
+        const auto cmd = nara::AwardCollectGapCommandLine(exe.string(), plan.from_date, plan.to_date, jsonl, env);
+        if (!RunCollectCommand(hwnd, cmd, dir, plan.from_date + "~" + plan.to_date, jsonl, db)) {
+            SetUpdatingUi(hwnd, false);
+            return;
+        }
+        SetCollectStatus(hwnd, "수집 완료 · 빠진 구간 " + plan.from_date + "~" + plan.to_date);
+        SetUpdatingUi(hwnd, false);
+        return;
+    }
+
+    const auto start_month = plan.from_date.substr(0, 7);
+    const auto end_month = plan.to_date.substr(0, 7);
+    const auto windows = nara::CollectThreeMonthWindows(start_month, end_month);
     for (size_t i = 0; i < windows.size(); ++i) {
         const auto& window = windows[i];
-        g_status = "나라장터 월단위 수집 " + window.start_month + "~" + window.end_month + " ("
-                   + std::to_string(i + 1) + "/" + std::to_string(windows.size()) + " · 3개월 창)";
-        InvalidateRect(hwnd, nullptr, FALSE);
-        UpdateWindow(hwnd);
-        const auto cmd_utf8 =
-            nara::AwardCollectCommandLine(exe.string(), window.start_month, window.end_month, jsonl, env);
-        auto cmd = Utf8ToWide(cmd_utf8);
-        std::vector<wchar_t> buf(cmd.begin(), cmd.end());
-        buf.push_back(0);
-        STARTUPINFOW si{};
-        si.cb = sizeof(si);
-        si.dwFlags = STARTF_USESHOWWINDOW;
-        si.wShowWindow = SW_HIDE;
-        PROCESS_INFORMATION pi{};
-        if (!CreateProcessW(nullptr, buf.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, dir.c_str(), &si,
-                            &pi)) {
-            g_status = "수집 프로세스 실행 실패 " + window.start_month + "~" + window.end_month;
-            InvalidateRect(hwnd, nullptr, FALSE);
+        SetCollectStatus(hwnd, "나라장터 월단위 수집 " + window.start_month + "~" + window.end_month + " ("
+                                   + std::to_string(i + 1) + "/" + std::to_string(windows.size()) + ")");
+        const auto cmd = nara::AwardCollectCommandLine(exe.string(), window.start_month, window.end_month, jsonl, env);
+        if (!RunCollectCommand(hwnd, cmd, dir, window.start_month + "~" + window.end_month, jsonl, db)) {
+            SetUpdatingUi(hwnd, false);
             return;
         }
-        while (WaitForSingleObject(pi.hProcess, 200) == WAIT_TIMEOUT) {
-            MSG msg{};
-            while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
-                TranslateMessage(&msg);
-                DispatchMessageW(&msg);
-            }
-        }
-        DWORD code = 1;
-        GetExitCodeProcess(pi.hProcess, &code);
-        CloseHandle(pi.hThread);
-        CloseHandle(pi.hProcess);
-        if (code != 0) {
-            g_status = "수집 실패 " + window.start_month + "~" + window.end_month + " code="
-                       + std::to_string(static_cast<int>(code));
-            const auto failed = nara::MergeJsonlIntoStore(jsonl, db);
-            ApplyMergedSnapshot(hwnd, failed);
-            return;
-        }
-        g_status = "수집 반영 " + window.start_month + "~" + window.end_month;
-        const auto chunk = nara::MergeJsonlIntoStore(jsonl, db);
-        ApplyMergedSnapshot(hwnd, chunk);
     }
-    g_status = "수집 완료 " + start_month + "~" + end_month + " · 3개월 창 "
-               + std::to_string(windows.size()) + "개";
-    InvalidateRect(hwnd, nullptr, FALSE);
+    SetCollectStatus(hwnd, "수집 완료 " + start_month + "~" + end_month);
+    SetUpdatingUi(hwnd, false);
 }
 
 void ApplyRegion(HWND hwnd, const std::string& token) {
@@ -365,9 +412,7 @@ void PaintMain(HWND hwnd, HDC hdc) {
     Gdiplus::Graphics g(mem);
     ApplyCrispGraphics(g);
     ApplyDpiTransform(g);
-    Gdiplus::LinearGradientBrush page(
-        Gdiplus::Point(0, 0), Gdiplus::Point(w, h),
-        Gdiplus::Color(255, 234, 242, 247), Gdiplus::Color(255, 238, 243, 248));
+    Gdiplus::SolidBrush page{Gdiplus::Color(nara::chart_theme::kWindowBgArgb)};
     g.FillRectangle(&page, 0, 0, w, h);
     Gdiplus::SolidBrush accent(Gdiplus::Color(255, 217, 119, 6));
     g.FillRectangle(&accent, 0, 0, w, 3);
@@ -384,116 +429,41 @@ void PaintMain(HWND hwnd, HDC hdc) {
     Gdiplus::SolidBrush headerBg(Gdiplus::Color(255, 238, 242, 246));
     Gdiplus::SolidBrush stripe(Gdiplus::Color(255, 248, 250, 252));
     Gdiplus::SolidBrush select(Gdiplus::Color(255, 255, 247, 237));
-    Gdiplus::SolidBrush plotFill(Gdiplus::Color(255, 247, 249, 252));
     Gdiplus::Pen copperPen(Gdiplus::Color(255, 231, 196, 140), 1.5f);
 
-    Gdiplus::RectF hero(20, 16, static_cast<Gdiplus::REAL>(w - 40), 318);
-    DrawBlurShadow(g, hero, 18.0f, nara::chart_theme::kCardShadowDepth, nara::chart_theme::kCardShadowBlur,
-                   nara::chart_theme::kCardShadowArgb);
-    Gdiplus::GraphicsPath heroPath;
-    RoundRectPath(heroPath, hero, 18);
-    g.FillPath(&white, &heroPath);
-    g.DrawPath(&copperPen, &heroPath);
-    Gdiplus::SolidBrush accentBar(Gdiplus::Color(255, 217, 119, 6));
-    g.FillRectangle(&accentBar, 28, 28, 3, 44);
-    FillGlyphs(g, L"낙찰분석프로그램", family, Gdiplus::FontStyleBold, 12.0f,
-               Gdiplus::RectF(44, 28, 280, 18), Gdiplus::StringAlignmentNear, Gdiplus::StringAlignmentNear,
-               0xFFB45309u);
-    FillGlyphs(g, L"동국문화유산연구원", family, Gdiplus::FontStyleBold, 22.0f,
-               Gdiplus::RectF(44, 46, 420, 32), Gdiplus::StringAlignmentNear, Gdiplus::StringAlignmentNear,
-               0xFF111111u);
-    wchar_t status_chip[80];
-    swprintf_s(status_chip, L"%s · 공고 %d건", nara::chart_theme::RegionLabelAt(nara::chart_theme::RegionIndexFromToken(g_region_token)),
-               g_notice_count > 0 ? g_notice_count : static_cast<int>(g_table.size()));
-    Gdiplus::RectF chip_rect(static_cast<Gdiplus::REAL>(w - 196), 26, 156, 26);
-    Gdiplus::GraphicsPath chipPath;
-    RoundRectPath(chipPath, chip_rect, 13);
-    Gdiplus::SolidBrush chipBg(Gdiplus::Color(230, 255, 255, 255));
-    Gdiplus::Pen chipPen(Gdiplus::Color(255, 216, 224, 234), 1.0f);
-    g.FillPath(&chipBg, &chipPath);
-    g.DrawPath(&chipPen, &chipPath);
-    Gdiplus::StringFormat chipFmt;
-    chipFmt.SetAlignment(Gdiplus::StringAlignmentCenter);
-    chipFmt.SetLineAlignment(Gdiplus::StringAlignmentCenter);
-    nara::dwrite_text::QueueBox(chip_rect.X, chip_rect.Y, chip_rect.Width, chip_rect.Height, status_chip, 12.0f,
-                                0xFF6B7280u, nara::dwrite_text::Align::Center, nara::dwrite_text::Align::Center,
-                                false);
+    nara::dwrite_text::QueueBox(36, 18, 280, 16, L"낙찰분석프로그램", 12.0f, nara::chart_theme::kAccentStrongArgb,
+                                nara::dwrite_text::Align::Near, nara::dwrite_text::Align::Near, true);
+    nara::dwrite_text::QueueBox(36, 34, 520, 28, L"동국문화유산연구원", 22.0f, nara::chart_theme::kTextArgb,
+                                nara::dwrite_text::Align::Near, nara::dwrite_text::Align::Near, true);
 
-    if (g_table.size() >= 2) {
-        const float plot_x = 56;
-        const float plot_y = 96;
-        const float plot_w = static_cast<float>(w - 120);
-        const float plot_h = 168;
-        const double lo = 98.9;
-        const double hi = 101.2;
-        Gdiplus::GraphicsPath plotPath;
-        RoundRectPath(plotPath, Gdiplus::RectF(plot_x, plot_y, plot_w, plot_h), 12);
-        g.FillPath(&plotFill, &plotPath);
-        Gdiplus::Pen axis(Gdiplus::Color(255, 226, 232, 240), 1.0f);
-        g.DrawPath(&axis, &plotPath);
-        auto y_of = [&](double rate) {
-            return plot_y + static_cast<Gdiplus::REAL>((hi - rate) / (hi - lo) * plot_h);
-        };
-        const double yticks[] = {98.9, 99.4, 100.0, 100.6, 101.2};
-        for (double t : yticks) {
-            const float y = y_of(t);
-            g.DrawLine(&axis, plot_x, y, plot_x + plot_w, y);
-            wchar_t lab[16];
-            swprintf_s(lab, L"%.1f", t);
-            nara::dwrite_text::QueueBox(plot_x - 36, y - 8, 36, 16, lab, 12.0f, 0xFF6B7280u,
-                                        nara::dwrite_text::Align::Far, nara::dwrite_text::Align::Near, false);
-        }
-        const int n = static_cast<int>(g_table.size());
-        std::vector<Gdiplus::PointF> dongguk;
-        std::vector<Gdiplus::PointF> award;
-        for (int i = n - 1; i >= 0; --i) {
-            const float x = plot_x + plot_w * static_cast<float>(n - 1 - i) / static_cast<float>(n - 1);
-            dongguk.emplace_back(x, y_of(g_table[i].dongguk_rate));
-            if (g_table[i].has_award_rate) {
-                award.emplace_back(x, y_of(g_table[i].award_rate));
-            }
-        }
-        Gdiplus::Pen blue(Gdiplus::Color(255, 29, 78, 216), 2.4f);
-        Gdiplus::Pen pink(Gdiplus::Color(255, 251, 113, 133), 2.4f);
-        g.SetClip(&plotPath);
-        if (award.size() >= 2) {
-            g.DrawLines(&pink, award.data(), static_cast<INT>(award.size()));
-        }
-        g.DrawLines(&blue, dongguk.data(), static_cast<INT>(dongguk.size()));
-        Gdiplus::SolidBrush blueFill(Gdiplus::Color(255, 29, 78, 216));
-        Gdiplus::SolidBrush pinkFill(Gdiplus::Color(255, 251, 113, 133));
-        for (const auto& pt : dongguk) {
-            g.FillEllipse(&blueFill, pt.X - 3.0f, pt.Y - 3.0f, 6.0f, 6.0f);
-        }
-        for (const auto& pt : award) {
-            g.FillEllipse(&pinkFill, pt.X - 3.0f, pt.Y - 3.0f, 6.0f, 6.0f);
-        }
-        g.ResetClip();
-        Gdiplus::RectF legend(plot_x + 12, plot_y + 10, 228, 44);
-        Gdiplus::GraphicsPath legendPath;
-        RoundRectPath(legendPath, legend, 8);
-        g.FillPath(&white, &legendPath);
-        g.DrawPath(&chipPen, &legendPath);
-        g.FillEllipse(&blueFill, legend.X + 12, legend.Y + 10, 8.0f, 8.0f);
-        nara::dwrite_text::QueueBox(legend.X + 26, legend.Y + 6, 280, 16, L"동국문화재연구원 기초대비사정율", 12.0f,
-                                    0xFF111111u, nara::dwrite_text::Align::Near, nara::dwrite_text::Align::Near, false);
-        g.FillEllipse(&pinkFill, legend.X + 12, legend.Y + 26, 8.0f, 8.0f);
-        nara::dwrite_text::QueueBox(legend.X + 26, legend.Y + 22, 280, 16, L"같은 공고 실제 낙찰 사정율", 12.0f,
-                                    0xFFB45309u, nara::dwrite_text::Align::Near, nara::dwrite_text::Align::Near, false);
-        const int ticks = 6;
-        for (int i = 0; i <= ticks; ++i) {
-            const int idx = (n - 1) * i / ticks;
-            const float x = plot_x + plot_w * static_cast<float>(i) / ticks;
-            auto d = g_table[n - 1 - idx].open_date;
-            if (d.size() >= 10) {
-                const auto label = Utf8ToWide(d.substr(5, 5));
-                nara::dwrite_text::QueueBox(x - 14, plot_y + plot_h + 4, 40, 16, label.c_str(), 12.0f, 0xFF6B7280u,
-                                            nara::dwrite_text::Align::Near, nara::dwrite_text::Align::Near, false);
-            }
-        }
+    const auto kpis = nara::chart_theme::LayoutMainKpis(w);
+    std::string latest_kpi = g_table.empty() ? "-" : g_table.front().open_date;
+    if (latest_kpi.size() >= 16) {
+        latest_kpi = latest_kpi.substr(0, 16);
     }
+    const std::string period_kpi = g_lookback_months >= 12 ? "최근 1년" : "최근 " + std::to_string(g_lookback_months) + "개월";
+    wchar_t notice_n[32];
+    swprintf_s(notice_n, L"%d건", g_notice_count > 0 ? g_notice_count : static_cast<int>(g_table.size()));
+    auto paint_kpi = [&](const nara::chart_theme::RectI& box, const wchar_t* caption, const wchar_t* value) {
+        Gdiplus::RectF r(static_cast<Gdiplus::REAL>(box.x), static_cast<Gdiplus::REAL>(box.y),
+                         static_cast<Gdiplus::REAL>(box.w), static_cast<Gdiplus::REAL>(box.h));
+        Gdiplus::GraphicsPath path;
+        RoundRectPath(path, r, 12);
+        g.FillPath(&white, &path);
+        Gdiplus::Pen edge(Gdiplus::Color(nara::chart_theme::kComboStrokeArgb), 1.0f);
+        g.DrawPath(&edge, &path);
+        nara::dwrite_text::QueueBox(r.X + 14, r.Y + 8, r.Width - 24, 16, caption, 11.0f,
+                                    nara::chart_theme::kSubtleTextArgb, nara::dwrite_text::Align::Near,
+                                    nara::dwrite_text::Align::Near, false);
+        nara::dwrite_text::QueueBox(r.X + 14, r.Y + 26, r.Width - 24, 24, value, 18.0f, nara::chart_theme::kTextArgb,
+                                    nara::dwrite_text::Align::Near, nara::dwrite_text::Align::Near, true);
+    };
+    paint_kpi(kpis.notices, L"낙찰공고", notice_n);
+    paint_kpi(kpis.latest, L"최신 개찰", Utf8ToWide(latest_kpi).c_str());
+    paint_kpi(kpis.period, L"기간", Utf8ToWide(period_kpi).c_str());
 
-    Gdiplus::RectF table_card(20, 348, static_cast<Gdiplus::REAL>(w - 40), static_cast<Gdiplus::REAL>(h - 400));
+    Gdiplus::RectF table_card(20, static_cast<Gdiplus::REAL>(kTableCardY), static_cast<Gdiplus::REAL>(w - 40),
+                              static_cast<Gdiplus::REAL>((std::max)(200, h - kTableCardY - 40)));
     Gdiplus::GraphicsPath tablePath;
     RoundRectPath(tablePath, table_card, 18);
     g.FillPath(&white, &tablePath);
@@ -525,6 +495,20 @@ void PaintMain(HWND hwnd, HDC hdc) {
     g.DrawPath(&copperPen, &tagPath);
     nara::dwrite_text::QueueBox(258, tag.Y + 4, 260, 18, summary.c_str(), 12.0f, 0xFFB45309u,
                                 nara::dwrite_text::Align::Near, nara::dwrite_text::Align::Near, false);
+
+    const auto status_box = nara::chart_theme::LayoutMainStatus(w, kTableCardY);
+    Gdiplus::RectF status_r(static_cast<Gdiplus::REAL>(status_box.x), static_cast<Gdiplus::REAL>(status_box.y),
+                            static_cast<Gdiplus::REAL>(status_box.w), static_cast<Gdiplus::REAL>(status_box.h));
+    Gdiplus::GraphicsPath status_path;
+    RoundRectPath(status_path, status_r, 10);
+    const bool busy = g_updating;
+    Gdiplus::SolidBrush status_fill(
+        Gdiplus::Color(busy ? nara::chart_theme::kAccentArgb : nara::chart_theme::kHoverFillArgb));
+    g.FillPath(&status_fill, &status_path);
+    const auto status_text = Utf8ToWide(g_status.empty() ? "업데이트는 없는 개찰일만 조회합니다." : g_status);
+    nara::dwrite_text::QueueBox(status_r.X + 12, status_r.Y, status_r.Width - 20, status_r.Height, status_text.c_str(),
+                                13.0f, busy ? 0xFFFFFFFFu : nara::chart_theme::kSubtleTextArgb,
+                                nara::dwrite_text::Align::Near, nara::dwrite_text::Align::Center, true, true, true);
 
     const int table_top = nara::chart_theme::MainTableGridY(kTableCardY);
     const int table_bottom = h - 52;
@@ -605,6 +589,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         nara::EnsurePortableDatabase();
         nara::MergeJsonlIntoStore(nara::DefaultAwardJsonlPath(), nara::DefaultDashboardDbPath());
         ReloadTable(hwnd);
+        const auto stored = nara::MaxParticipantOpenDay(nara::DefaultDashboardDbPath());
+        g_status = stored.empty() ? "준비됨 · 저장된 공고 없음 · 업데이트하면 1년치를 받습니다"
+                                  : "준비됨 · 저장 최신 개찰 " + stored + " · 업데이트는 그 다음 날부터만 조회";
         return 0;
     }
     case WM_SIZE:
@@ -676,7 +663,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         if (item->CtlID == kIdUpdate) {
             kind = nara::chart_theme::MainButtonKind::Primary;
         } else if (item->CtlID == kIdStop) {
-            kind = nara::chart_theme::MainStopKind(false);
+            kind = nara::chart_theme::MainStopKind(g_updating);
         }
         const auto look = nara::chart_theme::MainButtonLook(kind);
         const int pw = item->rcItem.right - item->rcItem.left;

@@ -58,9 +58,11 @@ bool EnsureFactories() {
     if (FAILED(g_d2d->CreateDCRenderTarget(&props, g_rt.ReleaseAndGetAddressOf()))) {
         return false;
     }
-    if (FAILED(g_dwrite->CreateCustomRenderingParams(2.2f, 0.0f, 0.0f, DWRITE_PIXEL_GEOMETRY_FLAT,
-                                                     DWRITE_RENDERING_MODE_NATURAL_SYMMETRIC,
-                                                     g_params.ReleaseAndGetAddressOf()))) {
+    if (FAILED(g_dwrite->CreateCustomRenderingParams(
+            kDwriteGamma, kDwriteEnhancedContrast, kDwriteClearTypeLevel,
+            static_cast<DWRITE_PIXEL_GEOMETRY>(kDwritePixelGeometryRgb),
+            static_cast<DWRITE_RENDERING_MODE>(kDwriteRenderingNaturalSymmetric),
+            g_params.ReleaseAndGetAddressOf()))) {
         return false;
     }
     return true;
@@ -125,7 +127,7 @@ void Flush(void* hdc_void, int pixel_w, int pixel_h, float dpi_scale, int origin
         return;
     }
     g_rt->SetDpi(96.0f * scale, 96.0f * scale);
-    g_rt->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
+    g_rt->SetTextAntialiasMode(static_cast<D2D1_TEXT_ANTIALIAS_MODE>(kDwriteTextAntialiasClearType));
     g_rt->SetTextRenderingParams(g_params.Get());
     g_rt->BeginDraw();
     for (const auto& job : g_jobs) {

@@ -4,6 +4,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <ctime>
 #include <set>
 #include <sstream>
 
@@ -85,6 +86,47 @@ std::string FormatYmd(int year, int month, int day) {
     char buf[16];
     std::snprintf(buf, sizeof(buf), "%04d-%02d-%02d", year, month, day);
     return buf;
+}
+
+std::string AddDaysYmd(const std::string& ymd, int days) {
+    if (ymd.size() < 10) {
+        return {};
+    }
+    std::tm t{};
+    t.tm_year = std::stoi(ymd.substr(0, 4)) - 1900;
+    t.tm_mon = std::stoi(ymd.substr(5, 2)) - 1;
+    t.tm_mday = std::stoi(ymd.substr(8, 2)) + days;
+    t.tm_isdst = -1;
+    if (std::mktime(&t) == static_cast<std::time_t>(-1)) {
+        return {};
+    }
+    return FormatYmd(t.tm_year + 1900, t.tm_mon + 1, t.tm_mday);
+}
+
+MissingCollectPlan PlanMissingCollect(
+    const std::string& stored_max_open_day,
+    const std::string& today,
+    int lookback_months) {
+    MissingCollectPlan plan;
+    const auto today_d = today.size() >= 10 ? today.substr(0, 10) : today;
+    plan.to_date = today_d;
+    const auto stored = stored_max_open_day.size() >= 10 ? stored_max_open_day.substr(0, 10) : stored_max_open_day;
+    if (stored.size() == 10 && stored >= today_d) {
+        plan.need = CollectNeed::AlreadyCurrent;
+        plan.from_date = stored;
+        return plan;
+    }
+    if (stored.size() == 10) {
+        plan.need = CollectNeed::GapFromStore;
+        plan.from_date = AddDaysYmd(stored, 1);
+        return plan;
+    }
+    plan.need = CollectNeed::FullLookback;
+    if (today_d.size() >= 10) {
+        plan.from_date = YmdMinusMonths(std::stoi(today_d.substr(0, 4)), std::stoi(today_d.substr(5, 2)),
+                                       std::stoi(today_d.substr(8, 2)), lookback_months);
+    }
+    return plan;
 }
 
 std::string YmdMinusMonths(int year, int month, int day, int months) {

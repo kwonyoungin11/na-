@@ -96,24 +96,17 @@ inline int ZoomSrcOrigin(int axis, int origin, int new_scroll, int old_cell, int
 inline bool BounceOverlaySkipsLabels() { return false; }
 inline bool PresentFromOffscreenFrame() { return true; }
 
-// 동국 칩만 천천히 통통. Cosine ease so edges do not sparkle.
-constexpr float kDonggukBounceAmp = 0.12f;
+// Bounce off: 50ms overlay rebuild lags the map and scaled 동국 covers neighbor labels.
+inline bool DonggukBounceEnabled() { return false; }
+constexpr float kDonggukBounceAmp = 0.0f;
 constexpr int kDonggukBouncePeriodMs = 2200;
-constexpr float kDonggukBounceLift = 3.5f;
+constexpr float kDonggukBounceLift = 0.0f;
 
-inline float DonggukBounceAmount(unsigned elapsed_ms) {
-    const unsigned period = static_cast<unsigned>(kDonggukBouncePeriodMs);
-    const float t = static_cast<float>(elapsed_ms % period) / static_cast<float>(period);
-    return 0.5f * (1.0f - std::cos(6.2831853f * t));
-}
+inline float DonggukBounceAmount(unsigned) { return 0.0f; }
 
-inline float DonggukBounceScale(unsigned elapsed_ms) {
-    return 1.0f + kDonggukBounceAmp * DonggukBounceAmount(elapsed_ms);
-}
+inline float DonggukBounceScale(unsigned) { return 1.0f; }
 
-inline float DonggukBounceLiftPx(unsigned elapsed_ms) {
-    return -kDonggukBounceLift * DonggukBounceAmount(elapsed_ms);
-}
+inline float DonggukBounceLiftPx(unsigned) { return 0.0f; }
 
 inline bool ShouldRaiseHoveredRate(bool has_previous, double previous, double next, double precision) {
     if (!has_previous) {
@@ -123,8 +116,9 @@ inline bool ShouldRaiseHoveredRate(bool has_previous, double previous, double ne
     return std::fabs(previous - next) >= (step / 2.0);
 }
 
-inline int ChromeHot(int hot_company, bool hot_reset, bool hot_all, bool hot_rank1 = false) {
-    return (hot_company & 0xFFFF) | (hot_reset ? 0x10000 : 0) | (hot_all ? 0x20000 : 0) | (hot_rank1 ? 0x40000 : 0);
+inline int ChromeHot(int hot_company, bool hot_reset, bool hot_all, bool hot_rank1 = false, int hot_tab = -1) {
+    return (hot_company & 0xFFFF) | (hot_reset ? 0x10000 : 0) | (hot_all ? 0x20000 : 0) | (hot_rank1 ? 0x40000 : 0)
+           | (((hot_tab + 1) & 0x7) << 19);
 }
 
 }  // namespace scatter_cache

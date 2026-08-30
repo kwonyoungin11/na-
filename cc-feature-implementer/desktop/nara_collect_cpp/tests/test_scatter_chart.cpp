@@ -65,6 +65,27 @@ int main() {
         return Fail("label must not keep stored rank 62 when only 6 chips plot");
     }
 
+    nara::ParticipantRow hanguk_heritage = Row("HANGUK", 1, "재단법인 한국문화유산연구원", 100.102);
+    hanguk_heritage.normalized_company_name = "한국문화재연구원";
+    nara::ParticipantRow hanguk_jae = Row("HANGUK", 21, "재단법인 한국문화재연구원", 100.110);
+    hanguk_jae.normalized_company_name = "한국문화재연구원";
+    const auto hanguk_scatter = nara::BuildScatterNotice({hanguk_heritage, hanguk_jae}, "HANGUK", 99.0, 101.0);
+    if (hanguk_scatter.chip_count != 2) {
+        std::cerr << "FAIL: 한국문화유산 and 한국문화재 are two chips, got " << hanguk_scatter.chip_count
+                  << "\n";
+        return 1;
+    }
+
+    nara::ParticipantRow hanul_old = Row("HANUL", 4, "재단법인 한울문화유산연구원", 99.79);
+    hanul_old.normalized_company_name = "한울문화재연구원";
+    nara::ParticipantRow hanul_new = Row("HANUL", 5, "한울문화재연구원", 99.80);
+    hanul_new.normalized_company_name = "한울문화재연구원";
+    const auto hanul_scatter = nara::BuildScatterNotice({hanul_old, hanul_new}, "HANUL", 99.0, 101.0);
+    if (hanul_scatter.chip_count != 1) {
+        std::cerr << "FAIL: 한울 개명 variants stay one chip, got " << hanul_scatter.chip_count << "\n";
+        return 1;
+    }
+
     nara::ParticipantRow feb = Row("FEB", 1, "동국문화재연구원", 99.5);
     feb.open_date = "2026-02-20 11:00:00";
     nara::ParticipantRow jun = Row("JUN", 1, "동국문화재연구원", 99.6);
@@ -207,6 +228,16 @@ int main() {
     }
     if (!nara::IsMappedRank1(mid_r1, mid)) {
         return Fail("1위 at 100.04 with spread chips must stay on the 1위 map");
+    }
+
+    std::vector<std::pair<std::string, std::string>> keys = {
+        {"R-OLD", "2026-06-12 11:00:00"},
+        {"R-NEW", "2026-08-28 11:00:00"},
+        {"R-MID", "2026-07-03 11:00:00"},
+    };
+    nara::SortNoticeKeysOldestFirst(keys);
+    if (keys.size() != 3 || keys[0].first != "R-OLD" || keys[2].first != "R-NEW") {
+        return Fail("map Y is oldest at the top, newest at the bottom (C# OrderBy OpenDate)");
     }
 
     std::cerr << "ok scatter chips match window companies\n";

@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cctype>
+#include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -24,6 +26,116 @@ std::string ReplaceAllCopy(std::string value, const std::string& from, const std
     return value;
 }
 
+size_t Utf8CharSize(unsigned char lead) {
+    if ((lead & 0x80) == 0) {
+        return 1;
+    }
+    if ((lead & 0xE0) == 0xC0) {
+        return 2;
+    }
+    if ((lead & 0xF0) == 0xE0) {
+        return 3;
+    }
+    if ((lead & 0xF8) == 0xF0) {
+        return 4;
+    }
+    return 1;
+}
+
+std::vector<std::string> Utf8Chars(const std::string& text) {
+    std::vector<std::string> chars;
+    size_t i = 0;
+    while (i < text.size()) {
+        size_t n = Utf8CharSize(static_cast<unsigned char>(text[i]));
+        if (i + n > text.size()) {
+            n = text.size() - i;
+        }
+        chars.push_back(text.substr(i, n));
+        i += n;
+    }
+    return chars;
+}
+
+std::string JoinChars(const std::vector<std::string>& chars, size_t count) {
+    std::string out;
+    const size_t n = (std::min)(count, chars.size());
+    for (size_t i = 0; i < n; ++i) {
+        out += chars[i];
+    }
+    return out;
+}
+
+bool StartsWithIgnoreAsciiCase(const std::string& value, const std::string& prefix) {
+    if (prefix.size() > value.size()) {
+        return false;
+    }
+    for (size_t i = 0; i < prefix.size(); ++i) {
+        const unsigned char a = static_cast<unsigned char>(value[i]);
+        const unsigned char b = static_cast<unsigned char>(prefix[i]);
+        if (std::tolower(a) != std::tolower(b)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+std::string HangulOnly(const std::string& text) {
+    std::string out;
+    size_t i = 0;
+    while (i < text.size()) {
+        const size_t n = Utf8CharSize(static_cast<unsigned char>(text[i]));
+        uint32_t cp = static_cast<unsigned char>(text[i]);
+        if (n == 2 && i + 1 < text.size()) {
+            cp = ((text[i] & 0x1F) << 6) | (text[i + 1] & 0x3F);
+        } else if (n == 3 && i + 2 < text.size()) {
+            cp = ((text[i] & 0x0F) << 12) | ((text[i + 1] & 0x3F) << 6) | (text[i + 2] & 0x3F);
+        } else if (n == 4 && i + 3 < text.size()) {
+            cp = ((text[i] & 0x07) << 18) | ((text[i + 1] & 0x3F) << 12) | ((text[i + 2] & 0x3F) << 6) |
+                 (text[i + 3] & 0x3F);
+        }
+        if (cp >= 0xAC00 && cp <= 0xD7A3) {
+            out.append(text, i, n);
+        }
+        i += n;
+    }
+    return out;
+}
+
+std::string CompactStem(const std::string& canonical) {
+    auto compact = ReplaceAllCopy(canonical, " ", "");
+    const std::vector<std::string> suffixes = {
+        "문화재연구원",
+        "문화유산연구원",
+        "문화연구원",
+        "문화유산원",
+        "연구원",
+        "고고학연구소",
+        "고고문화연구원",
+        "역사문화연구원",
+    };
+    for (const auto& suffix : suffixes) {
+        if (compact.size() > suffix.size() && compact.rfind(suffix) == compact.size() - suffix.size()) {
+            compact.erase(compact.size() - suffix.size());
+            break;
+        }
+    }
+    const auto hangul = HangulOnly(compact);
+    return hangul.empty() ? compact : hangul;
+}
+
+std::string CompressedUniqueLabel(const std::vector<std::string>& chars) {
+    if (chars.empty()) {
+        return {};
+    }
+    if (chars.size() <= 2) {
+        return JoinChars(chars, chars.size());
+    }
+    if (chars.size() == 3) {
+        return chars[0] + chars[2];
+    }
+    return chars[0] + chars[2] + chars.back();
+}
+
 }  // namespace
 
 std::string CanonicalizeCompany(const std::string& name) {
@@ -33,43 +145,92 @@ std::string CanonicalizeCompany(const std::string& name) {
     for (const auto& token : removals) {
         output = ReplaceAllCopy(output, token, "");
     }
-    output = ReplaceAllCopy(output, "문화유산연구원", "문화재연구원");
     output = TrimCopy(ReplaceAllCopy(output, "  ", " "));
-    return output;
+    const auto collapsed = ReplaceAllCopy(output, " ", "");
+    if (collapsed.find("한국문화유산연구원") == std::string::npos) {
+        output = ReplaceAllCopy(output, "문화유산연구원", "문화재연구원");
+    }
+    return TrimCopy(ReplaceAllCopy(output, "  ", " "));
+}
+
+std::string CompanyIdentity(const ParticipantRow& row) {
+    if (!row.company_name.empty()) {
+        return CanonicalizeCompany(row.company_name);
+    }
+    return CanonicalizeCompany(row.normalized_company_name);
 }
 
 std::string BuildShortLabel(const std::string& name) {
-    auto compact = CanonicalizeCompany(name);
-    const std::vector<std::string> suffixes = {
-        "문화재연구원", "문화유산연구원", "문화연구원", "연구원"};
-    for (const auto& suffix : suffixes) {
-        if (compact.size() > suffix.size() && compact.rfind(suffix) == compact.size() - suffix.size()) {
-            compact.erase(compact.size() - suffix.size());
-            break;
-        }
-    }
+    auto compact = CompactStem(CanonicalizeCompany(name));
     compact = TrimCopy(compact);
     if (compact.empty()) {
         return {};
     }
-    size_t i = 0;
-    int taken = 0;
-    while (i < compact.size() && taken < 2) {
-        const unsigned char lead = static_cast<unsigned char>(compact[i]);
-        size_t n = 1;
-        if ((lead & 0x80) == 0) {
-            n = 1;
-        } else if ((lead & 0xE0) == 0xC0) {
-            n = 2;
-        } else if ((lead & 0xF0) == 0xE0) {
-            n = 3;
-        } else if ((lead & 0xF8) == 0xF0) {
-            n = 4;
+    return JoinChars(Utf8Chars(compact), 2);
+}
+
+std::map<std::string, std::string> BuildDisplayMap(const std::vector<std::string>& names) {
+    std::vector<std::string> canonical_names;
+    std::set<std::string> seen;
+    for (const auto& name : names) {
+        const auto key = CanonicalizeCompany(name);
+        if (key.empty() || !seen.insert(key).second) {
+            continue;
         }
-        i += n;
-        ++taken;
+        canonical_names.push_back(key);
     }
-    return compact.substr(0, i);
+
+    std::map<std::string, std::string> raw_compact;
+    std::map<std::string, std::string> compact;
+    for (const auto& key : canonical_names) {
+        raw_compact[key] = ReplaceAllCopy(key, " ", "");
+        compact[key] = CompactStem(key);
+    }
+
+    std::map<std::string, std::string> result;
+    for (const auto& key : canonical_names) {
+        const auto& stem = compact[key];
+        const auto& raw = raw_compact[key];
+        if (stem.empty() || raw.empty()) {
+            result[key] = {};
+            continue;
+        }
+        const auto raw_chars = Utf8Chars(raw);
+        size_t unique_len = (std::min)(static_cast<size_t>(2), raw_chars.size());
+        while (unique_len <= raw_chars.size()) {
+            const auto prefix = JoinChars(raw_chars, unique_len);
+            bool unique = true;
+            for (const auto& other : canonical_names) {
+                if (other == key) {
+                    continue;
+                }
+                if (StartsWithIgnoreAsciiCase(raw_compact[other], prefix)) {
+                    unique = false;
+                    break;
+                }
+            }
+            if (unique) {
+                break;
+            }
+            ++unique_len;
+        }
+        const auto unique_prefix = Utf8Chars(JoinChars(raw_chars, (std::min)(unique_len, raw_chars.size())));
+        auto label = CompressedUniqueLabel(unique_prefix);
+        if (label.empty()) {
+            label = BuildShortLabel(key);
+        }
+        result[key] = label;
+    }
+    return result;
+}
+
+std::string DisplayLabelFor(const std::string& name, const std::map<std::string, std::string>& labels) {
+    const auto key = CanonicalizeCompany(name);
+    const auto found = labels.find(key);
+    if (found != labels.end() && !found->second.empty()) {
+        return found->second;
+    }
+    return BuildShortLabel(key.empty() ? name : key);
 }
 
 }  // namespace nara

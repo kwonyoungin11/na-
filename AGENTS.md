@@ -6,11 +6,14 @@ This file contains durable repository instructions only.
 
 - Put personal communication preferences in `~/.codex/AGENTS.md`.
 - Put directory-specific rules in the closest nested `AGENTS.md`.
+- Put C++ / Win32 design workflows in `.grok/skills/`.
 - Use `.agents/PLANS.md` (or a task-specific plan file) for complex or long-running work.
 
-## Disabled tooling
+## Tooling
 
-Grok **hooks**, **MCP servers**, and **skills** are removed. Do not recreate, install, call, or load them.
+Grok **hooks** and **MCP servers** stay off.
+
+C++ and design skills live in `.grok/skills/`. Load the matching skill for C++ work. Add more with `/create-skill`.
 
 Canonical domain text: `.grok/rules/00-dev-engineering.md`.
 

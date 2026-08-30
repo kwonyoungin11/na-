@@ -14,6 +14,36 @@ public sealed class CompanyNamePresentationTests
     }
 
     [Fact]
+    public void Canonicalize_Keeps_HangukHeritage_Separate_From_HangukJae()
+    {
+        var heritage = CompanyNamePresentation.Canonicalize("재단법인 한국문화유산연구원");
+        var jae = CompanyNamePresentation.Canonicalize("재단법인 한국문화재연구원");
+
+        Assert.NotEqual(jae, heritage);
+        Assert.Equal("한국문화유산연구원", heritage);
+        Assert.Equal("한국문화재연구원", jae);
+        Assert.Equal("한울문화재연구원", CompanyNamePresentation.Canonicalize("재단법인 한울문화유산연구원"));
+    }
+
+    [Fact]
+    public void BuildDisplayMap_Splits_Jeju_And_Hanguk_Family_Labels()
+    {
+        var jeju = CompanyNamePresentation.BuildDisplayMap(["제주문화재연구원", "제주고고학연구소"]);
+        Assert.NotEqual(jeju["제주문화재연구원"], jeju["제주고고학연구소"]);
+
+        var hanguk = CompanyNamePresentation.BuildDisplayMap(
+        [
+            "한국문화재연구원",
+            "한국문화유산연구원",
+            "한국문물연구원",
+            "한국고고환경연구소",
+            "한국선사문화연구원",
+        ]);
+        var labels = hanguk.Values.ToHashSet(StringComparer.Ordinal);
+        Assert.Equal(5, labels.Count);
+    }
+
+    [Fact]
     public void BuildDisplayMap_Uses_TwoLetter_Label_When_Unique()
     {
         var map = CompanyNamePresentation.BuildDisplayMap(["동아세아문화재연구원", "가경문화재연구원"]);

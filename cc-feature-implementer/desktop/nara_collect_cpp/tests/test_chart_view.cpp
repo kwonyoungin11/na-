@@ -70,13 +70,15 @@ int main() {
     tall.scroll_y = 0;
     const auto latest = nara::ShowLatestView(tall);
     if (latest.scroll_y != tall.world_h - tall.plot_h) {
-        return Fail("start view scrolls to the newest notices");
+        return Fail("start view scrolls to the newest notices at the bottom");
     }
     const int cell = nara::CellSize(1.0);
-    const int data_h = tall.world_h - nara::kBottomPadCells * cell;
-    const int last_notice_bottom = data_h - latest.scroll_y;
-    if (last_notice_bottom != tall.plot_h - nara::kBottomPadCells * cell) {
-        return Fail("newest notice sits 5 empty cells above the plot bottom");
+    const int newest_y = nara::LatestNoticePlotY(39, cell, tall.plot_h);
+    if (newest_y < 0 || newest_y + cell > tall.plot_h) {
+        return Fail("newest notice is inside the plot, 5 empty cells above the bottom");
+    }
+    if (newest_y != tall.plot_h - (nara::kBottomPadCells + 1) * cell) {
+        return Fail("newest row sits on the last data row, not reversed to the top");
     }
 
     nara::ChartView small = view;

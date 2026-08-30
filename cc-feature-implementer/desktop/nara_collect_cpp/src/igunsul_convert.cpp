@@ -168,18 +168,6 @@ std::optional<double> ToHundredScaleAdjustRate(std::optional<double> raw) {
     return value;
 }
 
-std::string CanonicalizeCompany(const std::string& name) {
-    auto output = Trim(name);
-    const std::vector<std::string> removals = {
-        "(재)", "(재단)", "재단법인", "재단", "(주)", "주식회사", "(사)", "사단법인"};
-    for (const auto& token : removals) {
-        output = ReplaceAll(output, token, "");
-    }
-    output = ReplaceAll(output, "문화유산연구원", "문화재연구원");
-    output = Trim(ReplaceAll(output, "  ", " "));
-    return output;
-}
-
 std::string ExtractNoticeNo(const std::string& notice_number) {
     auto text = Trim(notice_number);
     const auto dash = text.rfind('-');

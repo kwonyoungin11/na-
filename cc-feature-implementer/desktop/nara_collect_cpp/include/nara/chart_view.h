@@ -26,6 +26,12 @@ inline int ScatterWorldHeight(int notice_rows, int cell) {
 ChartView ClampView(ChartView view);
 ChartView CenterView(ChartView view);
 ChartView ShowLatestView(ChartView view);
+
+inline int LatestNoticePlotY(int notice_count, int cell, int plot_h) {
+    (void)notice_count;
+    const int c = cell > 0 ? cell : 20;
+    return plot_h - (kBottomPadCells + 1) * c;
+}
 ChartView PanBy(ChartView view, int dx, int dy);
 ChartView ZoomAt(ChartView view, int plot_x, int plot_y, bool zoom_in);
 int HoverColumn(int plot_x, int scroll_x, double scale);

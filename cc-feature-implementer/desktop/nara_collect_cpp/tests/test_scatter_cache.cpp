@@ -119,33 +119,18 @@ int main() {
     if (!nara::scatter_cache::PresentFromOffscreenFrame()) {
         return Fail("compose bounce offscreen then blit once, or the map blinks");
     }
+    using nara::scatter_cache::DonggukBounceEnabled;
     using nara::scatter_cache::DonggukBounceLiftPx;
     using nara::scatter_cache::DonggukBounceScale;
     using nara::scatter_cache::kDonggukBounceAmp;
-    using nara::scatter_cache::kDonggukBouncePeriodMs;
-    if (kDonggukBouncePeriodMs < 2000) {
-        return Fail("동국 bounce should stay slow");
+    if (DonggukBounceEnabled() || kDonggukBounceAmp != 0.0f) {
+        return Fail("동국 bounce is off: 50ms timer lags the map and covers neighbor 문화 labels");
     }
-    if (kDonggukBounceAmp < 0.10f || kDonggukBounceAmp > 0.15f) {
-        return Fail("bounce must be visible without sparkling");
+    if (std::fabs(DonggukBounceScale(0) - 1.0f) > 0.001f || std::fabs(DonggukBounceScale(1100) - 1.0f) > 0.001f) {
+        return Fail("disabled bounce stays scale 1");
     }
-    if (std::fabs(DonggukBounceScale(0) - 1.0f) > 0.001f) {
-        return Fail("bounce starts at rest scale 1");
-    }
-    if (DonggukBounceScale(kDonggukBouncePeriodMs / 2) <= DonggukBounceScale(0)) {
-        return Fail("mid-cycle scale pops above rest");
-    }
-    if (DonggukBounceScale(kDonggukBouncePeriodMs / 2) > 1.0f + kDonggukBounceAmp + 0.001f) {
-        return Fail("bounce amplitude cap");
-    }
-    const float quarter = DonggukBounceScale(kDonggukBouncePeriodMs / 4);
-    const float mid = DonggukBounceScale(kDonggukBouncePeriodMs / 2);
-    if (quarter >= mid - 0.001f) {
-        return Fail("cosine ease must peak once, not a sharp abs-sin flash");
-    }
-    const float lift = DonggukBounceLiftPx(kDonggukBouncePeriodMs / 2);
-    if (lift > -2.5f || lift < -4.5f) {
-        return Fail("lift stays a few pixels so the square does not glitter");
+    if (std::fabs(DonggukBounceLiftPx(1100)) > 0.001f) {
+        return Fail("disabled bounce does not lift chips");
     }
 
     std::cerr << "ok scatter cache matches ScatterRenderCache\n";

@@ -279,6 +279,39 @@ std::string AwardCollectCommandLine(
            + QuoteArg(jsonl_path) + " --env " + QuoteArg(env_path);
 }
 
+std::string AwardCollectGapCommandLine(
+    const std::string& exe_path,
+    const std::string& from_date,
+    const std::string& to_date,
+    const std::string& jsonl_path,
+    const std::string& env_path) {
+    return QuoteArg(exe_path) + " --from-date " + from_date + " --to-date " + to_date + " --out "
+           + QuoteArg(jsonl_path) + " --env " + QuoteArg(env_path);
+}
+
+std::string MaxParticipantOpenDay(const std::filesystem::path& db_path) {
+    sqlite3* db = nullptr;
+    if (sqlite3_open(PathUtf8(db_path).c_str(), &db) != SQLITE_OK) {
+        if (db) {
+            sqlite3_close(db);
+        }
+        return {};
+    }
+    sqlite3_stmt* stmt = nullptr;
+    const char* sql = "SELECT MAX(substr(open_date,1,10)) FROM participants;";
+    std::string day;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            if (const auto* text = sqlite3_column_text(stmt, 0)) {
+                day = reinterpret_cast<const char*>(text);
+            }
+        }
+        sqlite3_finalize(stmt);
+    }
+    sqlite3_close(db);
+    return day;
+}
+
 bool EnsureParticipantsSchema(const std::filesystem::path& db_path) {
     std::error_code ec;
     std::filesystem::create_directories(db_path.parent_path(), ec);

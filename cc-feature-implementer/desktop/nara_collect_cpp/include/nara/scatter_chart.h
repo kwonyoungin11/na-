@@ -2,7 +2,9 @@
 
 #include "nara/igunsul_convert.h"
 
+#include <algorithm>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace nara {
@@ -25,6 +27,16 @@ std::vector<ParticipantRow> InPeriod(
     const std::vector<ParticipantRow>& rows,
     const std::string& start_date,
     const std::string& end_date);
+
+inline void SortNoticeKeysOldestFirst(std::vector<std::pair<std::string, std::string>>& keys) {
+    std::sort(keys.begin(), keys.end(), [](const std::pair<std::string, std::string>& a,
+                                           const std::pair<std::string, std::string>& b) {
+        if (a.second != b.second) {
+            return a.second < b.second;
+        }
+        return a.first < b.first;
+    });
+}
 
 double ToChartAdjustRate(double raw, double rank1_raw, double rank1_chart);
 

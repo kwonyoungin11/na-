@@ -257,6 +257,20 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    const auto empty_db = dir / "empty-max.db";
+    if (!nara::EnsureParticipantsSchema(empty_db) || !nara::MaxParticipantOpenDay(empty_db).empty()) {
+        return Fail("empty sqlite has no max open_date");
+    }
+    if (nara::MaxParticipantOpenDay(db).size() < 10) {
+        return Fail("merged sqlite reports the latest stored open_date");
+    }
+    const auto gap_cmd = nara::AwardCollectGapCommandLine(
+        (dir / "nara_award_collect.exe").string(), "2026-08-21", "2026-08-29", jsonl_path, env_path);
+    if (gap_cmd.find("--from-date 2026-08-21") == std::string::npos
+        || gap_cmd.find("--to-date 2026-08-29") == std::string::npos
+        || gap_cmd.find("--start-month") != std::string::npos) {
+        return Fail("gap collect command must skip stored months");
+    }
     const auto cmd = nara::AwardCollectCommandLine(
         (dir / "nara_award_collect.exe").string(), "2025-08", "2026-08", jsonl_path, env_path);
     if (cmd.find("--start-month 2025-08") == std::string::npos

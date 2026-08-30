@@ -10,8 +10,7 @@ namespace nara {
 namespace {
 
 std::string CompanyKey(const ParticipantRow& row) {
-    auto name = row.normalized_company_name.empty() ? row.company_name : row.normalized_company_name;
-    return CanonicalizeCompany(name);
+    return CompanyIdentity(row);
 }
 
 bool SameNotice(const ParticipantRow& row, const std::string& notice) {

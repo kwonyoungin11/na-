@@ -49,9 +49,16 @@ constexpr float kFontCompanyAll = 13.0f;
 
 // MainWindow.xaml table-card toolbar (PreviewCard Padding 16,14).
 constexpr int kMainCardInset = 20;
+constexpr int kTableCardY = 128;
+constexpr float kMainToolbarShift = 0.20f;
+constexpr int kMainKpiY = 60;
+constexpr int kMainKpiH = 56;
+constexpr int kMainKpiGap = 10;
 constexpr int kMainTablePadX = 16;
 constexpr int kMainTablePadTop = 14;
 constexpr int kMainHeaderGap = 12;
+constexpr int kMainStatusH = 28;
+constexpr int kMainStatusGap = 8;
 constexpr int kMainBtnH = 40;
 constexpr int kMainUpdateW = 124;
 constexpr int kMainStopW = 108;
@@ -161,6 +168,34 @@ constexpr uint32_t kCheckMarkArgb = 0xFFFFFFFF;
 constexpr uint32_t kAccentSubtleArgb = 0xFFFFF4E5;
 constexpr uint32_t kHoverFillArgb = 0xFFEEF3F8;
 
+constexpr int kChartTabH = 34;
+constexpr int kChartTabW = 112;
+constexpr int kChartTabGap = 6;
+constexpr int kChartTabPad = 12;
+constexpr int kChartTabCount = 2;
+constexpr int kChartTabRadius = 12;
+constexpr int kHistogramBinCount = 40;
+constexpr int kHistogramMaxSeries = 8;
+constexpr int kHistPadL = 52;
+constexpr int kHistPadR = 28;
+constexpr int kHistPadT = 28;
+constexpr int kHistPadB = 36;
+constexpr float kHistDepthX = 0.55f;
+constexpr float kHistDepthY = 0.32f;
+constexpr float kHistBarGap = 0.18f;
+constexpr float kHistSeriesGap = 6.0f;
+constexpr uint32_t kHistFloorArgb = 0xFFF3F6FB;
+constexpr uint32_t kHistGridArgb = 0xFFD5DDE8;
+constexpr uint32_t kHistMarketLowArgb = 0xFF22D3EE;
+constexpr uint32_t kHistMarketMidArgb = 0xFF818CF8;
+constexpr uint32_t kHistMarketHighArgb = 0xFFF43F5E;
+constexpr uint32_t kHistMarketPeakArgb = 0xFFFBBF24;
+constexpr uint32_t kHistTabOnFillArgb = kAccentArgb;
+constexpr uint32_t kHistTabOnTextArgb = 0xFFFFFFFFu;
+constexpr uint32_t kHistTabOffFillArgb = kGlassFillArgb;
+constexpr uint32_t kHistTabOffTextArgb = kSubtleTextArgb;
+constexpr uint32_t kHistMarketGhostA = 0x66u;
+
 constexpr wchar_t kFontFamily[] = L"Malgun Gothic";
 constexpr wchar_t kResetLabel[] = L"맵 초기화";
 constexpr wchar_t kRank1Label[] = L"1위";
@@ -177,6 +212,12 @@ constexpr wchar_t kCompanyLabel[] = L"업체";
 constexpr wchar_t kCompanyAllLabel[] = L"전체";
 constexpr wchar_t kAxisNotice[] = L"공고(개찰일시)";
 constexpr wchar_t kAxisRate[] = L"기초대비사정률(%)";
+constexpr wchar_t kChartTabMapLabel[] = L"전장맵";
+constexpr wchar_t kChartTabHistLabel[] = L"히스토그램";
+constexpr wchar_t kHistAxisCount[] = L"투찰 건수";
+constexpr wchar_t kHistMarketLabel[] = L"전체";
+constexpr wchar_t kHistRank1Label[] = L"1위";
+constexpr wchar_t kHistEmpty[] = L"표시할 투찰이 없습니다. 기간·지역을 조정하세요.";
 constexpr wchar_t kEmptyMessage[] = L"동국 참여 낙찰공고가 없습니다. 기간·지역을 조정하세요.";
 constexpr wchar_t kWindowTitle[] = L"동국문화유산연구원 낙찰분석프로그램 - 분석 창";
 
@@ -219,6 +260,42 @@ inline uint32_t DarkenArgb(uint32_t argb, float amount) {
     };
     return (a << 24) | (channel((argb >> 16) & 0xFFu) << 16) | (channel((argb >> 8) & 0xFFu) << 8)
            | channel(argb & 0xFFu);
+}
+
+inline uint32_t LightenArgb(uint32_t argb, float amount) {
+    const float t = amount < 0.0f ? 0.0f : (amount > 1.0f ? 1.0f : amount);
+    const uint32_t a = (argb >> 24) & 0xFFu;
+    const auto channel = [t](uint32_t value) -> uint32_t {
+        const double lifted = static_cast<double>(value) + (255.0 - static_cast<double>(value)) * static_cast<double>(t);
+        return static_cast<uint32_t>(std::lround(lifted));
+    };
+    return (a << 24) | (channel((argb >> 16) & 0xFFu) << 16) | (channel((argb >> 8) & 0xFFu) << 8)
+           | channel(argb & 0xFFu);
+}
+
+inline uint32_t LerpArgb(uint32_t a, uint32_t b, float t) {
+    const float u = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+    const auto mix = [u](uint32_t lo, uint32_t hi) -> uint32_t {
+        return static_cast<uint32_t>(
+            std::lround(static_cast<double>(lo) + (static_cast<double>(hi) - static_cast<double>(lo)) * static_cast<double>(u)));
+    };
+    return (mix((a >> 24) & 0xFFu, (b >> 24) & 0xFFu) << 24) | (mix((a >> 16) & 0xFFu, (b >> 16) & 0xFFu) << 16)
+           | (mix((a >> 8) & 0xFFu, (b >> 8) & 0xFFu) << 8) | mix(a & 0xFFu, b & 0xFFu);
+}
+
+inline uint32_t WithAlpha(uint32_t argb, uint32_t alpha) {
+    return ((alpha & 0xFFu) << 24) | (argb & 0x00FFFFFFu);
+}
+
+inline uint32_t HistDensityArgb(float t) {
+    const float u = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+    if (u < 0.35f) {
+        return LerpArgb(kHistMarketLowArgb, kHistMarketMidArgb, u / 0.35f);
+    }
+    if (u < 0.70f) {
+        return LerpArgb(kHistMarketMidArgb, kHistMarketPeakArgb, (u - 0.35f) / 0.35f);
+    }
+    return LerpArgb(kHistMarketPeakArgb, kHistMarketHighArgb, (u - 0.70f) / 0.30f);
 }
 
 inline uint32_t ChipOutlineArgb() { return kChipBorderArgb; }
@@ -280,6 +357,66 @@ inline float ChipLabelScreenPx(int cell, int char_count) {
 
 inline float ChipLabelOutlineWidthPx(int cell) {
     return kChipLabelOutlineWidth * (static_cast<float>((std::max)(1, cell)) / static_cast<float>(kCellPx));
+}
+
+struct ChipDodge {
+    int dx = 1;
+    int dy = 1;
+    int side = 18;
+};
+
+inline ChipDodge LayoutChipDodge(int index, int count, int cell) {
+    ChipDodge d;
+    const int n = (std::max)(1, count);
+    const int safe_cell = (std::max)(4, cell);
+    if (n <= 1) {
+        d.side = (std::max)(2, safe_cell - 2);
+        d.dx = (safe_cell - d.side) / 2;
+        d.dy = d.dx;
+        return d;
+    }
+    int cols = 2;
+    if (n > 4) {
+        cols = 3;
+    }
+    if (n > 9) {
+        cols = 4;
+    }
+    const int rows = (n + cols - 1) / cols;
+    const int col = ((std::max)(0, index)) % cols;
+    const int row = ((std::max)(0, index)) / cols;
+    const int pad = 1;
+    const int inner = (std::max)(2, safe_cell - pad * 2);
+    const int cw = (std::max)(2, inner / cols);
+    const int rh = (std::max)(2, inner / rows);
+    d.side = (std::max)(2, (std::min)(cw, rh) - 2);
+    d.dx = pad + col * cw + (std::max)(0, (cw - d.side) / 2);
+    d.dy = pad + row * rh + (std::max)(0, (rh - d.side) / 2);
+    return d;
+}
+
+inline bool ChipDodgeRectsOverlap(const ChipDodge& a, const ChipDodge& b) {
+    return a.dx < b.dx + b.side && b.dx < a.dx + a.side && a.dy < b.dy + b.side && b.dy < a.dy + a.side;
+}
+
+inline bool ChipDodgeDrawsLabel(int side) {
+    return side >= 6;
+}
+
+inline float ChipGoldInset() { return kGoldWidth * 0.5f; }
+
+inline bool NoticeYLabelFits(int label_y, int cell, int plot_y, int plot_bottom, int tab_bottom) {
+    const int vis_top = (std::max)(plot_y, tab_bottom);
+    const int lab_bot = label_y + (std::max)(1, cell);
+    return lab_bot > vis_top && label_y < plot_bottom;
+}
+
+inline int AxisNoticeTitleY(int tab_bottom, int plot_y) {
+    const int under_tab = tab_bottom + 2;
+    if (under_tab + static_cast<int>(kFontAxis) <= plot_y) {
+        return under_tab;
+    }
+    return plot_y;
 }
 
 inline std::string FormatNoticeYLabel(const std::string& notice, const std::string& open_date) {
@@ -388,7 +525,14 @@ struct MainToolbar {
 
 inline int MainToolbarY(int card_y) { return card_y + kMainTablePadTop; }
 
-inline int MainTableGridY(int card_y) { return MainToolbarY(card_y) + kMainBtnH + kMainHeaderGap; }
+inline int MainStatusY(int card_y) { return MainToolbarY(card_y) + kMainBtnH + kMainStatusGap; }
+
+inline RectI LayoutMainStatus(int client_w, int card_y) {
+    return {kMainCardInset + kMainTablePadX, MainStatusY(card_y),
+            (std::max)(80, client_w - 2 * (kMainCardInset + kMainTablePadX)), kMainStatusH};
+}
+
+inline int MainTableGridY(int card_y) { return MainStatusY(card_y) + kMainStatusH + kMainHeaderGap; }
 
 struct RegionSegment {
     RectI nationwide;
@@ -414,6 +558,10 @@ inline const wchar_t* RegionLabelAt(int index) {
     return index == 1 ? kRegionGyeongbuk : kRegionNationwide;
 }
 
+inline const wchar_t* ChartTabLabelAt(int index) {
+    return index == 1 ? kChartTabHistLabel : kChartTabMapLabel;
+}
+
 inline int RegionIndexFromToken(const std::string& token) {
     return token == "경북" ? 1 : 0;
 }
@@ -421,13 +569,31 @@ inline int RegionIndexFromToken(const std::string& token) {
 inline MainToolbar LayoutMainToolbar(int client_w, int card_y) {
     MainToolbar t;
     const int y = MainToolbarY(card_y);
-    const int right = client_w - kMainCardInset - kMainTablePadX;
+    const int shift = static_cast<int>(std::lround(static_cast<double>(client_w) * static_cast<double>(kMainToolbarShift)));
+    const int right = client_w - kMainCardInset - kMainTablePadX - shift;
     t.chart = {right - kMainChartW, y, kMainChartW, kMainBtnH};
     t.stop = {t.chart.x - kMainBtnGap - kMainStopW, y, kMainStopW, kMainBtnH};
     t.update = {t.stop.x - kMainBtnGap - kMainUpdateW, y, kMainUpdateW, kMainBtnH};
     t.region_combo = {t.update.x - kMainComboGap - kMainRegionComboW, y, kMainRegionComboW, kMainBtnH};
     t.region_label = {t.region_combo.x - kMainRegionLabelGap - kMainRegionLabelW, y, kMainRegionLabelW, kMainBtnH};
     return t;
+}
+
+struct MainKpiRow {
+    RectI notices;
+    RectI latest;
+    RectI period;
+};
+
+inline MainKpiRow LayoutMainKpis(int client_w) {
+    MainKpiRow row;
+    const int x = kMainCardInset + kMainTablePadX;
+    const int inner = (std::max)(120, client_w - 2 * x);
+    const int w = (std::max)(80, (inner - 2 * kMainKpiGap) / 3);
+    row.notices = {x, kMainKpiY, w, kMainKpiH};
+    row.latest = {row.notices.Right() + kMainKpiGap, kMainKpiY, w, kMainKpiH};
+    row.period = {row.latest.Right() + kMainKpiGap, kMainKpiY, w, kMainKpiH};
+    return row;
 }
 
 inline RectI CompanyAllButtonRect(const RectI& company_pane) {
@@ -445,7 +611,11 @@ struct ChartChrome {
     RectI content;
     RectI map_card;
     RectI map_inner;
+    RectI tab_strip;
+    RectI tab_map;
+    RectI tab_hist;
     RectI plot;
+    RectI hist_plot;
     RectI reset_toolbar;
     RectI reset_btn;
     RectI rank1_btn;
@@ -498,10 +668,15 @@ inline ChartChrome LayoutChartChrome(int client_w, int client_h, int company_cou
     c.map_inner.w = (std::max)(40, c.map_card.w - 2 * (kCardPad + kCardInner));
     c.map_inner.h = (std::max)(40, c.map_card.h - 2 * (kCardPad + kCardInner));
 
+    c.tab_map = {c.map_inner.x + kChartTabPad, c.map_inner.y + kChartTabPad, kChartTabW, kChartTabH};
+    c.tab_hist = {c.tab_map.Right() + kChartTabGap, c.tab_map.y, kChartTabW, kChartTabH};
+    c.tab_strip = {c.tab_map.x, c.tab_map.y, c.tab_hist.Right() - c.tab_map.x, kChartTabH};
+
     c.plot.x = c.map_inner.x + kPlotLeft;
-    c.plot.y = c.map_inner.y + kPlotTop;
+    c.plot.y = c.tab_map.Bottom() + kPlotTop;
     c.plot.w = (std::max)(120, c.map_inner.w - kPlotLeft - kPlotRight);
-    c.plot.h = (std::max)(120, c.map_inner.h - kPlotTop - kPlotBottom);
+    c.plot.h = (std::max)(120, c.map_inner.h - kPlotBottom - (c.plot.y - c.map_inner.y));
+    c.hist_plot = {c.map_inner.x + 12, c.plot.y, (std::max)(120, c.map_inner.w - 24), c.plot.h};
 
     c.reset_toolbar.w = kToolbarPad * 2 + kRank1BtnW + kFieldGap + kResetMinW;
     c.reset_toolbar.h = kToolbarPad * 2 + kResetH;
@@ -589,6 +764,8 @@ inline void ApplyCompanyClick(std::vector<char>& checked, int index, bool click_
     checked[static_cast<size_t>(index)] = checked[static_cast<size_t>(index)] ? 0 : 1;
 }
 
+inline void ResetMapFilters(std::vector<char>& checked) { ApplyCompanyClick(checked, -1, true); }
+
 inline RectI CompanyCheckCellRect(const RectI& wrap, int index, int count) {
     int col = 0;
     int row = 0;
@@ -601,6 +778,16 @@ inline RectI CompanyCheckCellRect(const RectI& wrap, int index, int count) {
     const int rh = inner_h / (std::max)(1, rows);
     return {wrap.x + kCompanyPadX + col * cw + 1, wrap.y + kCompanyPadY + row * rh + 1, (std::max)(8, cw - 7),
             (std::max)(8, rh - 2)};
+}
+
+inline int HitChartTab(const ChartChrome& chrome, int x, int y) {
+    if (chrome.tab_map.Contains(x, y)) {
+        return 0;
+    }
+    if (chrome.tab_hist.Contains(x, y)) {
+        return 1;
+    }
+    return -1;
 }
 
 }  // namespace chart_theme

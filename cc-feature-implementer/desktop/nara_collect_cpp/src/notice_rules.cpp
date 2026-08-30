@@ -30,13 +30,7 @@ std::string NoticeKey(const ParticipantRow& row) {
 }
 
 std::string CompanyKey(const ParticipantRow& row) {
-    const auto& value = row.normalized_company_name.empty() ? row.company_name : row.normalized_company_name;
-    auto start = value.find_first_not_of(" \t");
-    auto end = value.find_last_not_of(" \t");
-    if (start == std::string::npos) {
-        return {};
-    }
-    return value.substr(start, end - start + 1);
+    return CompanyIdentity(row);
 }
 
 }  // namespace
@@ -46,9 +40,7 @@ bool IsExcludedNoticeName(const std::string& notice_name) {
 }
 
 bool IsDonggukCompany(const ParticipantRow& row) {
-    const auto& name =
-        row.normalized_company_name.empty() ? row.company_name : row.normalized_company_name;
-    const auto canonical = CanonicalizeCompany(name);
+    const auto canonical = CompanyIdentity(row);
     return canonical.find("동국문화재연구원") != std::string::npos;
 }
 

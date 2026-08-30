@@ -8,6 +8,14 @@ namespace dwrite_text {
 
 enum class Align { Near, Center, Far };
 
+// ClearType (C# WPF). Grayscale + contrast 0 is why C++ Hangul looks muddy.
+constexpr float kDwriteGamma = 2.2f;
+constexpr float kDwriteEnhancedContrast = 0.5f;
+constexpr float kDwriteClearTypeLevel = 1.0f;
+constexpr int kDwritePixelGeometryRgb = 1;
+constexpr int kDwriteRenderingNaturalSymmetric = 5;
+constexpr int kDwriteTextAntialiasClearType = 1;
+
 struct Job {
     float x = 0;
     float y = 0;
