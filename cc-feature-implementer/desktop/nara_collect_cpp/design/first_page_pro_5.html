@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>5 · 스몰 멀티플 + 표 레일</title>
+<link rel="stylesheet" href="first_page_pro.css" />
+<style>
+  .body { flex: 1; min-height: 0; display: flex; gap: 8px; padding: 6px 12px 10px; }
+  .charts { flex: 1; padding: 0; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr 1fr; }
+  .table-rail {
+    width: 280px; flex-shrink: 0; height: 100%;
+    background: var(--card); border-radius: 12px;
+    box-shadow: 0 6px 16px rgba(15,23,42,.05);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="caption"><div class="dots"><i></i><i></i><i></i></div>동국 낙찰분석 · 프로 5 스몰 멀티플 · 1280×800 · 표 레일 20%</div>
+  <div class="top">
+    <div class="brand">동국 낙찰<em>패널 9</em></div>
+    <div class="kpi-row">
+      <div class="kpi"><div><div class="cap">공고</div><b>124</b></div></div>
+      <div class="kpi"><div><div class="cap">1위</div><b>5</b></div></div>
+      <div class="kpi"><div><div class="cap">중앙</div><b>48위</b></div></div>
+    </div>
+    <div class="grow"></div>
+    <button class="btn btn-update">업데이트</button>
+    <button class="btn btn-stop">중지</button>
+    <button class="btn btn-map">전장 맵</button>
+    <div class="seg"><div class="on">전국</div><div class="off">경북</div></div>
+  </div>
+  <div class="body">
+    <div class="charts">
+      <div class="panel"><div class="ph"><h3>1위 칸</h3><span class="cap">사정률 · 횟수</span></div><div class="plot"><canvas id="c1"></canvas></div></div>
+      <div class="panel"><div class="ph"><h3>동국 순위</h3></div><div class="plot"><canvas id="c2"></canvas></div></div>
+      <div class="panel"><div class="ph"><h3>월별 공고</h3></div><div class="plot"><canvas id="c3"></canvas></div></div>
+      <div class="panel"><div class="ph"><h3>사정률 월</h3></div><div class="plot"><canvas id="c4"></canvas></div></div>
+      <div class="panel"><div class="ph"><h3>간격</h3></div><div class="plot"><canvas id="c5"></canvas></div></div>
+      <div class="panel"><div class="ph"><h3>N개사</h3></div><div class="plot"><canvas id="c6"></canvas></div></div>
+      <div class="panel"><div class="ph"><h3>고정 감시</h3></div><div class="plot"><canvas id="c7"></canvas></div></div>
+      <div class="panel"><div class="ph"><h3>1위 빈도</h3><span class="cap">상위 5</span></div><div class="plot"><canvas id="c8"></canvas></div></div>
+      <div class="panel"><div class="ph"><h3>동국 상자</h3></div><div class="plot"><canvas id="c9"></canvas></div></div>
+    </div>
+    <aside class="table-rail">
+      <div class="th"><h3>낙찰공고</h3><span class="tag">08-26</span></div>
+      <div class="scroll" id="tbl"></div>
+      <div class="replay" style="flex-wrap:wrap; gap:6px; line-height:1.35">
+        <span>복기</span>
+        <span>1위 <b>미래 99.906</b></span>
+        <span>동국 <b>19위</b></span>
+        <span>맵에서 칸</span>
+      </div>
+    </aside>
+  </div>
+</div>
+<script src="first_page_pro_kit.js"></script>
+<script>
+window.addEventListener("load", function () {
+  const D = ProData, C = Pro.COL;
+  Pro.vbars("c1", D.bins, D.winN, { home: 5, peak: 9 });
+  Pro.vbars("c2", D.rankL, D.rankN, {});
+  Pro.vbars("c3", D.months, D.notices, {});
+  Pro.lines("c4", [
+    { name: "동국", data: D.dongRate, color: C.dong },
+    { name: "1위", data: D.winRate, color: C.hot }
+  ], { ymin: 99.5, ymax: 100.2, digits: 2 });
+  Pro.area("c5", D.gap, { ymin: 0, ymax: 0.55, color: C.violet });
+  Pro.lines("c6", [{ name: "N", data: D.nFirm, color: C.blue }], { ymin: 55, ymax: 85, digits: 0 });
+  Pro.hbars("c7", D.watchL, D.watchN, { colors: ["#0F766E","#2563EB","#7C3AED","#B45309","#0E7490","#64748B"] });
+  Pro.hbars("c8", D.winL, D.winC, { colors: ["#0F766E","#2563EB","#B45309","#7C3AED","#0E7490","#CBD5E1"] });
+  Pro.boxplot("c9", { min: 99.37, q1: 99.56, med: 99.61, q3: 99.65, max: 100.48 });
+  Pro.mountTable("tbl", true);
+});
+</script>
+</body>
+</html>

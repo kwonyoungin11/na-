@@ -464,25 +464,44 @@ int main() {
     if (status.y != 410 || status.h != 28 || status.x != kMainCardInset + kMainTablePadX) {
         return Fail("status banner sits under 업데이트");
     }
-    if (kTableCardY != 306 || std::fabs(kMainToolbarShift - 0.20f) > 0.001f || kMainKpiH != 56) {
-        return Fail("first screen KPIs, intel row, table at 306");
+    if (kMainWindowMinW != 1280 || kMainWindowMinH != 800 || MainTableSlotH(800) != 160) {
+        return Fail("mosaic first page is 1280x800 with table 20% (160)");
     }
-    const auto tb1600 = LayoutMainToolbar(1600, kTableCardY);
-    if (tb1600.chart.Right() != 1600 - kMainCardInset - kMainTablePadX - 320) {
-        return Fail("지역/업데이트 cluster moves 20% of width left");
+    if (kMosaicYTickN != 4 || kMosaicAxisPad != 28 || kMosaicGridArgb != 0xFFE2E8F0u) {
+        return Fail("mosaic charts use 4 Y ticks, 28px axis pad, #E2E8F0 grid");
     }
-    const auto kpis = LayoutMainKpis(1600);
-    if (kpis.notices.y != 60 || kpis.latest.x <= kpis.notices.x || kpis.dong_wins.x <= kpis.latest.x
-        || kpis.dong_median.x <= kpis.dong_wins.x || kpis.notices.h != 56) {
-        return Fail("four KPI tiles: 낙찰공고 최신 동국1위 순위중앙");
+    if (std::fabs(MosaicYTick(0, 12, 0) - 12) > 1e-9 || std::fabs(MosaicYTick(0, 12, 3) - 0) > 1e-9
+        || std::fabs(MosaicYTick(99.50, 100.10, 0) - 100.10) > 1e-9) {
+        return Fail("Y ticks run max→min so the top grid line is the high value");
     }
-    const auto intel = LayoutMainIntel(1600);
-    if (intel.win_bars.y != 128 || intel.houses.x <= intel.win_bars.x || intel.dong.x <= intel.houses.x
-        || intel.win_bars.h != 168) {
-        return Fail("intel row is 1위 bars + 고정 감시 + 동국 1년");
+    const auto few = LayoutMainMosaic(1280, 800, 20);
+    const auto many = LayoutMainMosaic(1280, 800, 115);
+    if (few.hist.w != 0 || few.rank.w != 0 || few.month.w != 0 || few.donut.w != 0) {
+        return Fail("bar/donut mosaic charts are removed");
     }
-    if (intel.win_bars.Bottom() + kMainKpiGap != kTableCardY) {
-        return Fail("table card sits under intel, not 넣을 곳");
+    if (few.firms.y != kMainTopY + kMainTopH + kMainMosaicGap
+        || few.firms.Bottom() + kMainMosaicGap != few.table.y) {
+        return Fail("table sits directly under packed firm board");
+    }
+    if (few.table.y >= many.table.y) {
+        return Fail("fewer firms lift the table so the white gap is gone");
+    }
+    if (few.table.h < kMainTableMinH || many.table.h < kMainTableMinH) {
+        return Fail("table keeps a minimum height after the lift");
+    }
+    const auto grid = LayoutFirmGrid({0, 0, few.firms.w - 16, 400}, 20);
+    if (grid.cell_h != kMainFirmCellH) {
+        return Fail("firm cells pack to content height; empty stretch is not data");
+    }
+    if (few.replay.y < few.table_grid.y) {
+        return Fail("replay sits inside the lifted table card");
+    }
+    if (few.toolbar.chart.y != kMainTopY || few.kpis.notices.y < kMainTopY) {
+        return Fail("toolbar and KPI sparks share the top row, not a 306 intel band");
+    }
+    const auto tb1600 = LayoutMainToolbar(1600, kMainTopY - kMainTablePadTop);
+    if (tb1600.chart.Right() != 1600 - kMainCardInset - kMainTablePadX) {
+        return Fail("지역/업데이트 cluster sits on the right edge");
     }
     const auto tb = LayoutMainToolbar(1600, 348);
     if (tb.chart.y != 362 || tb.stop.y != 362 || tb.update.y != 362 || tb.region_combo.y != 362
@@ -497,8 +516,8 @@ int main() {
         || tb.region_combo.w != 148) {
         return Fail("toolbar widths 124/108/132/148 with empty 설계원칙 slot");
     }
-    if (tb.chart.Right() != 1600 - kMainCardInset - kMainTablePadX - 320) {
-        return Fail("차트 화면 sits 20% of width left of the card's right pad");
+    if (tb.chart.Right() != 1600 - kMainCardInset - kMainTablePadX) {
+        return Fail("차트 화면 sits on the card's right pad");
     }
     if (tb.stop.Right() + kMainBtnGap != tb.chart.x || tb.update.Right() + kMainBtnGap != tb.stop.x
         || tb.region_combo.Right() + kMainComboGap != tb.update.x

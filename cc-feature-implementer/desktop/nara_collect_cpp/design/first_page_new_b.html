@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>B · 좌 좌표 / 우 표 · 1100×700</title>
+<style>
+  :root {
+    --bg: #F3F5F8;
+    --card: #FFFFFF;
+    --text: #111111;
+    --muted: #5A6473;
+    --line: #EEF2F6;
+    --accent: #D97706;
+    --hot: #0E7490;
+    --gold: #A16207;
+    --ink: #0F172A;
+    --font: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1100px; height: 700px; overflow: hidden; background: #D8DEE7; }
+  body { font-family: var(--font); color: var(--text); }
+  .app { width: 1100px; height: 700px; background: var(--bg); display: flex; flex-direction: column; }
+  .caption {
+    height: 32px; background: #2B3340; color: #E5E7EB; font-size: 12px;
+    display: flex; align-items: center; gap: 8px; padding: 0 12px; flex-shrink: 0;
+  }
+  .dots { display: flex; gap: 6px; }
+  .dots i { width: 10px; height: 10px; border-radius: 50%; background: #64748B; display: block; }
+  .top {
+    height: 48px; display: flex; align-items: center; gap: 8px;
+    padding: 8px 14px 0; flex-shrink: 0;
+  }
+  .brand { font-size: 15px; font-weight: 800; letter-spacing: -0.03em; }
+  .brand em { font-style: normal; color: var(--muted); font-weight: 500; font-size: 11px; margin-left: 6px; }
+  .grow { flex: 1; }
+  .btn { height: 34px; border: 0; border-radius: 12px; padding: 0 12px; font: 700 12px var(--font); }
+  .btn-update { background: var(--accent); color: #fff; }
+  .btn-stop { background: #fff; color: #334155; box-shadow: inset 0 0 0 1px #E2E8F0; }
+  .btn-map { background: var(--ink); color: #fff; }
+  .seg {
+    display: flex; height: 34px; width: 116px; border-radius: 12px; overflow: hidden;
+    background: #fff; box-shadow: inset 0 0 0 1px #E2E8F0;
+  }
+  .seg div { flex: 1; display: flex; align-items: center; justify-content: center; font: 700 12px var(--font); }
+  .seg .on { background: #111; color: #fff; }
+  .seg .off { color: var(--muted); }
+  .body { flex: 1; min-height: 0; display: grid; grid-template-columns: 328px 1fr; gap: 10px; padding: 8px 14px 12px; }
+  .left, .right {
+    background: var(--card); border-radius: 16px; box-shadow: 0 8px 22px rgba(15,23,42,.06);
+    display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+  }
+  .left { overflow: hidden; }
+  .pad { padding: 12px 14px 8px; }
+  h3 { margin: 0 0 2px; font-size: 13px; }
+  .cap { font-size: 11px; color: var(--muted); }
+  .bins { flex: 0 0 auto; padding: 0 10px 4px; }
+  .bin {
+    display: grid; grid-template-columns: 64px 1fr 24px; gap: 8px; align-items: center;
+    height: 22px; padding: 0 4px; border-radius: 6px;
+  }
+  .bin.home { background: #ECFEFF; }
+  .bin.peak { background: #F1F5F9; }
+  .rate { font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; }
+  .bin.home .rate { color: var(--hot); }
+  .track { height: 8px; background: #E2E8F0; border-radius: 4px; overflow: hidden; }
+  .fill { height: 100%; background: #94A3B8; border-radius: 4px; }
+  .bin.home .fill { background: var(--hot); }
+  .bin.peak .fill { background: #334155; }
+  .cnt { font-size: 12px; font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; }
+  .stats {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+    padding: 8px 12px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+    flex-shrink: 0;
+  }
+  .stat { background: #F8FAFC; border-radius: 10px; padding: 5px 6px; }
+  .stat .cap { font-size: 10px; }
+  .stat b { display: block; font-size: 14px; margin-top: 1px; }
+  .houses { padding: 8px 14px 10px; font-size: 12px; flex-shrink: 0; }
+  .house { display: flex; align-items: center; gap: 6px; height: 18px; }
+  .dot { width: 7px; height: 7px; border-radius: 2px; }
+  .house b { flex: 1; font-size: 12px; }
+  .house span { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .right-head {
+    display: flex; align-items: center; gap: 8px; padding: 10px 12px 6px; flex-shrink: 0;
+  }
+  .tag {
+    margin-left: auto; background: #FFF7ED; color: #B45309; border-radius: 999px;
+    padding: 3px 8px; font-size: 11px; font-weight: 700;
+  }
+  .status {
+    margin: 0 12px 6px; height: 22px; border-radius: 8px; background: #EEF3F8;
+    display: flex; align-items: center; padding: 0 10px; font-size: 11px; color: var(--muted); flex-shrink: 0;
+  }
+  .scroll { flex: 1; overflow: auto; min-height: 0; }
+  .scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+  .scroll::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th {
+    position: sticky; top: 0; background: #F8FAFC; text-align: left; color: var(--muted);
+    font-size: 11px; padding: 7px 8px; border-bottom: 1px solid #E5EAF0; z-index: 1;
+  }
+  td { padding: 7px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td.clip { max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+  tr.sel td { background: #FFF7ED; }
+  .gold { font-weight: 800; color: var(--gold); }
+  .replay {
+    flex-shrink: 0; background: var(--ink); color: #E2E8F0; padding: 8px 12px;
+    font-size: 11px; display: flex; gap: 12px; align-items: center;
+  }
+  .replay b { color: #22D3EE; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="caption"><div class="dots"><i></i><i></i><i></i></div>동국문화유산연구원 낙찰분석프로그램 · B 1100×700</div>
+  <div class="top">
+    <div class="brand">동국 낙찰<em>낙찰만 · 동국 참여</em></div>
+    <div class="grow"></div>
+    <button class="btn btn-update">업데이트</button>
+    <button class="btn btn-stop">중지</button>
+    <button class="btn btn-map">전장 맵</button>
+    <div class="seg"><div class="on">전국</div><div class="off">경북</div></div>
+  </div>
+  <div class="body">
+    <aside class="left">
+      <div class="pad">
+        <h3>1년 1위 좌표</h3>
+        <div class="cap">칸 시작 기초대비사정률 · 오른쪽 숫자 = 1위 횟수</div>
+      </div>
+      <div class="bins">
+        <div class="bin"><span class="rate">99.10</span><div class="track"><div class="fill" style="width:7%"></div></div><span class="cnt">1</span></div>
+        <div class="bin"><span class="rate">99.20</span><div class="track"><div class="fill" style="width:36%"></div></div><span class="cnt">5</span></div>
+        <div class="bin"><span class="rate">99.30</span><div class="track"><div class="fill" style="width:22%"></div></div><span class="cnt">3</span></div>
+        <div class="bin"><span class="rate">99.40</span><div class="track"><div class="fill" style="width:29%"></div></div><span class="cnt">4</span></div>
+        <div class="bin"><span class="rate">99.50</span><div class="track"><div class="fill" style="width:22%"></div></div><span class="cnt">3</span></div>
+        <div class="bin home"><span class="rate">99.60</span><div class="track"><div class="fill" style="width:57%"></div></div><span class="cnt">8</span></div>
+        <div class="bin"><span class="rate">99.70</span><div class="track"><div class="fill" style="width:79%"></div></div><span class="cnt">11</span></div>
+        <div class="bin"><span class="rate">99.80</span><div class="track"><div class="fill" style="width:71%"></div></div><span class="cnt">10</span></div>
+        <div class="bin"><span class="rate">99.90</span><div class="track"><div class="fill" style="width:79%"></div></div><span class="cnt">11</span></div>
+        <div class="bin peak"><span class="rate">100.00</span><div class="track"><div class="fill" style="width:100%"></div></div><span class="cnt">14</span></div>
+        <div class="bin"><span class="rate">100.10</span><div class="track"><div class="fill" style="width:43%"></div></div><span class="cnt">6</span></div>
+        <div class="bin"><span class="rate">100.20</span><div class="track"><div class="fill" style="width:57%"></div></div><span class="cnt">8</span></div>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="cap">낙찰공고</div><b>124</b></div>
+        <div class="stat"><div class="cap">동국 1위</div><b>5</b></div>
+        <div class="stat"><div class="cap">순위 중앙</div><b>48위</b></div>
+        <div class="stat"><div class="cap">사정률 중앙</div><b>99.61</b></div>
+      </div>
+      <div class="houses">
+        <div class="cap" style="margin-bottom:4px">고정 감시 · 99.50–99.70 · 3공고+</div>
+        <div class="house"><i class="dot" style="background:#0F766E"></i><b>미래</b><span>18</span></div>
+        <div class="house"><i class="dot" style="background:#2563EB"></i><b>한울</b><span>14</span></div>
+        <div class="house"><i class="dot" style="background:#7C3AED"></i><b>해동</b><span>11</span></div>
+        <div class="house"><i class="dot" style="background:#B45309"></i><b>고대</b><span>9</span></div>
+        <div class="house"><i class="dot" style="background:#94A3B8"></i><b>한번 52곳</b><span>1–2</span></div>
+      </div>
+    </aside>
+    <section class="right">
+      <div class="right-head">
+        <h3 style="margin:0">동국 참여 낙찰공고</h3>
+        <span class="cap">이미 개찰된 결과 · 표만 스크롤</span>
+        <span class="tag">최신 08-26 11:00</span>
+      </div>
+      <div class="status">준비됨 · 저장 최신 개찰 2026-08-26 · 업데이트는 그 다음 날부터만 조회</div>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>개찰일</th><th>공고명</th><th>지역</th>
+              <th>1위 사정률</th><th>1위 업체</th><th>동국순위</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="sel"><td>08-26</td><td class="clip">정읍시 정읍1지구 하천환경정비사업</td><td>전국</td><td class="gold">99.906</td><td>미래</td><td>19위 · 52개사</td></tr>
+            <tr><td>08-20</td><td class="clip">창녕-고암 국도건설공사 문화재 정밀발굴</td><td>전국</td><td class="gold">99.780</td><td>춘추</td><td>58위 · 74개사</td></tr>
+            <tr><td>08-20</td><td class="clip">고성-통영 국도건설공사 시점부 발굴</td><td>전국</td><td class="gold">100.561</td><td>중청</td><td>26위 · 73개사</td></tr>
+            <tr><td>08-14</td><td class="clip">부산 용천리 334-1번지 국비지원</td><td>전국</td><td class="gold">99.482</td><td>동양</td><td>5위 · 73개사</td></tr>
+            <tr><td>08-14</td><td class="clip">광양 목성리 621-1번지 국비지원</td><td>전국</td><td class="gold">99.840</td><td>국강</td><td>61위 · 78개사</td></tr>
+            <tr><td>08-14</td><td class="clip">나주 월태리 109-1번지 국비지원</td><td>전국</td><td class="gold">99.722</td><td>고대</td><td>67위 · 78개사</td></tr>
+            <tr><td>08-14</td><td class="clip">제주 광령리 1615번지 국비지원</td><td>전국</td><td class="gold">99.737</td><td>가디</td><td>2위 · 65개사</td></tr>
+            <tr><td>08-06</td><td class="clip">제주 곽지리 2109번지 국비지원</td><td>전국</td><td class="gold">99.874</td><td>울산</td><td>49위 · 64개사</td></tr>
+            <tr><td>08-06</td><td class="clip">경주 인왕동 536-12번지 국비지원</td><td>전국</td><td class="gold">100.510</td><td>가야</td><td>27위 · 61개사</td></tr>
+            <tr><td>08-04</td><td class="clip">대구 용수동 429번지 국비지원</td><td>전국</td><td class="gold">100.132</td><td>경산</td><td>12위 · 72개사</td></tr>
+            <tr><td>08-04</td><td class="clip">경주 사정동 462-3번지 국비지원</td><td>전국</td><td class="gold">99.440</td><td>고운</td><td>3위 · 68개사</td></tr>
+            <tr><td>08-04</td><td class="clip">포항 성내리 53-2번지 국비지원</td><td>전국</td><td class="gold">99.899</td><td>민족</td><td>55위 · 74개사</td></tr>
+            <tr><td>07-22</td><td class="clip">충주 단월동 550번지 국비지원</td><td>전국</td><td class="gold">99.288</td><td>중앙</td><td>14위 · 70개사</td></tr>
+            <tr><td>07-22</td><td class="clip">상주 복용동 300번지 국비지원</td><td>전국</td><td class="gold">99.201</td><td>라온</td><td>5위 · 61개사</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="replay">
+        <span>복기</span>
+        <span>1위 <b>미래 99.906</b></span>
+        <span>동국 <b>100.481 · 19위</b></span>
+        <span>왼쪽 고정 <b>고대 99.607</b></span>
+        <span>전장 맵에서 칸</span>
+      </div>
+    </section>
+  </div>
+</div>
+</body>
+</html>

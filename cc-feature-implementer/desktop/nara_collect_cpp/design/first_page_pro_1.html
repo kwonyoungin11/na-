@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>1 · 타일 모자이크</title>
+<link rel="stylesheet" href="first_page_pro.css" />
+<style>
+  .charts { grid-template-columns: 1.35fr 0.95fr 0.95fr 0.95fr; grid-template-rows: 1fr 1fr; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="caption"><div class="dots"><i></i><i></i><i></i></div>동국 낙찰분석 · 프로 1 모자이크 · 1280×800 · 표 20%</div>
+  <div class="top">
+    <div class="brand">동국 낙찰<em>1년 원장 · 관측</em></div>
+    <div class="kpi-row">
+      <div class="kpi"><div><div class="cap">공고</div><b>124</b></div><canvas id="s1"></canvas></div>
+      <div class="kpi"><div><div class="cap">동국 1위</div><b>5</b></div><canvas id="s2"></canvas></div>
+      <div class="kpi"><div><div class="cap">중앙 순위</div><b>48위</b></div><canvas id="s3"></canvas></div>
+      <div class="kpi"><div><div class="cap">사정률 중앙</div><b>99.61</b></div><canvas id="s4"></canvas></div>
+    </div>
+    <div class="grow"></div>
+    <button class="btn btn-update">업데이트</button>
+    <button class="btn btn-stop">중지</button>
+    <button class="btn btn-map">전장 맵</button>
+    <div class="seg"><div class="on">전국</div><div class="off">경북</div></div>
+  </div>
+  <div class="charts">
+    <div class="panel">
+      <div class="ph"><h3>1년 1위가 떨어진 칸</h3><span class="cap">아래 사정률 · 위 횟수</span><span class="peak">100.00 · 14건</span></div>
+      <div class="plot"><canvas id="cHist"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h3>동국 순위 분포</h3><span class="cap">99–101 창 · 개사 기준</span></div>
+      <div class="plot"><canvas id="cRank"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h3>월별 낙찰공고</h3><span class="cap">동국 참여</span></div>
+      <div class="plot"><canvas id="cMonth"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h3>동국 결과 구성</h3><span class="cap">1년 · 이미 개찰</span></div>
+      <div class="plot"><canvas id="cDonut"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h3>사정률 시계열</h3><span class="cap">월 중앙값 · 기초대비</span></div>
+      <div class="plot"><canvas id="cLine"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h3>1위−동국 간격</h3><span class="cap">양수 = 1위가 오른쪽</span></div>
+      <div class="plot"><canvas id="cGap"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h3>고정 감시</h3><span class="cap">99.50–99.70 · 3공고+</span></div>
+      <div class="plot"><canvas id="cWatch"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h3>1위 업체 빈도</h3><span class="cap">상위 5 · 그 외 94건</span></div>
+      <div class="plot"><canvas id="cWin"></canvas></div>
+    </div>
+  </div>
+  <div class="table20">
+    <div class="th"><h3>동국 참여 낙찰공고</h3><span class="cap">표 면적 20% · 스크롤</span><span class="tag">최신 08-26</span></div>
+    <div class="scroll" id="tbl"></div>
+    <div class="replay"><span>복기</span><span>1위 <b>미래 99.906</b></span><span>동국 <b>100.481 · 19위 · 52개사</b></span><span>왼쪽 고정 <b>고대 99.607</b></span><span>전장 맵에서 칸</span></div>
+  </div>
+</div>
+<script src="first_page_pro_kit.js"></script>
+<script>
+window.addEventListener("load", function () {
+  const D = ProData, C = Pro.COL;
+  Pro.spark("s1", D.notices, C.hot);
+  Pro.spark("s2", [0,0,1,0,0,1,0,1,0,0,1,1], C.dong);
+  Pro.spark("s3", D.rankMed, C.ink);
+  Pro.spark("s4", D.dongRate, C.hot);
+  Pro.vbars("cHist", D.bins, D.winN, { home: 5, peak: 9 });
+  Pro.vbars("cRank", D.rankL, D.rankN, {});
+  Pro.vbars("cMonth", D.months, D.notices, {});
+  Pro.donut("cDonut", [
+    { label: "1위", n: 5, color: C.gold },
+    { label: "10위 안", n: 12, color: C.hot },
+    { label: "그 외", n: 107, color: C.slate }
+  ]);
+  Pro.lines("cLine", [
+    { name: "동국 중앙", data: D.dongRate, color: C.dong },
+    { name: "1위 중앙", data: D.winRate, color: C.hot }
+  ], { ymin: 99.5, ymax: 100.2, xlabels: D.months, legend: true, digits: 2 });
+  Pro.area("cGap", D.gap, { ymin: 0, ymax: 0.55, color: C.violet });
+  Pro.hbars("cWatch", D.watchL, D.watchN, { colors: ["#0F766E","#2563EB","#7C3AED","#B45309","#0E7490","#64748B"] });
+  Pro.hbars("cWin", D.winL, D.winC, { colors: ["#0F766E","#2563EB","#B45309","#7C3AED","#0E7490","#CBD5E1"] });
+  Pro.mountTable("tbl");
+});
+</script>
+</body>
+</html>

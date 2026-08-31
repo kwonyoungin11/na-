@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>3 · 시계열 월</title>
+<link rel="stylesheet" href="first_page_pro.css" />
+<style>
+  .charts { grid-template-columns: 1fr 1fr; grid-template-rows: 1.15fr 0.9fr 0.9fr; }
+  .span2 { grid-column: 1 / -1; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="caption"><div class="dots"><i></i><i></i><i></i></div>동국 낙찰분석 · 프로 3 시계열 월 · 1280×800 · 표 20%</div>
+  <div class="top">
+    <div class="brand">동국 낙찰<em>월 단위 관측</em></div>
+    <div class="kpi-row">
+      <div class="kpi"><div><div class="cap">공고</div><b>124</b></div><canvas id="s1"></canvas></div>
+      <div class="kpi"><div><div class="cap">동국 1위</div><b>5</b></div><canvas id="s2"></canvas></div>
+      <div class="kpi"><div><div class="cap">중앙 순위</div><b>48위</b></div><canvas id="s3"></canvas></div>
+      <div class="kpi"><div><div class="cap">N개사 중앙</div><b>70</b></div><canvas id="s4"></canvas></div>
+    </div>
+    <div class="grow"></div>
+    <button class="btn btn-update">업데이트</button>
+    <button class="btn btn-stop">중지</button>
+    <button class="btn btn-map">전장 맵</button>
+    <div class="seg"><div class="on">전국</div><div class="off">경북</div></div>
+  </div>
+  <div class="charts">
+    <div class="panel span2">
+      <div class="ph"><h3>기초대비사정률 월 중앙</h3><span class="cap">동국 점 vs 그 달 1위 · 예측 아님</span></div>
+      <div class="plot"><canvas id="cLine"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h3>1위−동국 간격</h3><span class="cap">월 중앙 차이</span></div>
+      <div class="plot"><canvas id="cGap"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h3>동국 순위 중앙</h3><span class="cap">낮을수록 앞</span></div>
+      <div class="plot"><canvas id="cRankT"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h3>월별 공고 수</h3><span class="cap">동국 참여 낙찰</span></div>
+      <div class="plot"><canvas id="cMonth"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h3>참여 업체 수 중앙</h3><span class="cap">99–101 창 · N개사</span></div>
+      <div class="plot"><canvas id="cN"></canvas></div>
+    </div>
+  </div>
+  <div class="table20">
+    <div class="th"><h3>동국 참여 낙찰공고</h3><span class="cap">표 면적 20% · 스크롤</span><span class="tag">최신 08-26</span></div>
+    <div class="scroll" id="tbl"></div>
+    <div class="replay"><span>복기</span><span>1위 <b>미래 99.906</b></span><span>동국 <b>100.481 · 19위 · 52개사</b></span><span>왼쪽 고정 <b>고대 99.607</b></span><span>전장 맵에서 칸</span></div>
+  </div>
+</div>
+<script src="first_page_pro_kit.js"></script>
+<script>
+window.addEventListener("load", function () {
+  const D = ProData, C = Pro.COL;
+  Pro.spark("s1", D.notices, C.hot);
+  Pro.spark("s2", [0,0,1,0,0,1,0,1,0,0,1,1], C.dong);
+  Pro.spark("s3", D.rankMed, C.ink);
+  Pro.spark("s4", D.nFirm, C.blue);
+  Pro.lines("cLine", [
+    { name: "동국 중앙", data: D.dongRate, color: C.dong },
+    { name: "1위 중앙", data: D.winRate, color: C.hot }
+  ], { ymin: 99.50, ymax: 100.15, xlabels: D.months, legend: true, digits: 2 });
+  Pro.area("cGap", D.gap, { ymin: 0, ymax: 0.55, color: C.violet });
+  Pro.lines("cRankT", [
+    { name: "순위 중앙", data: D.rankMed, color: C.ink }
+  ], { ymin: 30, ymax: 70, xlabels: D.months, digits: 0 });
+  Pro.vbars("cMonth", D.months, D.notices, {});
+  Pro.lines("cN", [
+    { name: "N개사", data: D.nFirm, color: C.blue }
+  ], { ymin: 55, ymax: 85, xlabels: D.months, digits: 0 });
+  Pro.mountTable("tbl");
+});
+</script>
+</body>
+</html>

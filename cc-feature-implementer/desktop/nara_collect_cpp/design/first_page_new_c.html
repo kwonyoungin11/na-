@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>C · 칸 숫자판 · 1024×680</title>
+<style>
+  :root {
+    --bg: #F3F5F8;
+    --card: #FFFFFF;
+    --text: #111111;
+    --muted: #5A6473;
+    --line: #EEF2F6;
+    --accent: #D97706;
+    --hot: #0E7490;
+    --gold: #A16207;
+    --ink: #0F172A;
+    --font: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1024px; height: 680px; overflow: hidden; background: #D8DEE7; }
+  body { font-family: var(--font); color: var(--text); }
+  .app { width: 1024px; height: 680px; background: var(--bg); display: flex; flex-direction: column; }
+  .caption {
+    height: 32px; background: #2B3340; color: #E5E7EB; font-size: 12px;
+    display: flex; align-items: center; gap: 8px; padding: 0 12px; flex-shrink: 0;
+  }
+  .dots { display: flex; gap: 6px; }
+  .dots i { width: 10px; height: 10px; border-radius: 50%; background: #64748B; display: block; }
+  .top {
+    display: flex; align-items: center; gap: 8px; padding: 8px 12px 0; flex-shrink: 0;
+  }
+  .brand { font-size: 14px; font-weight: 800; letter-spacing: -0.03em; }
+  .pills { display: flex; gap: 6px; margin-left: 8px; }
+  .pill { background: #fff; border-radius: 10px; padding: 4px 8px; font-size: 11px; color: var(--muted); box-shadow: inset 0 0 0 1px #E2E8F0; }
+  .pill b { color: var(--text); margin-left: 4px; }
+  .grow { flex: 1; }
+  .btn { height: 32px; border: 0; border-radius: 11px; padding: 0 12px; font: 700 12px var(--font); }
+  .btn-update { background: var(--accent); color: #fff; }
+  .btn-stop { background: #fff; box-shadow: inset 0 0 0 1px #E2E8F0; }
+  .btn-map { background: var(--ink); color: #fff; }
+  .seg {
+    display: flex; height: 32px; width: 108px; border-radius: 11px; overflow: hidden;
+    background: #fff; box-shadow: inset 0 0 0 1px #E2E8F0;
+  }
+  .seg div { flex: 1; display: flex; align-items: center; justify-content: center; font: 700 12px var(--font); }
+  .seg .on { background: #111; color: #fff; }
+  .seg .off { color: var(--muted); }
+  .board {
+    margin: 8px 12px 0; background: var(--card); border-radius: 14px; padding: 8px 10px 10px;
+    box-shadow: 0 8px 22px rgba(15,23,42,.06); flex-shrink: 0;
+  }
+  .board-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+  h3 { margin: 0; font-size: 13px; }
+  .cap { font-size: 11px; color: var(--muted); }
+  .cells { display: grid; grid-template-columns: repeat(12, 1fr); gap: 4px; }
+  .cell {
+    background: #F8FAFC; border-radius: 8px; padding: 6px 2px 5px; text-align: center;
+  }
+  .cell.home { background: #ECFEFF; }
+  .cell.peak { background: #0F172A; color: #fff; }
+  .cell .n { font-size: 16px; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .cell .r { font-size: 10px; font-weight: 700; margin-top: 2px; letter-spacing: -0.04em; color: var(--muted); }
+  .cell.home .r { color: var(--hot); }
+  .cell.peak .r { color: #94A3B8; }
+  .cell.peak .n { color: #FACC15; }
+  .legend { display: flex; gap: 12px; margin-top: 6px; font-size: 11px; color: var(--muted); }
+  .legend b { color: var(--text); }
+  .table-card {
+    margin: 8px 12px 10px; background: var(--card); border-radius: 14px;
+    box-shadow: 0 8px 22px rgba(15,23,42,.06); flex: 1; min-height: 0;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .table-head { display: flex; align-items: baseline; justify-content: space-between; padding: 8px 12px 4px; }
+  .scroll { flex: 1; overflow: auto; min-height: 0; }
+  .scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+  .scroll::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th {
+    position: sticky; top: 0; background: #F8FAFC; text-align: left; color: var(--muted);
+    font-size: 11px; padding: 6px 8px; border-bottom: 1px solid #E5EAF0; z-index: 1;
+  }
+  td { padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td.clip { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+  tr.sel td { background: #FFF7ED; }
+  .gold { font-weight: 800; color: var(--gold); }
+  .replay {
+    flex-shrink: 0; background: var(--ink); color: #E2E8F0; padding: 7px 12px;
+    font-size: 11px; display: flex; gap: 12px; align-items: center;
+  }
+  .replay b { color: #22D3EE; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="caption"><div class="dots"><i></i><i></i><i></i></div>동국문화유산연구원 낙찰분석프로그램 · C 1024×680</div>
+  <div class="top">
+    <div class="brand">동국 낙찰</div>
+    <div class="pills">
+      <span class="pill">공고<b>124</b></span>
+      <span class="pill">08-26<b>11:00</b></span>
+      <span class="pill">1위<b>5</b></span>
+      <span class="pill">중앙<b>48위</b></span>
+    </div>
+    <div class="grow"></div>
+    <button class="btn btn-update">업데이트</button>
+    <button class="btn btn-stop">중지</button>
+    <button class="btn btn-map">전장 맵</button>
+    <div class="seg"><div class="on">전국</div><div class="off">경북</div></div>
+  </div>
+  <div class="board">
+    <div class="board-head">
+      <h3>1년 1위가 떨어진 칸</h3>
+      <span class="cap">큰 숫자 = 1위 횟수 · 작은 숫자 = 칸 시작 기초대비사정률 · 넣을 자리 아님</span>
+    </div>
+    <div class="cells">
+      <div class="cell"><div class="n">1</div><div class="r">99.10</div></div>
+      <div class="cell"><div class="n">5</div><div class="r">99.20</div></div>
+      <div class="cell"><div class="n">3</div><div class="r">99.30</div></div>
+      <div class="cell"><div class="n">4</div><div class="r">99.40</div></div>
+      <div class="cell"><div class="n">3</div><div class="r">99.50</div></div>
+      <div class="cell home"><div class="n">8</div><div class="r">99.60</div></div>
+      <div class="cell"><div class="n">11</div><div class="r">99.70</div></div>
+      <div class="cell"><div class="n">10</div><div class="r">99.80</div></div>
+      <div class="cell"><div class="n">11</div><div class="r">99.90</div></div>
+      <div class="cell peak"><div class="n">14</div><div class="r">100.00</div></div>
+      <div class="cell"><div class="n">6</div><div class="r">100.10</div></div>
+      <div class="cell"><div class="n">8</div><div class="r">100.20</div></div>
+    </div>
+    <div class="legend">
+      <span>청록 99.60–99.70 집 칸 <b>8건</b></span>
+      <span>검정 봉우리 100.00–100.10 <b>14건</b></span>
+      <span>고정 감시 미래 18 · 한울 14 · 해동 11 · 고대 9</span>
+    </div>
+  </div>
+  <div class="table-card">
+    <div class="table-head">
+      <h3>동국 참여 낙찰공고</h3>
+      <span class="cap">준비됨 · 최신 개찰 2026-08-26 · 표만 스크롤</span>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>개찰일</th><th>공고명</th><th>지역</th><th>1위 사정률</th><th>1위 업체</th><th>동국순위</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="sel"><td>08-26</td><td class="clip">정읍시 정읍1지구 하천환경정비사업 매장유…</td><td>전국</td><td class="gold">99.906</td><td>미래</td><td>19위 · 52개사</td></tr>
+          <tr><td>08-20</td><td class="clip">창녕-고암 국도건설공사 문화재 정밀발굴조…</td><td>전국</td><td class="gold">99.780</td><td>춘추</td><td>58위 · 74개사</td></tr>
+          <tr><td>08-20</td><td class="clip">고성-통영 국도건설공사 시점부 문화재 발굴…</td><td>전국</td><td class="gold">100.561</td><td>중청</td><td>26위 · 73개사</td></tr>
+          <tr><td>08-14</td><td class="clip">부산 용천리 334-1번지 국비지원(소규모)</td><td>전국</td><td class="gold">99.482</td><td>동양</td><td>5위 · 73개사</td></tr>
+          <tr><td>08-14</td><td class="clip">광양 목성리 621-1번지 국비지원(소규모)</td><td>전국</td><td class="gold">99.840</td><td>국강</td><td>61위 · 78개사</td></tr>
+          <tr><td>08-14</td><td class="clip">나주 월태리 109-1번지 외 1필지 국비지원</td><td>전국</td><td class="gold">99.722</td><td>고대</td><td>67위 · 78개사</td></tr>
+          <tr><td>08-14</td><td class="clip">제주 광령리 1615번지 국비지원(소규모)</td><td>전국</td><td class="gold">99.737</td><td>가디</td><td>2위 · 65개사</td></tr>
+          <tr><td>08-06</td><td class="clip">제주 곽지리 2109번지 국비지원(소규모)</td><td>전국</td><td class="gold">99.874</td><td>울산</td><td>49위 · 64개사</td></tr>
+          <tr><td>08-06</td><td class="clip">경주 인왕동 536-12번지 국비지원(소규모)</td><td>전국</td><td class="gold">100.510</td><td>가야</td><td>27위 · 61개사</td></tr>
+          <tr><td>08-04</td><td class="clip">대구 용수동 429번지 국비지원(소규모)</td><td>전국</td><td class="gold">100.132</td><td>경산</td><td>12위 · 72개사</td></tr>
+          <tr><td>08-04</td><td class="clip">경주 사정동 462-3번지 외 1필지 국비지원</td><td>전국</td><td class="gold">99.440</td><td>고운</td><td>3위 · 68개사</td></tr>
+          <tr><td>08-04</td><td class="clip">포항 성내리 53-2번지 국비지원(소규모)</td><td>전국</td><td class="gold">99.899</td><td>민족</td><td>55위 · 74개사</td></tr>
+          <tr><td>07-22</td><td class="clip">충주 단월동 550번지 외 5필지 국비지원</td><td>전국</td><td class="gold">99.288</td><td>중앙</td><td>14위 · 70개사</td></tr>
+          <tr><td>07-22</td><td class="clip">상주 복용동 300번지 국비지원(소규모)</td><td>전국</td><td class="gold">99.201</td><td>라온</td><td>5위 · 61개사</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="replay">
+      <span>복기</span>
+      <span>1위 <b>미래 99.906</b></span>
+      <span>동국 <b>100.481 · 19위 · 52개사</b></span>
+      <span>왼쪽 고정 <b>고대 99.607</b></span>
+      <span>전장 맵에서 칸을 봅니다</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>

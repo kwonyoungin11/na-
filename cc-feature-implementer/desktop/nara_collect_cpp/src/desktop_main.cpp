@@ -20,10 +20,13 @@
 #include "nara/chart_popup.h"
 #include "nara/chart_theme.h"
 #include "nara/dongguk_band.h"
+#include "nara/first_page_dash.h"
 #include "nara/notice_rules.h"
+#include <cmath>
 #include <map>
 #include "nara/scatter_chart.h"
 #include "nara/dwrite_text.h"
+#include "nara/first_page_mosaic.h"
 #include "nara/sqlite_store.h"
 
 #pragma comment(lib, "comctl32.lib")
@@ -37,9 +40,8 @@ namespace {
 constexpr int kIdUpdate = 1001;
 constexpr int kIdStop = 1002;
 constexpr int kIdChart = 1003;
-constexpr int kRowH = 38;
-constexpr int kHeaderH = 40;
-const int kTableCardY = nara::chart_theme::kTableCardY;
+constexpr int kRowH = 28;
+constexpr int kHeaderH = 24;
 
 HWND g_mainHwnd = nullptr;
 HWND g_btnUpdate = nullptr;
@@ -402,7 +404,8 @@ void LayoutMain(HWND hwnd) {
     SyncDpi(hwnd);
     RECT rc{};
     GetClientRect(hwnd, &rc);
-    const auto tb = nara::chart_theme::LayoutMainToolbar(ToDip(rc.right), kTableCardY);
+    const auto mosaic = nara::chart_theme::LayoutMainMosaic(ToDip(rc.right), ToDip(rc.bottom));
+    const auto& tb = mosaic.toolbar;
     MoveWindow(g_btnChart, ToPx(tb.chart.x), ToPx(tb.chart.y), ToPx(tb.chart.w), ToPx(tb.chart.h), TRUE);
     MoveWindow(g_btnStop, ToPx(tb.stop.x), ToPx(tb.stop.y), ToPx(tb.stop.w), ToPx(tb.stop.h), TRUE);
     MoveWindow(g_btnUpdate, ToPx(tb.update.x), ToPx(tb.update.y), ToPx(tb.update.w), ToPx(tb.update.h), TRUE);
@@ -453,355 +456,37 @@ void PaintMain(HWND hwnd, HDC hdc) {
     Gdiplus::SolidBrush select(Gdiplus::Color(255, 255, 247, 237));
     Gdiplus::Pen copperPen(Gdiplus::Color(255, 231, 196, 140), 1.5f);
 
-    nara::dwrite_text::QueueBox(36, 18, 280, 16, L"낙찰분석프로그램", 12.0f, nara::chart_theme::kAccentStrongArgb,
-                                nara::dwrite_text::Align::Near, nara::dwrite_text::Align::Near, true);
-    nara::dwrite_text::QueueBox(36, 34, 520, 28, L"동국문화유산연구원", 22.0f, nara::chart_theme::kTextArgb,
-                                nara::dwrite_text::Align::Near, nara::dwrite_text::Align::Near, true);
-
-    std::map<std::string, int> dong_rank;
-    std::map<std::string, double> dong_rate;
-    int dong_wins = 0;
-    int dong_top10 = 0;
-    for (const auto& row : g_snapshot) {
-        if (!nara::IsDonggukCompany(row)) {
-            continue;
-        }
-        const auto found = dong_rank.find(row.notice_number);
-        if (found == dong_rank.end() || (row.rank > 0 && row.rank < found->second)) {
-            dong_rank[row.notice_number] = row.rank;
-        }
-        if (row.adjust_rate) {
-            dong_rate[row.notice_number] = *row.adjust_rate;
-        }
-    }
-    std::vector<int> ranks;
-    std::vector<double> rates;
-    for (const auto& kv : dong_rank) {
-        ranks.push_back(kv.second);
-        if (kv.second == 1) {
-            ++dong_wins;
-        }
-        if (kv.second > 0 && kv.second <= 10) {
-            ++dong_top10;
-        }
-        const auto rt = dong_rate.find(kv.first);
-        if (rt != dong_rate.end()) {
-            rates.push_back(rt->second);
-        }
-    }
-    std::sort(ranks.begin(), ranks.end());
-    std::sort(rates.begin(), rates.end());
-    auto pick = [](const auto& xs, double p) -> double {
-        if (xs.empty()) {
-            return 0;
-        }
-        const double i = (static_cast<double>(xs.size()) - 1.0) * p;
-        const size_t lo = static_cast<size_t>(i);
-        const size_t hi = (std::min)(lo + 1, xs.size() - 1);
-        const double wgt = i - static_cast<double>(lo);
-        return xs[lo] * (1.0 - wgt) + xs[hi] * wgt;
-    };
-    const int rank_med = ranks.empty() ? 0 : static_cast<int>(pick(ranks, 0.5) + 0.5);
-
-    const auto kpis = nara::chart_theme::LayoutMainKpis(w);
-    std::string latest_kpi = g_table.empty() ? "-" : g_table.front().open_date;
-    if (latest_kpi.size() >= 10) {
-        latest_kpi = latest_kpi.substr(5, 5);
-    }
-    wchar_t notice_n[32];
-    swprintf_s(notice_n, L"%d", g_notice_count > 0 ? g_notice_count : static_cast<int>(g_table.size()));
-    wchar_t win_n[32];
-    swprintf_s(win_n, L"%d", dong_wins);
-    wchar_t med_n[32];
-    swprintf_s(med_n, L"%d위", rank_med);
-    auto paint_kpi = [&](const nara::chart_theme::RectI& box, const wchar_t* caption, const wchar_t* value) {
-        Gdiplus::RectF r(static_cast<Gdiplus::REAL>(box.x), static_cast<Gdiplus::REAL>(box.y),
-                         static_cast<Gdiplus::REAL>(box.w), static_cast<Gdiplus::REAL>(box.h));
-        Gdiplus::GraphicsPath path;
-        RoundRectPath(path, r, 12);
-        g.FillPath(&white, &path);
-        Gdiplus::Pen edge(Gdiplus::Color(nara::chart_theme::kComboStrokeArgb), 1.0f);
-        g.DrawPath(&edge, &path);
-        nara::dwrite_text::QueueBox(r.X + 14, r.Y + 8, r.Width - 24, 16, caption, 11.0f,
-                                    nara::chart_theme::kSubtleTextArgb, nara::dwrite_text::Align::Near,
-                                    nara::dwrite_text::Align::Near, false);
-        nara::dwrite_text::QueueBox(r.X + 14, r.Y + 26, r.Width - 24, 24, value, 18.0f, nara::chart_theme::kTextArgb,
-                                    nara::dwrite_text::Align::Near, nara::dwrite_text::Align::Near, true);
-    };
-    paint_kpi(kpis.notices, L"낙찰공고", notice_n);
-    paint_kpi(kpis.latest, L"최신 개찰", Utf8ToWide(latest_kpi).c_str());
-    paint_kpi(kpis.dong_wins, L"동국 1위", win_n);
-    paint_kpi(kpis.dong_median, L"동국 순위 중앙", med_n);
-
-    const auto intel = nara::chart_theme::LayoutMainIntel(w);
-    FillRoundCard(g, intel.win_bars, 18.0f);
-    FillRoundCard(g, intel.houses, 18.0f);
-    FillRoundCard(g, intel.dong, 18.0f);
-    nara::dwrite_text::QueueBox(static_cast<float>(intel.win_bars.x + 12), static_cast<float>(intel.win_bars.y + 10),
-                                static_cast<float>(intel.win_bars.w - 24), 18, L"1년 1위가 떨어진 칸", 13.0f,
-                                nara::chart_theme::kTextArgb, nara::dwrite_text::Align::Near,
-                                nara::dwrite_text::Align::Near, true);
-    int bar_max = 1;
-    for (int i = 1; i <= 12; ++i) {
-        bar_max = (std::max)(bar_max, g_year_band.win_bin_n[static_cast<size_t>(i)]);
-    }
-    const int bar_base_y = intel.win_bars.y + 148;
-    const int bar_max_h = 88;
-    const float bar_x0 = static_cast<float>(intel.win_bars.x + 14);
-    const float bar_w = (static_cast<float>(intel.win_bars.w) - 32.0f) / 12.0f;
-    Gdiplus::SolidBrush bar_idle(Gdiplus::Color(255, 203, 213, 225));
-    Gdiplus::SolidBrush bar_hot(Gdiplus::Color(255, 14, 116, 144));
-    for (int i = 1; i <= 12; ++i) {
-        const int n1 = g_year_band.win_bin_n[static_cast<size_t>(i)];
-        const int bh = (std::max)(4, n1 * bar_max_h / bar_max);
-        Gdiplus::SolidBrush& br = (i == 6) ? bar_hot : bar_idle;
-        g.FillRectangle(&br, bar_x0 + (i - 1) * bar_w + 1.0f, static_cast<Gdiplus::REAL>(bar_base_y - bh), bar_w - 2.0f,
-                        static_cast<Gdiplus::REAL>(bh));
-    }
-    nara::dwrite_text::QueueBox(bar_x0, static_cast<float>(bar_base_y + 2), 60, 14, L"99.10", 10.0f,
-                                nara::chart_theme::kSubtleTextArgb, nara::dwrite_text::Align::Near,
-                                nara::dwrite_text::Align::Near, false);
-    nara::dwrite_text::QueueBox(bar_x0 + 5 * bar_w, static_cast<float>(bar_base_y + 2), 60, 14, L"99.60", 10.0f,
-                                nara::chart_theme::kSubtleTextArgb, nara::dwrite_text::Align::Near,
-                                nara::dwrite_text::Align::Near, false);
-    nara::dwrite_text::QueueBox(static_cast<float>(intel.win_bars.Right() - 72), static_cast<float>(bar_base_y + 2), 60,
-                                14, L"100.30", 10.0f, nara::chart_theme::kSubtleTextArgb, nara::dwrite_text::Align::Far,
-                                nara::dwrite_text::Align::Near, false);
-
-    nara::dwrite_text::QueueBox(static_cast<float>(intel.houses.x + 12), static_cast<float>(intel.houses.y + 10),
-                                static_cast<float>(intel.houses.w - 24), 18, L"고정 감시", 13.0f,
-                                nara::chart_theme::kTextArgb, nara::dwrite_text::Align::Near,
-                                nara::dwrite_text::Align::Near, true);
-    std::vector<nara::WatchFirm> houses = g_year_band.watch_firms;
-    std::sort(houses.begin(), houses.end(),
-              [](const nara::WatchFirm& a, const nara::WatchFirm& b) { return a.notice_n > b.notice_n; });
-    int shown = 0;
-    int once_n = 0;
-    for (const auto& firm : houses) {
-        if (!firm.regular) {
-            ++once_n;
-            continue;
-        }
-        if (shown >= 4) {
-            continue;
-        }
-        const float y = static_cast<float>(intel.houses.y + 34 + shown * 22);
-        wchar_t cnt[24];
-        swprintf_s(cnt, L"%d공고", firm.notice_n);
-        nara::dwrite_text::QueueBox(static_cast<float>(intel.houses.x + 14), y, static_cast<float>(intel.houses.w - 80),
-                                    18, Utf8ToWide(firm.company).c_str(), 12.0f, nara::chart_theme::kTextArgb,
-                                    nara::dwrite_text::Align::Near, nara::dwrite_text::Align::Near, true, true, true);
-        nara::dwrite_text::QueueBox(static_cast<float>(intel.houses.Right() - 70), y, 56, 18, cnt, 12.0f,
-                                    nara::chart_theme::kSubtleTextArgb, nara::dwrite_text::Align::Far,
-                                    nara::dwrite_text::Align::Near, false);
-        ++shown;
-    }
-    wchar_t once_line[40];
-    swprintf_s(once_line, L"한번 %d곳", once_n);
-    nara::dwrite_text::QueueBox(static_cast<float>(intel.houses.x + 14), static_cast<float>(intel.houses.y + 34 + 4 * 22),
-                                static_cast<float>(intel.houses.w - 28), 18, once_line, 12.0f,
-                                nara::chart_theme::kSubtleTextArgb, nara::dwrite_text::Align::Near,
-                                nara::dwrite_text::Align::Near, false);
-
-    nara::dwrite_text::QueueBox(static_cast<float>(intel.dong.x + 12), static_cast<float>(intel.dong.y + 10), 180, 18,
-                                L"동국 1년", 13.0f, nara::chart_theme::kTextArgb, nara::dwrite_text::Align::Near,
-                                nara::dwrite_text::Align::Near, true);
-    wchar_t box1[32];
-    swprintf_s(box1, L"%d", dong_wins);
-    wchar_t box2[32];
-    swprintf_s(box2, L"%d", dong_top10);
-    char rate_med[24];
-    std::snprintf(rate_med, sizeof(rate_med), "%.2f", pick(rates, 0.5));
-    char rate_q[40];
-    std::snprintf(rate_q, sizeof(rate_q), "%.2f–%.2f", pick(rates, 0.25), pick(rates, 0.75));
-    nara::dwrite_text::QueueBox(static_cast<float>(intel.dong.x + 12), static_cast<float>(intel.dong.y + 36), 90, 16,
-                                L"1위", 11.0f, nara::chart_theme::kSubtleTextArgb, nara::dwrite_text::Align::Near,
-                                nara::dwrite_text::Align::Near, false);
-    nara::dwrite_text::QueueBox(static_cast<float>(intel.dong.x + 12), static_cast<float>(intel.dong.y + 50), 90, 22,
-                                box1, 18.0f, nara::chart_theme::kTextArgb, nara::dwrite_text::Align::Near,
-                                nara::dwrite_text::Align::Near, true);
-    nara::dwrite_text::QueueBox(static_cast<float>(intel.dong.x + intel.dong.w / 2), static_cast<float>(intel.dong.y + 36),
-                                90, 16, L"10위 안", 11.0f, nara::chart_theme::kSubtleTextArgb,
-                                nara::dwrite_text::Align::Near, nara::dwrite_text::Align::Near, false);
-    nara::dwrite_text::QueueBox(static_cast<float>(intel.dong.x + intel.dong.w / 2), static_cast<float>(intel.dong.y + 50),
-                                90, 22, box2, 18.0f, nara::chart_theme::kTextArgb, nara::dwrite_text::Align::Near,
-                                nara::dwrite_text::Align::Near, true);
-    nara::dwrite_text::QueueBox(static_cast<float>(intel.dong.x + 12), static_cast<float>(intel.dong.y + 86), 180, 16,
-                                L"사정률 중앙", 11.0f, nara::chart_theme::kSubtleTextArgb, nara::dwrite_text::Align::Near,
-                                nara::dwrite_text::Align::Near, false);
-    nara::dwrite_text::QueueBox(static_cast<float>(intel.dong.x + 12), static_cast<float>(intel.dong.y + 102), 180, 20,
-                                Utf8ToWide(rate_med).c_str(), 16.0f, nara::chart_theme::kTextArgb,
-                                nara::dwrite_text::Align::Near, nara::dwrite_text::Align::Near, true);
-    nara::dwrite_text::QueueBox(static_cast<float>(intel.dong.x + 12), static_cast<float>(intel.dong.y + 128), 180, 16,
-                                L"Q1–Q3", 11.0f, nara::chart_theme::kSubtleTextArgb, nara::dwrite_text::Align::Near,
-                                nara::dwrite_text::Align::Near, false);
-    nara::dwrite_text::QueueBox(static_cast<float>(intel.dong.x + 12), static_cast<float>(intel.dong.y + 144), 180, 18,
-                                Utf8ToWide(rate_q).c_str(), 14.0f, nara::chart_theme::kTextArgb,
-                                nara::dwrite_text::Align::Near, nara::dwrite_text::Align::Near, true);
-
-    Gdiplus::RectF table_card(20, static_cast<Gdiplus::REAL>(kTableCardY), static_cast<Gdiplus::REAL>(w - 40),
-                              static_cast<Gdiplus::REAL>((std::max)(200, h - kTableCardY - 40)));
-    Gdiplus::GraphicsPath tablePath;
-    RoundRectPath(tablePath, table_card, 18);
-    g.FillPath(&white, &tablePath);
-    g.DrawPath(&copperPen, &tablePath);
-    Gdiplus::Font section(&family, 18.0f, Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
-    const auto tb = nara::chart_theme::LayoutMainToolbar(w, kTableCardY);
-    const float title_y = static_cast<float>(tb.update.y + (tb.update.h - 18) / 2);
-    nara::dwrite_text::QueueBox(static_cast<float>(nara::chart_theme::kMainCardInset + nara::chart_theme::kMainTablePadX),
-                                title_y, 280, 24, L"동국 참여 낙찰공고", 18.0f, 0xFF111111u,
-                                nara::dwrite_text::Align::Near, nara::dwrite_text::Align::Near, true);
-    Gdiplus::StringFormat label_fmt;
-    label_fmt.SetAlignment(Gdiplus::StringAlignmentFar);
-    label_fmt.SetLineAlignment(Gdiplus::StringAlignmentCenter);
-    nara::dwrite_text::QueueBox(static_cast<float>(tb.region_label.x), static_cast<float>(tb.region_label.y),
-                                static_cast<float>(tb.region_label.w), static_cast<float>(tb.region_label.h), L"지역",
-                                12.0f, 0xFF6B7280u, nara::dwrite_text::Align::Far, nara::dwrite_text::Align::Center,
-                                false);
-    PaintRegionSegment(g, tb.region_combo, eyebrow);
-    std::string latest = g_table.empty() ? "" : g_table.front().open_date;
-    if (latest.size() >= 16) {
-        latest = latest.substr(5, 11);
-    }
-    const auto summary = Utf8ToWide("동국 연동 낙찰공고 " + std::to_string(g_table.size()) + "건 · 최신 " + latest);
-    Gdiplus::RectF tag(248, static_cast<Gdiplus::REAL>(tb.update.y + (tb.update.h - 24) / 2), 280, 24);
-    Gdiplus::GraphicsPath tagPath;
-    RoundRectPath(tagPath, tag, 12);
-    Gdiplus::SolidBrush tagFill(Gdiplus::Color(255, 255, 244, 229));
-    g.FillPath(&tagFill, &tagPath);
-    g.DrawPath(&copperPen, &tagPath);
-    nara::dwrite_text::QueueBox(258, tag.Y + 4, 260, 18, summary.c_str(), 12.0f, 0xFFB45309u,
-                                nara::dwrite_text::Align::Near, nara::dwrite_text::Align::Near, false);
-
-    const auto status_box = nara::chart_theme::LayoutMainStatus(w, kTableCardY);
-    Gdiplus::RectF status_r(static_cast<Gdiplus::REAL>(status_box.x), static_cast<Gdiplus::REAL>(status_box.y),
-                            static_cast<Gdiplus::REAL>(status_box.w), static_cast<Gdiplus::REAL>(status_box.h));
-    Gdiplus::GraphicsPath status_path;
-    RoundRectPath(status_path, status_r, 10);
-    const bool busy = g_updating;
-    Gdiplus::SolidBrush status_fill(
-        Gdiplus::Color(busy ? nara::chart_theme::kAccentArgb : nara::chart_theme::kHoverFillArgb));
-    g.FillPath(&status_fill, &status_path);
-    const auto status_text = Utf8ToWide(g_status.empty() ? "업데이트는 없는 개찰일만 조회합니다." : g_status);
-    nara::dwrite_text::QueueBox(status_r.X + 12, status_r.Y, status_r.Width - 20, status_r.Height, status_text.c_str(),
-                                13.0f, busy ? 0xFFFFFFFFu : nara::chart_theme::kSubtleTextArgb,
-                                nara::dwrite_text::Align::Near, nara::dwrite_text::Align::Center, true, true, true);
-
-    const int table_top = nara::chart_theme::MainTableGridY(kTableCardY);
-    const int table_bottom = h - 92;
-    g_tableRect = {28, table_top, w - 28, table_bottom};
-    const int cols[] = {28, 140, 280, 560, 760, 840, 980, 1140, w - 36};
-    const wchar_t* headers[] = {L"개찰일", L"공고번호", L"공고명", L"발주처", L"지역", L"1위 사정률", L"1위 업체",
-                                L"동국순위"};
-    g.FillRectangle(&headerBg, 28, table_top, w - 64, kHeaderH);
-    for (int c = 0; c < 8; ++c) {
-        nara::dwrite_text::QueueBox(static_cast<float>(cols[c] + 8), static_cast<float>(table_top + 8),
-                                    static_cast<float>(cols[c + 1] - cols[c] - 12), 20, headers[c], 12.0f, 0xFF6B7280u,
-                                    nara::dwrite_text::Align::Near, nara::dwrite_text::Align::Near, true);
-    }
-    g.SetClip(Gdiplus::Rect(28, table_top + kHeaderH, w - 64, table_bottom - table_top - kHeaderH));
-    const int visible = (std::max)(1, (table_bottom - table_top - kHeaderH) / kRowH);
-    const int max_scroll = (std::max)(0, static_cast<int>(g_table.size()) - visible);
-    g_scroll = std::clamp(g_scroll, 0, max_scroll);
-    for (int i = 0; i < visible; ++i) {
-        const int idx = g_scroll + i;
-        if (idx >= static_cast<int>(g_table.size())) {
-            break;
-        }
-        const int y = table_top + kHeaderH + i * kRowH;
-        if (idx == g_selected) {
-            g.FillRectangle(&select, 28, y, w - 64, kRowH);
-        } else if (i % 2 == 1) {
-            g.FillRectangle(&stripe, 28, y, w - 64, kRowH);
-        }
-        const auto& row = g_table[idx];
-        char award_txt[24];
-        if (row.has_award_rate) {
-            std::snprintf(award_txt, sizeof(award_txt), "%.3f", row.award_rate);
-        } else {
-            std::snprintf(award_txt, sizeof(award_txt), "-");
-        }
-        const std::wstring cells[] = {
-            Utf8ToWide(row.open_date),
-            Utf8ToWide(row.notice_number),
-            Utf8ToWide(row.notice_name),
-            Utf8ToWide(row.ordering_agency),
-            Utf8ToWide(row.region),
-            Utf8ToWide(award_txt),
-            Utf8ToWide(row.award_company.empty() ? "-" : row.award_company),
-            Utf8ToWide(row.rank_label),
-        };
-        for (int c = 0; c < 8; ++c) {
-            Gdiplus::RectF clip(static_cast<Gdiplus::REAL>(cols[c] + 6), static_cast<Gdiplus::REAL>(y + 8),
-                                static_cast<Gdiplus::REAL>(cols[c + 1] - cols[c] - 12), 20);
-            g.SetClip(clip);
-            nara::dwrite_text::QueueBox(clip.X, clip.Y, clip.Width, clip.Height, cells[c].c_str(), 13.0f, 0xFF111111u,
-                                        nara::dwrite_text::Align::Near, nara::dwrite_text::Align::Near, false, true,
-                                        true);
-            g.SetClip(Gdiplus::Rect(28, table_top + kHeaderH, w - 64, table_bottom - table_top - kHeaderH));
-        }
-    }
-    g.ResetClip();
-    std::string replay = "복기 · 이미 개찰된 결과";
-    if (!g_table.empty() && g_selected >= 0 && g_selected < static_cast<int>(g_table.size())) {
-        const auto& sel = g_table[g_selected];
-        char ar[24];
-        if (sel.has_award_rate) {
-            std::snprintf(ar, sizeof(ar), "%.3f", sel.award_rate);
-        } else {
-            std::snprintf(ar, sizeof(ar), "-");
-        }
-        char dr[24];
-        std::snprintf(dr, sizeof(dr), "%.3f", sel.dongguk_rate);
-        replay = "복기 · 1위 " + (sel.award_company.empty() ? std::string("-") : sel.award_company) + " " + ar
-                 + "  · 동국 " + dr + " · " + sel.rank_label;
-        std::string cover;
-        double cover_r = 0;
-        for (const auto& row : g_snapshot) {
-            if (row.notice_number != sel.notice_number || !row.adjust_rate || nara::IsDonggukCompany(row)) {
-                continue;
-            }
-            const double r = *row.adjust_rate;
-            if (r + 1e-12 < nara::kWatchHomeLo || r >= nara::kWatchHomeHi) {
-                continue;
-            }
-            if (!nara::BandWatchIsRegular(g_year_band, row)) {
-                continue;
-            }
-            if (cover.empty() || r < cover_r) {
-                cover = row.company_name.empty() ? row.normalized_company_name : row.company_name;
-                cover_r = r;
-            }
-        }
-        if (!cover.empty()) {
-            char cr[24];
-            std::snprintf(cr, sizeof(cr), "%.3f", cover_r);
-            replay += "  · 바로 왼쪽 고정 " + cover + " " + cr;
-        }
-        replay += "  · 전장 맵에서 칸을 봅니다";
-    }
-    Gdiplus::RectF replay_r(28, static_cast<Gdiplus::REAL>(h - 80), static_cast<Gdiplus::REAL>(w - 56), 32);
-    Gdiplus::GraphicsPath replay_path;
-    RoundRectPath(replay_path, replay_r, 10);
-    Gdiplus::SolidBrush replay_fill(Gdiplus::Color(255, 15, 23, 42));
-    g.FillPath(&replay_fill, &replay_path);
-    nara::dwrite_text::QueueBox(replay_r.X + 12, replay_r.Y, replay_r.Width - 24, replay_r.Height,
-                                Utf8ToWide(replay).c_str(), 12.0f, 0xFFE2E8F0u, nara::dwrite_text::Align::Near,
-                                nara::dwrite_text::Align::Center, true, true, true);
-    const std::string period_label = g_lookback_months >= 12 ? "최근 1년" : "최근 " + std::to_string(g_lookback_months) + "개월";
-    const auto footer = Utf8ToWide(period_label + " · " + g_start + "~" + g_end + " · " + g_region_token
-                                   + " · 사정률 99.00000~101.00000"
-                                   + (g_status.empty() ? "" : " · " + g_status));
-    nara::dwrite_text::QueueBox(28, static_cast<float>(h - 36), static_cast<float>(w - 56), 18, footer.c_str(), 12.0f,
-                                0xFF6B7280u, nara::dwrite_text::Align::Near, nara::dwrite_text::Align::Near, false,
-                                true, true);
+    nara::MosaicPaintIn mosaic_in;
+    mosaic_in.w = w;
+    mosaic_in.h = h;
+    mosaic_in.table = &g_table;
+    mosaic_in.band = &g_year_band;
+    mosaic_in.snapshot = &g_snapshot;
+    mosaic_in.status = g_status;
+    mosaic_in.region_token = g_region_token;
+    mosaic_in.selected = g_selected;
+    mosaic_in.scroll = &g_scroll;
+    mosaic_in.table_rect = &g_tableRect;
+    nara::PaintMosaicFirstPage(g, mosaic_in);
+    (void)eyebrow;
+    (void)body;
+    (void)bodyBold;
+    (void)headerFont;
+    (void)ink;
+    (void)muted;
+    (void)copper;
+    (void)white;
+    (void)headerBg;
+    (void)stripe;
+    (void)select;
+    (void)copperPen;
     g.Flush();
     nara::dwrite_text::Flush(mem, pixel_w, pixel_h, g_dpi_scale);
-
     BitBlt(hdc, 0, 0, pixel_w, pixel_h, mem, 0, 0, SRCCOPY);
     SelectObject(mem, old);
     DeleteObject(bmp);
     DeleteDC(mem);
+    return;
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -815,7 +500,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                                     reinterpret_cast<HMENU>(static_cast<INT_PTR>(kIdUpdate)), nullptr, nullptr);
         g_btnStop = CreateWindowW(L"BUTTON", L"중지", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 0, 0, 72, 36, hwnd,
                                   reinterpret_cast<HMENU>(static_cast<INT_PTR>(kIdStop)), nullptr, nullptr);
-        g_btnChart = CreateWindowW(L"BUTTON", L"차트 화면", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 0, 0, 96, 36, hwnd,
+        g_btnChart = CreateWindowW(L"BUTTON", L"전장 맵", WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 0, 0, 96, 36, hwnd,
                                    reinterpret_cast<HMENU>(static_cast<INT_PTR>(kIdChart)), nullptr, nullptr);
         LayoutMain(hwnd);
         nara::EnsurePortableDatabase();
@@ -841,8 +526,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     case WM_GETMINMAXINFO: {
         SyncDpi(hwnd);
         auto* info = reinterpret_cast<MINMAXINFO*>(lParam);
-        info->ptMinTrackSize.x = ToPx(nara::chart_theme::kWindowMinW);
-        info->ptMinTrackSize.y = ToPx(nara::chart_theme::kWindowMinH);
+        info->ptMinTrackSize.x = ToPx(nara::chart_theme::kMainWindowMinW);
+        info->ptMinTrackSize.y = ToPx(nara::chart_theme::kMainWindowMinH);
         return 0;
     }
     case WM_ERASEBKGND:
@@ -869,7 +554,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         const int y = ToDip(GET_Y_LPARAM(lParam));
         RECT client{};
         GetClientRect(hwnd, &client);
-        const auto tb = nara::chart_theme::LayoutMainToolbar(ToDip(client.right), kTableCardY);
+        const auto tb = nara::chart_theme::LayoutMainMosaic(ToDip(client.right), ToDip(client.bottom)).toolbar;
         const auto seg = nara::chart_theme::SplitRegionSegment(tb.region_combo);
         const int region_hit = nara::chart_theme::HitRegionSegment(seg, mx, y);
         if (region_hit == 0) {
@@ -975,9 +660,9 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
     wc.lpszClassName = L"NaraDesktopMain";
     RegisterClassW(&wc);
     HWND hwnd = CreateWindowExW(0, wc.lpszClassName, L"동국문화유산연구원 낙찰분석프로그램",
-                                WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT, 1600, 960, nullptr,
+                                WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT, 1280, 800, nullptr,
                                 nullptr, instance, nullptr);
-    ShowWindow(hwnd, SW_SHOWMAXIMIZED);
+    ShowWindow(hwnd, show);
     MSG msg{};
     while (GetMessageW(&msg, nullptr, 0, 0)) {
         TranslateMessage(&msg);

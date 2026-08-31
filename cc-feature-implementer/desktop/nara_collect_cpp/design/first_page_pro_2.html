@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>2 · 히트맵 관제</title>
+<link rel="stylesheet" href="first_page_pro.css" />
+<style>
+  .charts { grid-template-columns: 1.7fr 1fr 1fr; grid-template-rows: 1.25fr 1fr; }
+  .wide { grid-column: 1 / 2; grid-row: 1 / 3; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="caption"><div class="dots"><i></i><i></i><i></i></div>동국 낙찰분석 · 프로 2 히트맵 관제 · 1280×800 · 표 20%</div>
+  <div class="top">
+    <div class="brand">동국 낙찰<em>월 × 칸</em></div>
+    <div class="kpi-row">
+      <div class="kpi"><div><div class="cap">공고</div><b>124</b></div><canvas id="s1"></canvas></div>
+      <div class="kpi"><div><div class="cap">1위 봉우리</div><b>100.00</b></div></div>
+      <div class="kpi"><div><div class="cap">집 칸 99.60</div><b>8건</b></div></div>
+      <div class="kpi"><div><div class="cap">Q1–Q3</div><b>99.56–99.65</b></div></div>
+    </div>
+    <div class="grow"></div>
+    <button class="btn btn-update">업데이트</button>
+    <button class="btn btn-stop">중지</button>
+    <button class="btn btn-map">전장 맵</button>
+    <div class="seg"><div class="on">전국</div><div class="off">경북</div></div>
+  </div>
+  <div class="charts">
+    <div class="panel wide">
+      <div class="ph"><h3>1위 칸 × 월</h3><span class="cap">행 = 기초대비사정률 칸 시작값 · 색 = 1위 횟수 · 넣을 자리 아님</span></div>
+      <div class="plot"><canvas id="cHeat"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h3>동국 사정률 상자</h3><span class="cap">1년 점 · min/Q1/중앙/Q3/max</span></div>
+      <div class="plot"><canvas id="cBox"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h3>동국 결과 구성</h3><span class="cap">이미 개찰된 124건</span></div>
+      <div class="plot"><canvas id="cDonut"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h3>1위 칸 합</h3><span class="cap">횟수 · 사정률</span></div>
+      <div class="plot"><canvas id="cHist"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h3>고정 감시</h3><span class="cap">99.50–99.70</span></div>
+      <div class="plot"><canvas id="cWatch"></canvas></div>
+    </div>
+  </div>
+  <div class="table20">
+    <div class="th"><h3>동국 참여 낙찰공고</h3><span class="cap">표 면적 20% · 스크롤</span><span class="tag">최신 08-26</span></div>
+    <div class="scroll" id="tbl"></div>
+    <div class="replay"><span>복기</span><span>1위 <b>미래 99.906</b></span><span>동국 <b>100.481 · 19위 · 52개사</b></span><span>왼쪽 고정 <b>고대 99.607</b></span><span>전장 맵에서 칸</span></div>
+  </div>
+</div>
+<script src="first_page_pro_kit.js"></script>
+<script>
+window.addEventListener("load", function () {
+  const D = ProData, C = Pro.COL;
+  Pro.spark("s1", D.notices, C.hot);
+  Pro.heatmap("cHeat", D.heat, D.bins, D.months);
+  Pro.boxplot("cBox", { min: 99.37, q1: 99.56, med: 99.61, q3: 99.65, max: 100.48 });
+  Pro.donut("cDonut", [
+    { label: "1위", n: 5, color: C.gold },
+    { label: "10위 안", n: 12, color: C.hot },
+    { label: "그 외", n: 107, color: C.slate }
+  ]);
+  Pro.vbars("cHist", D.bins, D.winN, { home: 5, peak: 9 });
+  Pro.hbars("cWatch", D.watchL, D.watchN, { colors: ["#0F766E","#2563EB","#7C3AED","#B45309","#0E7490","#64748B"] });
+  Pro.mountTable("tbl");
+});
+</script>
+</body>
+</html>

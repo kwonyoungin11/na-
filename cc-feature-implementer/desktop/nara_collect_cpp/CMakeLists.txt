@@ -102,6 +102,15 @@ add_executable(nara_dongguk_band_tests
 target_include_directories(nara_dongguk_band_tests PRIVATE include)
 add_test(NAME nara_dongguk_band_tests COMMAND nara_dongguk_band_tests)
 
+add_executable(nara_first_page_dash_tests
+    tests/test_first_page_dash.cpp
+    src/first_page_dash.cpp
+    src/scatter_chart.cpp
+    src/notice_rules.cpp
+    src/company_name.cpp)
+target_include_directories(nara_first_page_dash_tests PRIVATE include)
+add_test(NAME nara_first_page_dash_tests COMMAND nara_first_page_dash_tests)
+
 add_executable(nara_scatter_cache_tests
     tests/test_scatter_cache.cpp)
 target_include_directories(nara_scatter_cache_tests PRIVATE include)
@@ -119,6 +128,8 @@ add_executable(nara_desktop WIN32
     src/chart_view.cpp
     src/dwrite_text.cpp
     src/dongguk_band.cpp
+    src/first_page_dash.cpp
+    src/first_page_mosaic.cpp
     src/design_principles_window.cpp)
 target_include_directories(nara_desktop PRIVATE include)
 target_compile_definitions(nara_desktop PRIVATE UNICODE _UNICODE)
@@ -160,6 +171,7 @@ if (MSVC)
     target_compile_options(nara_design_page_tests PRIVATE /utf-8 /W3)
     target_compile_options(nara_histogram_chart_tests PRIVATE /utf-8 /W3)
     target_compile_options(nara_dongguk_band_tests PRIVATE /utf-8 /W3)
+    target_compile_options(nara_first_page_dash_tests PRIVATE /utf-8 /W3)
     target_compile_options(nara_dwrite_text_tests PRIVATE /utf-8 /W3)
     target_compile_options(nara_scatter_cache_tests PRIVATE /utf-8 /W3)
     target_compile_options(nara_desktop PRIVATE /utf-8 /W3)

@@ -88,10 +88,17 @@ int main() {
     std::vector<nara::ParticipantRow> mixed;
     AddSixFirmNotice(mixed, "N-NAT", "전국", "2025-06-15 11:00:00");
     AddSixFirmNotice(mixed, "N-GB", "경상북도", "2025-06-16 11:00:00");
+    AddSixFirmNotice(mixed, "N-GJ", "전국", "2025-07-22 11:00:00");
+    for (auto& row : mixed) {
+        if (row.notice_number == "N-GJ") {
+            row.notice_name = "경주 사정동 정밀발굴조사";
+            row.ordering_agency = "국가유산진흥원";
+        }
+    }
     const auto gyungbuk = nara::BuildChartUniverse(mixed, "2025-01-01", "2025-12-31", "경북", 99.0, 101.0);
     for (const auto& row : gyungbuk) {
         if (nara::CanonicalizeRegion(row.region) != "경북") {
-            return Fail("BuildChartUniverse(경북) must keep only 경북 notices");
+            return Fail("경북 universe must not contain 전국 notices");
         }
     }
     bool has_gb = false;
@@ -106,7 +113,7 @@ int main() {
     }
     const auto gb_table = nara::BuildAwardNoticeRows(gyungbuk, "2025-01-01", "2025-12-31");
     if (gb_table.size() != 1 || gb_table[0].notice_number != "N-GB") {
-        return Fail("경북 table universe is only the 경북 notice");
+        return Fail("경북 table universe is only 참가가능 경북 notices");
     }
 
     std::vector<nara::ParticipantRow> market;

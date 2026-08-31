@@ -54,10 +54,39 @@ constexpr int kMainCardInset = 20;
 constexpr int kTableCardY = 306;
 constexpr int kMainIntelY = 128;
 constexpr int kMainIntelH = 168;
-constexpr float kMainToolbarShift = 0.20f;
-constexpr int kMainKpiY = 60;
-constexpr int kMainKpiH = 56;
-constexpr int kMainKpiGap = 10;
+constexpr float kMainToolbarShift = 0.0f;
+constexpr int kMainKpiY = 8;
+constexpr int kMainKpiH = 36;
+constexpr int kMainKpiGap = 6;
+constexpr int kMainTopY = 8;
+constexpr int kMainTopH = 40;
+constexpr int kMainBrandW = 168;
+constexpr int kMainMosaicGap = 8;
+constexpr int kMainTableFracNum = 20;
+constexpr int kMainTableFracDen = 100;
+constexpr int kMainTableMinH = 140;
+constexpr int kMainReplayH = 28;
+constexpr int kMainWindowMinW = 1280;
+constexpr int kMainWindowMinH = 800;
+constexpr int kMainFirmMinCellW = 108;
+constexpr int kMainFirmMinCellH = 40;
+constexpr int kMainFirmCellH = 52;
+constexpr int kMainFirmDonut = 22;
+constexpr int kMainChartShareNum = 46;
+constexpr int kMainChartShareDen = 100;
+constexpr int kMosaicYTickN = 4;
+constexpr int kMosaicAxisPad = 28;
+constexpr int kMosaicXLabelH = 14;
+constexpr uint32_t kMosaicGridArgb = 0xFFE2E8F0;
+constexpr uint32_t kMosaicAxisArgb = 0xFFCBD5E1;
+
+inline double MosaicYTick(double ymin, double ymax, int i, int n = kMosaicYTickN) {
+    if (n < 2) {
+        return ymax;
+    }
+    const int idx = (std::max)(0, (std::min)(i, n - 1));
+    return ymax - (ymax - ymin) * static_cast<double>(idx) / static_cast<double>(n - 1);
+}
 constexpr int kMainTablePadX = 16;
 constexpr int kMainTablePadTop = 14;
 constexpr int kMainHeaderGap = 12;
@@ -789,6 +818,131 @@ inline MainIntel LayoutMainIntel(int client_w) {
     row.houses = {row.win_bars.Right() + kMainKpiGap, kMainIntelY, mid, kMainIntelH};
     row.dong = {row.houses.Right() + kMainKpiGap, kMainIntelY, right, kMainIntelH};
     return row;
+}
+
+inline int MainTableSlotH(int client_h) {
+    return (std::max)(kMainTableMinH, client_h * kMainTableFracNum / kMainTableFracDen);
+}
+
+struct MainMosaic {
+    RectI brand;
+    MainKpiRow kpis;
+    MainToolbar toolbar;
+    RectI hist;
+    RectI rank;
+    RectI month;
+    RectI donut;
+    RectI line;
+    RectI gap;
+    RectI watch;
+    RectI winners;
+    RectI firms;
+    RectI table;
+    RectI table_grid;
+    RectI replay;
+};
+
+inline int FirmBoardHeaderH() { return 50; }
+
+struct FirmGrid {
+    RectI box;
+    int n = 0;
+    int cols = 0;
+    int rows = 0;
+    int cell_w = 0;
+    int cell_h = 0;
+};
+
+inline FirmGrid LayoutFirmGrid(const RectI& box, int n) {
+    FirmGrid g;
+    g.box = box;
+    g.n = (std::max)(0, n);
+    if (g.n <= 0 || box.w < 8 || box.h < 8) {
+        return g;
+    }
+    int cols = 6;
+    if (g.n > 18) {
+        cols = 8;
+    }
+    if (g.n > 40) {
+        cols = 10;
+    }
+    if (g.n > 70) {
+        cols = 12;
+    }
+    int rows = (g.n + cols - 1) / cols;
+    int cw = box.w / cols;
+    int rh = kMainFirmCellH;
+    while (rows * rh > box.h && cols < 16) {
+        cols += 1;
+        rows = (g.n + cols - 1) / cols;
+        cw = box.w / cols;
+    }
+    if (rows * rh > box.h) {
+        rh = (std::max)(1, box.h / rows);
+    }
+    if (cw < 1) {
+        cw = 1;
+    }
+    g.cols = cols;
+    g.rows = rows;
+    g.cell_w = cw;
+    g.cell_h = rh;
+    return g;
+}
+
+inline RectI FirmCellRect(const FirmGrid& g, int i) {
+    if (g.cols <= 0 || i < 0 || i >= g.n) {
+        return {};
+    }
+    const int r = i / g.cols;
+    const int c = i % g.cols;
+    return {g.box.x + c * g.cell_w, g.box.y + r * g.cell_h, g.cell_w, g.cell_h};
+}
+
+inline MainMosaic LayoutMainMosaic(int client_w, int client_h, int firm_n = 0) {
+    MainMosaic m;
+    const int x = kMainCardInset + kMainTablePadX;
+    const int inner = (std::max)(240, client_w - 2 * x);
+    m.toolbar = LayoutMainToolbar(client_w, kMainTopY - kMainTablePadTop);
+    m.brand = {x, kMainTopY, kMainBrandW, kMainTopH};
+    const int kpi_right = m.toolbar.region_label.x - kMainKpiGap;
+    const int kpi_left = m.brand.Right() + kMainKpiGap;
+    const int kpi_inner = (std::max)(80, kpi_right - kpi_left);
+    const int kpi_w = (std::max)(64, (kpi_inner - 3 * kMainKpiGap) / 4);
+    m.kpis.notices = {kpi_left, kMainTopY + 2, kpi_w, kMainKpiH};
+    m.kpis.latest = {m.kpis.notices.Right() + kMainKpiGap, kMainTopY + 2, kpi_w, kMainKpiH};
+    m.kpis.dong_wins = {m.kpis.latest.Right() + kMainKpiGap, kMainTopY + 2, kpi_w, kMainKpiH};
+    m.kpis.dong_median = {m.kpis.dong_wins.Right() + kMainKpiGap, kMainTopY + 2, kpi_w, kMainKpiH};
+    const int firms_y = kMainTopY + kMainTopH + kMainMosaicGap;
+    const int max_firms_h =
+        (std::max)(FirmBoardHeaderH(), client_h - kMainCardInset - kMainTableMinH - kMainMosaicGap - firms_y);
+    const int board_w = (std::max)(8, inner - 16);
+    const int board_max = (std::max)(8, max_firms_h - FirmBoardHeaderH());
+    const auto grid = LayoutFirmGrid({0, 0, board_w, board_max}, (std::max)(0, firm_n));
+    int firms_h = FirmBoardHeaderH();
+    if (firm_n > 0 && grid.rows > 0 && grid.cell_h > 0) {
+        firms_h = FirmBoardHeaderH() + grid.rows * grid.cell_h + 8;
+    }
+    if (firms_h > max_firms_h) {
+        firms_h = max_firms_h;
+    }
+    m.hist = {};
+    m.rank = {};
+    m.month = {};
+    m.donut = {};
+    m.line = {};
+    m.gap = {};
+    m.watch = {};
+    m.winners = {};
+    m.firms = {x, firms_y, inner, firms_h};
+    const int table_y = m.firms.Bottom() + kMainMosaicGap;
+    const int table_h = (std::max)(kMainTableMinH, client_h - kMainCardInset - table_y);
+    m.table = {x, table_y, inner, table_h};
+    m.replay = {m.table.x + 8, m.table.Bottom() - kMainReplayH - 6, m.table.w - 16, kMainReplayH};
+    m.table_grid = {m.table.x + 8, m.table.y + 34, m.table.w - 16,
+                    (std::max)(24, m.replay.y - 4 - (m.table.y + 34))};
+    return m;
 }
 
 inline RectI CompanyAllButtonRect(const RectI& company_pane) {
