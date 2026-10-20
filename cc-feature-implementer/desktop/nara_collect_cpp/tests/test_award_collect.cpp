@@ -1,5 +1,6 @@
 #include "nara/award_collect.h"
 
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <string>
@@ -78,6 +79,44 @@ int main() {
     if (!nara::PassesCollectRules(heritage)) {
         return Fail("python 전처리 is 문화유산연구원 → 문화재연구원 then keep");
     }
+
+    nara::AwardNotice surface = notice;
+    surface.notice_name = "지표조사 용역";
+    if (!nara::PassesCollectRules(surface)) {
+        return Fail("지표조사 용역 + 6 연구원 must pass");
+    }
+    nara::AwardNotice sample = notice;
+    sample.notice_name = "표본조사 용역";
+    if (!nara::PassesCollectRules(sample)) {
+        return Fail("표본조사 용역 + 6 연구원 must pass");
+    }
+    nara::AwardNotice heritage_mgmt = notice;
+    heritage_mgmt.notice_name = "문화유산 보존관리 용역";
+    if (!nara::PassesCollectRules(heritage_mgmt)) {
+        return Fail("문화유산 보존관리 용역 (no 발굴) + 6 연구원 must pass");
+    }
+    if (nara::PassesCollectRules(impact)) {
+        return Fail("국가유산영향진단 still false");
+    }
+
+    const auto search_keys = nara::CollectSearchKeywords();
+    auto has_key = [&](const char* token) {
+        return std::find(search_keys.begin(), search_keys.end(), token) != search_keys.end();
+    };
+    if (!has_key("매장유산") || !has_key("문화재조사") || !has_key("문화유산") || !has_key("발굴조사")
+        || !has_key("정밀발굴조사") || !has_key("시굴조사") || !has_key("지표조사") || !has_key("표본조사")
+        || !has_key("문화재발굴조사")) {
+        return Fail("CollectSearchKeywords must include 매장유산, 문화재조사, 문화유산, and the existing six");
+    }
+    if (has_key("국가유산")) {
+        return Fail("Do not search 국가유산");
+    }
+    if (nara::ResolveOrderingAgency("", "경주시") != "경주시") {
+        return Fail("empty dminsttNm falls back to ntceInsttNm");
+    }
+    if (nara::ResolveOrderingAgency("대구광역시", "경주시") != "대구광역시") {
+        return Fail("non-empty dminsttNm wins over ntceInsttNm");
+    }
     if (nara::CollectRegionToken("경상북도") != "경북" || nara::CollectRegionToken("대구,경북") != "경북") {
         return Fail("CollectRegionToken 경상북도/대구,경북 → 경북");
     }
@@ -128,18 +167,23 @@ int main() {
         return Fail("6-month helper is only for range math, not the app default");
     }
     if (nara::AddDaysYmd("2026-08-20", 1) != "2026-08-21" || nara::AddDaysYmd("2026-08-31", 1) != "2026-09-01") {
-        return Fail("gap collect starts the day after the last stored open_date");
+        return Fail("AddDaysYmd rolls the calendar");
     }
     if (nara::YmdToInqryBegin("2026-08-21") != "202608210000" || nara::YmdToInqryEnd("2026-08-29") != "202608292359") {
         return Fail("OpenAPI inqry dates are YYYYMMDD0000..2359");
     }
     const auto gap = nara::PlanMissingCollect("2026-08-20 11:00:00", "2026-08-29", 12);
-    if (gap.need != nara::CollectNeed::GapFromStore || gap.from_date != "2026-08-21" || gap.to_date != "2026-08-29") {
-        return Fail("업데이트 must query only the missing days after sqlite max open_date");
+    if (gap.need != nara::CollectNeed::GapFromStore || gap.from_date != "2026-08-20" || gap.to_date != "2026-08-29") {
+        return Fail("업데이트 must include the last stored open_date so same-day 낙찰 is fetched");
     }
     const auto current = nara::PlanMissingCollect("2026-08-29", "2026-08-29", 12);
-    if (current.need != nara::CollectNeed::AlreadyCurrent) {
-        return Fail("already-current store must not hit OpenAPI again");
+    if (current.need != nara::CollectNeed::GapFromStore || current.from_date != "2026-08-29"
+        || current.to_date != "2026-08-29") {
+        return Fail("당일 개찰이 저장돼 있어도 오늘 구간은 다시 조회한다");
+    }
+    const auto future = nara::PlanMissingCollect("2026-09-01", "2026-08-29", 12);
+    if (future.need != nara::CollectNeed::AlreadyCurrent) {
+        return Fail("stored open_date after today has nothing left to fetch");
     }
     const auto empty = nara::PlanMissingCollect("", "2026-08-29", 12);
     if (empty.need != nara::CollectNeed::FullLookback || empty.from_date != "2025-08-29") {
@@ -242,6 +286,62 @@ int main() {
                                                          : "null")
                   << "\n";
         return 1;
+    }
+
+    // M2-1: OpenAPI totalCount & detail page count
+    const auto paged_body = std::string(
+        "{\"response\":{\"body\":{\"totalCount\":135,\"numOfRows\":50,\"pageNo\":1,\"items\":[]}}}");
+    if (nara::ExtractOpenApiTotalCount(paged_body) != 135) {
+        return Fail("ExtractOpenApiTotalCount must parse response.body.totalCount");
+    }
+    if (nara::ComputeOpenApiPageCount(135, 50) != 3 || nara::ComputeOpenApiPageCount(100, 100) != 1) {
+        return Fail("ComputeOpenApiPageCount ceiling division");
+    }
+
+    // M2-2: Matching bidNtceOrd when multiple orders exist
+    const auto multi_ord_body = std::string(
+        "{\"response\":{\"body\":{\"items\":["
+        "{\"bidNtceNo\":\"R26BK01676511\",\"bidNtceOrd\":\"000\",\"sucsfbidLwltRate\":\"87.745\",\"bssAmt\":\"100000000\"},"
+        "{\"bidNtceNo\":\"R26BK01676511\",\"bidNtceOrd\":\"001\",\"sucsfbidLwltRate\":\"86.745\",\"bssAmt\":\"120000000\"}"
+        "]}}}");
+    const auto matched_ord = nara::SelectMatchingNoticeItem(nara::ParseResponseItems(multi_ord_body), "001");
+    if (nara::JsonString(matched_ord, "bidNtceOrd") != "001"
+        || !nara::ParseLowerRateForOrder(multi_ord_body, "001")
+        || std::fabs(*nara::ParseLowerRateForOrder(multi_ord_body, "001") - 86.745) > 0.001) {
+        return Fail("SelectMatchingNoticeItem / ParseLowerRateForOrder must pick bidNtceOrd 001");
+    }
+
+    // M2-3: Infer missing company adjust_rate from valid anchor in the same notice
+    nara::AwardNotice partial_notice;
+    partial_notice.notice_number = "R26BK01676511-001";
+    partial_notice.companies = {
+        {"충청문화재연구원", 1, 99.85000, 86614880.0, 87.745, "314-82-00001"},
+        {"동국문화재연구원", 19, std::nullopt, 86441380.0, 87.569, "505-82-00002"},
+    };
+    nara::InferNoticeCompanyAdjustRates(partial_notice);
+    if (!partial_notice.companies[1].adjust_rate
+        || std::fabs(*partial_notice.companies[1].adjust_rate - (86441380.0 / 86614880.0 * 99.85000)) > 0.0005) {
+        return Fail("InferNoticeCompanyAdjustRates must restore missing adjust_rate from anchor bid_amount");
+    }
+
+    // M2-4: Multi-source upcoming bid parser (kaah.kr & d2b.go.kr)
+    const auto d2b_json = std::string(
+        "{\"list\":[{\"bidNtceNo\":\"2026-국방-001\",\"bidNtceNm\":\"육군 OO부대 매장유산 지표조사 용역\","
+        "\"dminsttNm\":\"육군제1234부대\",\"opengDt\":\"2026-10-25 11:00\",\"bssamt\":\"45000000\"}]}");
+    const auto d2b_bids = nara::ParseD2bUpcomingBids(d2b_json);
+    if (d2b_bids.size() != 1 || d2b_bids[0].source != "국방전자조달"
+        || d2b_bids[0].notice_name.find("매장유산") == std::string::npos) {
+        return Fail("ParseD2bUpcomingBids should extract cultural heritage bids from d2b JSON");
+    }
+
+    const auto kaah_html = std::string(
+        "<table><tr><th>입찰명</th><td>화성 남양성지 문화유산 시굴조사 용역</td></tr>"
+        "<tr><th>기초금액</th><td>88,500,000원</td></tr>"
+        "<tr><th>개찰일시</th><td>2026-10-28 14:00</td></tr></table>");
+    const auto kaah_bid = nara::ParseKaahNoticeDetailHtml("KAAH-69", kaah_html);
+    if (!kaah_bid || kaah_bid->source != "한국문화유산협회" || kaah_bid->notice_number != "KAAH-69"
+        || !kaah_bid->base_amount || std::fabs(*kaah_bid->base_amount - 88500000.0) > 1.0) {
+        return Fail("ParseKaahNoticeDetailHtml should extract notice_name, base_amount, open_date");
     }
 
     std::cerr << "ok award collect rules\n";

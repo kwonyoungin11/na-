@@ -146,8 +146,7 @@ int main(int argc, char** argv) {
         std::cerr << "cpp collect months=" << months.size() << " " << start_month << "~" << end_month
                   << " (월 단위 OpenAPI)\n";
     }
-    const std::vector<std::string> keywords = {
-        "발굴조사", "정밀발굴조사", "시굴조사", "지표조사", "표본조사", "문화재발굴조사"};
+    const std::vector<std::string> keywords = nara::CollectSearchKeywords();
 
     std::ofstream out(out_path, std::ios::binary);
     if (!out) {
@@ -204,7 +203,8 @@ int main(int argc, char** argv) {
                     continue;
                 }
                 notice.notice_name = nara::JsonString(item, "bidNtceNm");
-                notice.agency = nara::JsonString(item, "dminsttNm");
+                notice.agency = nara::ResolveOrderingAgency(
+                    nara::JsonString(item, "dminsttNm"), nara::JsonString(item, "ntceInsttNm"));
                 const auto ntce_no = nara::JsonString(item, "bidNtceNo");
                 const auto cached_region = region_cache.find(ntce_no);
                 if (cached_region != region_cache.end()) {
@@ -216,18 +216,31 @@ int main(int argc, char** argv) {
                                 << "&bidNtceNo=" << UrlEncode(ntce_no)
                                 << "&bidNtceOrd=" << UrlEncode(ord.empty() ? "000" : ord)
                                 << "&ServiceKey=" << UrlEncode(key);
+                    std::string api_token;
+                    bool api_ok = false;
+                    bool api_listed = false;
                     try {
-                        notice.region = nara::ParseParticipantRegion(nara::HttpGet("apis.data.go.kr", region_path.str()));
+                        const auto region_body = nara::HttpGet("apis.data.go.kr", region_path.str());
+                        api_ok = true;
+                        api_listed = nara::ParticipantRegionListed(region_body);
+                        api_token = nara::ParseParticipantRegion(region_body);
                     } catch (const std::exception& ex) {
                         std::cerr << "WARN region " << notice.notice_number << " " << ex.what() << "\n";
                     }
                     std::this_thread::sleep_for(std::chrono::milliseconds(80));
-                    if (notice.region.empty()) {
-                        notice.region = nara::CollectRegionToken(nara::JsonString(item, "rgnLmtBidLocplcJdgmBssNm"));
+                    if (api_token.empty()) {
+                        try {
+                            const auto region_body = nara::HttpGet("apis.data.go.kr", region_path.str());
+                            api_ok = true;
+                            api_listed = nara::ParticipantRegionListed(region_body);
+                            api_token = nara::ParseParticipantRegion(region_body);
+                        } catch (const std::exception& ex) {
+                            std::cerr << "WARN region retry " << notice.notice_number << " " << ex.what() << "\n";
+                        }
+                        std::this_thread::sleep_for(std::chrono::milliseconds(80));
                     }
-                    if (notice.region.empty()) {
-                        notice.region = "전국";
-                    }
+                    notice.region = nara::ResolveNoticeRegion(
+                        api_token, nara::JsonString(item, "rgnLmtBidLocplcJdgmBssNm"), api_ok, api_listed);
                     region_cache[ntce_no] = notice.region;
                 }
                 notice.open_date = nara::JsonString(item, "opengDt");
@@ -239,7 +252,8 @@ int main(int argc, char** argv) {
                 ++notices;
 
                 if (!notice.lower_rate || !notice.base_amount) {
-                    const auto cached = bid_notice_cache.find(ntce_no);
+                    const auto cache_key = notice.notice_number;
+                    const auto cached = bid_notice_cache.find(cache_key);
                     if (cached != bid_notice_cache.end()) {
                         if (!notice.lower_rate) {
                             notice.lower_rate = cached->second.lower_rate;
@@ -250,21 +264,21 @@ int main(int argc, char** argv) {
                     } else {
                         std::ostringstream bid_notice;
                         bid_notice << "/1230000/ad/BidPublicInfoService/getBidPblancListInfoServc"
-                                   << "?inqryDiv=2&type=json&numOfRows=5&pageNo=1"
+                                   << "?inqryDiv=2&type=json&numOfRows=10&pageNo=1"
                                    << "&bidNtceNo=" << UrlEncode(ntce_no)
                                    << "&ServiceKey=" << UrlEncode(key);
                         try {
                             const auto body = nara::HttpGet("apis.data.go.kr", bid_notice.str());
                             if (!notice.lower_rate) {
-                                notice.lower_rate = nara::ParseLowerRate(body);
+                                notice.lower_rate = nara::ParseLowerRateForOrder(body, ord);
                             }
                             if (!notice.base_amount) {
-                                notice.base_amount = nara::ParseBaseAmount(body);
+                                notice.base_amount = nara::ParseBaseAmountForOrder(body, ord);
                             }
                         } catch (const std::exception& ex) {
                             std::cerr << "WARN bid-notice " << notice.notice_number << " " << ex.what() << "\n";
                         }
-                        bid_notice_cache[ntce_no] = BidNoticeMeta{notice.lower_rate, notice.base_amount};
+                        bid_notice_cache[cache_key] = BidNoticeMeta{notice.lower_rate, notice.base_amount};
                     }
                 }
 
@@ -283,27 +297,37 @@ int main(int argc, char** argv) {
                            << "&ServiceKey=" << UrlEncode(key);
                     try {
                         notice.base_amount = nara::ParseBaseAmount(nara::HttpGet("apis.data.go.kr", prepar.str()));
-                        bid_notice_cache[ntce_no].base_amount = notice.base_amount;
+                        bid_notice_cache[notice.notice_number].base_amount = notice.base_amount;
                     } catch (const std::exception& ex) {
                         std::cerr << "WARN prepar " << notice.notice_number << " " << ex.what() << "\n";
                     }
                     std::this_thread::sleep_for(std::chrono::milliseconds(80));
                 }
 
-                std::ostringstream detail;
-                detail << "/1230000/as/ScsbidInfoService/getOpengResultListInfoOpengCompt"
-                       << "?type=json&numOfRows=100&pageNo=1"
-                       << "&bidNtceNo=" << UrlEncode(nara::JsonString(item, "bidNtceNo"))
-                       << "&bidNtceOrd=" << UrlEncode(ord.empty() ? "000" : ord)
-                       << "&bidClsfcNo=" << UrlEncode(nara::JsonString(item, "bidClsfcNo").empty() ? "0" : nara::JsonString(item, "bidClsfcNo"))
-                       << "&rbidNo=" << UrlEncode(nara::JsonString(item, "rbidNo").empty() ? "000" : nara::JsonString(item, "rbidNo"))
-                       << "&ServiceKey=" << UrlEncode(key);
-                try {
-                    nara::ApplyDetailCompanies(notice, nara::HttpGet("apis.data.go.kr", detail.str()));
-                } catch (const std::exception& ex) {
-                    std::cerr << "WARN detail " << notice.notice_number << " " << ex.what() << "\n";
+                const int detail_rows = 500;
+                int total_detail_pages = 1;
+                for (int dpage = 1; dpage <= total_detail_pages && dpage <= 10; ++dpage) {
+                    std::ostringstream detail;
+                    detail << "/1230000/as/ScsbidInfoService/getOpengResultListInfoOpengCompt"
+                           << "?type=json&numOfRows=" << detail_rows << "&pageNo=" << dpage
+                           << "&bidNtceNo=" << UrlEncode(nara::JsonString(item, "bidNtceNo"))
+                           << "&bidNtceOrd=" << UrlEncode(ord.empty() ? "000" : ord)
+                           << "&bidClsfcNo=" << UrlEncode(nara::JsonString(item, "bidClsfcNo").empty() ? "0" : nara::JsonString(item, "bidClsfcNo"))
+                           << "&rbidNo=" << UrlEncode(nara::JsonString(item, "rbidNo").empty() ? "000" : nara::JsonString(item, "rbidNo"))
+                           << "&ServiceKey=" << UrlEncode(key);
+                    try {
+                        const auto detail_body = nara::HttpGet("apis.data.go.kr", detail.str());
+                        if (dpage == 1) {
+                            total_detail_pages = nara::ComputeOpenApiPageCount(
+                                nara::ExtractOpenApiTotalCount(detail_body), detail_rows);
+                        }
+                        nara::ApplyDetailCompanies(notice, detail_body);
+                    } catch (const std::exception& ex) {
+                        std::cerr << "WARN detail " << notice.notice_number << " p" << dpage << " " << ex.what() << "\n";
+                        break;
+                    }
+                    std::this_thread::sleep_for(std::chrono::milliseconds(80));
                 }
-                std::this_thread::sleep_for(std::chrono::milliseconds(80));
 
                 if (!nara::PassesCollectRules(notice)) {
                     continue;
@@ -317,11 +341,17 @@ int main(int argc, char** argv) {
                         << "\",\"open_date\":\"" << JsonEscape(notice.open_date)
                         << "\",\"rank\":" << company.rank
                         << ",\"company_name\":\"" << JsonEscape(company.name) << "\"";
+                    if (!company.biz_no.empty()) {
+                        out << ",\"biz_no\":\"" << JsonEscape(company.biz_no) << "\"";
+                    }
                     if (company.adjust_rate) {
                         out << ",\"adjust_rate\":" << *company.adjust_rate;
                     }
                     if (company.bid_amount) {
                         out << ",\"bid_amount\":" << *company.bid_amount;
+                    }
+                    if (company.bid_rate) {
+                        out << ",\"bid_rate_vs_estimate\":" << *company.bid_rate;
                     }
                     if (notice.base_amount) {
                         out << ",\"base_amount\":" << *notice.base_amount;
