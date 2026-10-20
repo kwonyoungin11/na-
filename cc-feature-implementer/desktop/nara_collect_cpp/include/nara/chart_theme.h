@@ -77,8 +77,8 @@ constexpr int kMainChartShareDen = 100;
 constexpr int kMosaicYTickN = 4;
 constexpr int kMosaicAxisPad = 28;
 constexpr int kMosaicXLabelH = 14;
-constexpr uint32_t kMosaicGridArgb = 0xFFE2E8F0;
-constexpr uint32_t kMosaicAxisArgb = 0xFFCBD5E1;
+constexpr uint32_t kMosaicGridArgb = 0xFFE2E5EC;
+constexpr uint32_t kMosaicAxisArgb = 0xFFCBD0DC;
 
 inline double MosaicYTick(double ymin, double ymax, int i, int n = kMosaicYTickN) {
     if (n < 2) {
@@ -162,45 +162,64 @@ constexpr float kAccentBarH = 3.0f;
 constexpr float kCardStrokeW = 1.0f;
 constexpr float kComboStrokeW = 1.2f;
 
-// Colors (AARRGGBB) — NativeBidChartControl + DesignTokens + bidder_colors.json.
-constexpr uint32_t kBgArgb = 0xFFF6F8FB;
+// Colors (AARRGGBB) — Trowel 3.0 ("Quiet Plate") + NativeBidChartControl + bidder_colors.json.
+constexpr uint32_t kBgArgb = 0xFFF6F7F9;
 constexpr uint32_t kPlotBgArgb = 0xFFFFFFFF;
-constexpr uint32_t kGridArgb = 0xFFD9DEE7;
-constexpr uint32_t kMajorGridArgb = 0xFFBFC7D4;
-constexpr uint32_t kAxisArgb = 0xFF5E6A7D;
-constexpr uint32_t kTextArgb = 0xFF111111;
-constexpr uint32_t kSubtleTextArgb = 0xFF5A6473;
-constexpr uint32_t kMutedCaptionArgb = 0xFF4B5563;
-constexpr uint32_t kAccentArgb = 0xFFD97706;
-constexpr uint32_t kAccentStrongArgb = 0xFFB45309;
-constexpr uint32_t kAccentBar0Argb = 0xFFF59E0B;
-constexpr uint32_t kAccentBar1Argb = 0xFFB45309;
+constexpr uint32_t kGridArgb = 0xFFE2E5EC;
+constexpr uint32_t kMajorGridArgb = 0xFFCBD0DC;
+constexpr uint32_t kAxisArgb = 0xFF525866;
+constexpr uint32_t kTextArgb = 0xFF16191F;
+constexpr uint32_t kSubtleTextArgb = 0xFF525866;
+constexpr uint32_t kMutedCaptionArgb = 0xFF848B98;
+constexpr uint32_t kAccentArgb = 0xFF1F5EFF;
+constexpr uint32_t kAccentStrongArgb = 0xFF1749CC;
+constexpr uint32_t kAccentBar0Argb = 0xFF1F5EFF;
+constexpr uint32_t kAccentBar1Argb = 0xFF127A48;
 constexpr uint32_t kDonggukArgb = 0xFFFF0000;
 constexpr uint32_t kRankGoldArgb = 0xFFFACC15;
 constexpr uint32_t kRankGoldOuterArgb = 0xFFCA8A04;
 constexpr uint32_t kRankBadgeArgb = 0xFFC62828;
 constexpr uint32_t kChipBorderArgb = 0xFF21252B;
 constexpr uint32_t kChipLabelOutlineArgb = 0x59000000;
-constexpr uint32_t kPointerArgb = 0xFF2563EB;
-constexpr uint32_t kPointerLabelBgArgb = 0xFFEFF6FF;
-constexpr uint32_t kPointerLabelTextArgb = 0xFF1D4ED8;
-constexpr uint32_t kCalloutPenArgb = 0xFFFDBA74;
-constexpr uint32_t kStrokeSubtleArgb = 0xFFD8E0EA;
-constexpr uint32_t kStrokeStrongArgb = 0xFFBAC6D5;
+constexpr uint32_t kPointerArgb = 0xFF1F5EFF;
+constexpr uint32_t kPointerLabelBgArgb = 0xFFE8EFFF;
+constexpr uint32_t kPointerLabelTextArgb = 0xFF1749CC;
+constexpr uint32_t kCalloutPenArgb = 0xFFF5B87A;
+constexpr uint32_t kStrokeSubtleArgb = 0xFFE2E5EC;
+constexpr uint32_t kStrokeStrongArgb = 0xFFCBD0DC;
 constexpr uint32_t kComboStrokeArgb = kStrokeStrongArgb;
 constexpr uint32_t kGlassFillArgb = 0xD6FFFFFF;
 constexpr uint32_t kDockFillArgb = 0xF2FFFFFF;
 constexpr uint32_t kCompanyPanelArgb = 0xFFFFFFFF;
 constexpr uint32_t kShadowArgb = 0x2E081018;
-constexpr uint32_t kWindowBgArgb = 0xFFF3F5F8;
+constexpr uint32_t kWindowBgArgb = 0xFFF6F7F9;
+constexpr uint32_t kPageBg0Argb = 0xFFF6F7F9;
+constexpr uint32_t kPageBg1Argb = 0xFFFAFBFC;
+constexpr uint32_t kPageBloomArgb = 0xFFF6F7F9;
+constexpr uint32_t kOnSkyTextArgb = 0xFF16191F;
+constexpr uint32_t kOnSkyMutedArgb = 0xFF525866;
+constexpr uint32_t kTableHeaderBgArgb = 0xFFEEF0F4;
+constexpr uint32_t kTableStripeArgb = 0xFFFAFBFC;
+constexpr uint32_t kTableSelectArgb = 0xFFE8EFFF;
+constexpr uint32_t kStatusBannerFillArgb = 0xFFFFF4C4;
+constexpr uint32_t kStatusBannerTextArgb = 0xFF7A4E00;
+
+// COLORREF is 0x00BBGGRR (Win32 RGB). Tests stay free of windows.h.
+inline unsigned WindowBgColorRef() {
+    const unsigned r = (kWindowBgArgb >> 16) & 0xFFu;
+    const unsigned g = (kWindowBgArgb >> 8) & 0xFFu;
+    const unsigned b = kWindowBgArgb & 0xFFu;
+    return r | (g << 8) | (b << 16);
+}
+
 constexpr uint32_t kCardFillArgb = 0xFFFFFFFF;
-constexpr uint32_t kCardStrokeArgb = 0xFFD8E0EA;
+constexpr uint32_t kCardStrokeArgb = 0xFFE2E5EC;
 constexpr uint32_t kCardShadowArgb = 0x14000000;
 constexpr uint32_t kResetShadowArgb = 0x2E081018;
 constexpr uint32_t kCheckFillArgb = 0xFFFFFFFF;
 constexpr uint32_t kCheckMarkArgb = 0xFFFFFFFF;
-constexpr uint32_t kAccentSubtleArgb = 0xFFFFF4E5;
-constexpr uint32_t kHoverFillArgb = 0xFFEEF3F8;
+constexpr uint32_t kAccentSubtleArgb = 0xFFE8EFFF;
+constexpr uint32_t kHoverFillArgb = 0xFFEEF0F4;
 constexpr uint32_t kMapDesignFillArgb = 0xFF2563EBu;
 constexpr uint32_t kMapDesignHotArgb = 0xFF3B82F6u;
 constexpr uint32_t kMapDesignTextArgb = 0xFFFFFFFFu;
@@ -259,8 +278,8 @@ constexpr float kHistDepthX = 0.55f;
 constexpr float kHistDepthY = 0.32f;
 constexpr float kHistBarGap = 0.18f;
 constexpr float kHistSeriesGap = 6.0f;
-constexpr uint32_t kHistFloorArgb = 0xFFF3F6FB;
-constexpr uint32_t kHistGridArgb = 0xFFD5DDE8;
+constexpr uint32_t kHistFloorArgb = 0xFFFAFBFC;
+constexpr uint32_t kHistGridArgb = 0xFFE2E5EC;
 constexpr uint32_t kHistMarketLowArgb = 0xFF22D3EE;
 constexpr uint32_t kHistMarketMidArgb = 0xFF818CF8;
 constexpr uint32_t kHistMarketHighArgb = 0xFFF43F5E;
@@ -376,6 +395,7 @@ inline void BandUseStageInterval(double lo, double hi, int i, double& s_lo, doub
 }
 
 constexpr wchar_t kFontFamily[] = L"Malgun Gothic";
+constexpr wchar_t kMapPreparingLabel[] = L"맵 준비 중…";
 constexpr wchar_t kResetLabel[] = L"맵 초기화";
 constexpr wchar_t kRank1Label[] = L"1위";
 constexpr wchar_t kRangeLabel[] = L"분석 범위";
@@ -673,6 +693,20 @@ struct RectI {
     }
 };
 
+struct PtI {
+    int x = 0;
+    int y = 0;
+};
+
+// Button-local DIP of PaintMain's page wash, so owner-draw corners continue the parent gradient.
+inline PtI PageWashLocalStart(int btn_x, int btn_y) { return {-btn_x, -btn_y}; }
+
+inline PtI PageWashLocalEnd(int parent_w, int btn_x, int btn_y) { return {parent_w - btn_x, -btn_y}; }
+
+inline PtI PageBloomLocalEnd(int parent_w, int parent_h, int btn_x, int btn_y) {
+    return {parent_w / 2 - btn_x, parent_h / 3 - btn_y};
+}
+
 enum class MainButtonKind { Primary, Secondary, Ghost, Danger };
 
 struct MainButtonColors {
@@ -688,11 +722,11 @@ struct MainButtonColors {
 inline MainButtonColors MainButtonLook(MainButtonKind kind) {
     switch (kind) {
     case MainButtonKind::Primary:
-        return {0xFFF59E0B, 0xFFD97706, 0xFFB45309, 0xFFB45309, 0xFFFFFFFF, true, false};
+        return {0xFF1F5EFF, 0xFF1F5EFF, 0xFF1749CC, 0xFF1749CC, 0xFFFFFFFF, true, false};
     case MainButtonKind::Secondary:
-        return {0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFD8E0EA, 0xFF111111, false, false};
+        return {0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFCBD0DC, 0xFF16191F, false, false};
     case MainButtonKind::Ghost:
-        return {0x00FFFFFF, 0x00FFFFFF, 0x00FFFFFF, 0x00000000, 0xFF4B5563, false, true};
+        return {0x00FFFFFF, 0x00FFFFFF, 0x00FFFFFF, 0x00000000, 0xFF525866, false, true};
     case MainButtonKind::Danger:
         return {0xFFFEF2F2, 0xFFFEF2F2, 0xFFFEF2F2, 0xFFF5C2C7, 0xFFDC2626, false, false};
     }

@@ -50,6 +50,9 @@ void FillRoundCard(Gdiplus::Graphics& g, const chart_theme::RectI& box, float ra
     RoundRectPath(path, r, radius);
     Gdiplus::SolidBrush white(Gdiplus::Color(255, 255, 255, 255));
     g.FillPath(&white, &path);
+    Gdiplus::Pen stroke(Gdiplus::Color(static_cast<Gdiplus::ARGB>(chart_theme::kCardStrokeArgb)),
+                        chart_theme::kCardStrokeW);
+    g.DrawPath(&stroke, &path);
 }
 
 Gdiplus::RectF DipBox(const chart_theme::RectI& box) {
@@ -369,11 +372,11 @@ void PaintMosaicFirstPage(Gdiplus::Graphics& g, MosaicPaintIn& in) {
     const auto mosaic = chart_theme::LayoutMainMosaic(in.w, in.h, static_cast<int>(firms.size()));
 
     dwrite_text::QueueBox(static_cast<float>(mosaic.brand.x), static_cast<float>(mosaic.brand.y + 4),
-                          static_cast<float>(mosaic.brand.w), 18, L"동국 낙찰", 15.0f, chart_theme::kTextArgb,
+                          static_cast<float>(mosaic.brand.w), 18, L"동국 낙찰", 15.0f, chart_theme::kOnSkyTextArgb,
                           dwrite_text::Align::Near, dwrite_text::Align::Near, true);
     const auto span = FormatDataSpan(table);
     dwrite_text::QueueBox(static_cast<float>(mosaic.brand.x), static_cast<float>(mosaic.brand.y + 22),
-                          static_cast<float>(mosaic.brand.w), 14, L"낙찰만", 10.0f, chart_theme::kSubtleTextArgb,
+                          static_cast<float>(mosaic.brand.w), 14, L"낙찰만", 10.0f, chart_theme::kOnSkyMutedArgb,
                           dwrite_text::Align::Near, dwrite_text::Align::Near, false);
 
     std::vector<double> spark_n;
@@ -410,7 +413,8 @@ void PaintMosaicFirstPage(Gdiplus::Graphics& g, MosaicPaintIn& in) {
     dwrite_text::QueueBox(static_cast<float>(mosaic.toolbar.region_label.x),
                           static_cast<float>(mosaic.toolbar.region_label.y),
                           static_cast<float>(mosaic.toolbar.region_label.w),
-                          static_cast<float>(mosaic.toolbar.region_label.h), L"지역", 12.0f, 0xFF6B7280u,
+                          static_cast<float>(mosaic.toolbar.region_label.h), L"지역", 12.0f,
+                          chart_theme::kOnSkyMutedArgb,
                           dwrite_text::Align::Far, dwrite_text::Align::Center, false);
     PaintRegion(g, mosaic.toolbar.region_combo, in.region_token);
 
@@ -449,16 +453,25 @@ void PaintMosaicFirstPage(Gdiplus::Graphics& g, MosaicPaintIn& in) {
     }
 
     FillRoundCard(g, mosaic.table, 12.0f);
-    dwrite_text::QueueBox(static_cast<float>(mosaic.table.x + 12), static_cast<float>(mosaic.table.y + 8), 280, 18,
+    dwrite_text::QueueBox(static_cast<float>(mosaic.table.x + 12), static_cast<float>(mosaic.table.y + 8), 200, 18,
                           L"동국 참여 낙찰공고", 13.0f, chart_theme::kTextArgb, dwrite_text::Align::Near,
                           dwrite_text::Align::Near, true);
-    dwrite_text::QueueBox(static_cast<float>(mosaic.table.Right() - 420), static_cast<float>(mosaic.table.y + 10), 400,
-                          16, Utf8ToWide(in.status).c_str(), 10.0f, chart_theme::kSubtleTextArgb, dwrite_text::Align::Far,
-                          dwrite_text::Align::Near, false, true, true);
+    const chart_theme::RectI banner{mosaic.table.x + 220, mosaic.table.y + 6,
+                                    (std::max)(80, mosaic.table.w - 232), 22};
+    Gdiplus::RectF banner_r(static_cast<Gdiplus::REAL>(banner.x), static_cast<Gdiplus::REAL>(banner.y),
+                            static_cast<Gdiplus::REAL>(banner.w), static_cast<Gdiplus::REAL>(banner.h));
+    Gdiplus::GraphicsPath banner_path;
+    RoundRectPath(banner_path, banner_r, 8.0f);
+    Gdiplus::SolidBrush banner_fill(Gdiplus::Color(static_cast<Gdiplus::ARGB>(chart_theme::kStatusBannerFillArgb)));
+    g.FillPath(&banner_fill, &banner_path);
+    dwrite_text::QueueBox(static_cast<float>(banner.x + 10), static_cast<float>(banner.y + 2),
+                          static_cast<float>(banner.w - 20), 18, Utf8ToWide(in.status).c_str(), 12.0f,
+                          chart_theme::kStatusBannerTextArgb, dwrite_text::Align::Near, dwrite_text::Align::Near, true,
+                          true, true);
 
-    Gdiplus::SolidBrush headerBg(Gdiplus::Color(255, 238, 242, 246));
-    Gdiplus::SolidBrush stripe(Gdiplus::Color(255, 248, 250, 252));
-    Gdiplus::SolidBrush select(Gdiplus::Color(255, 255, 247, 237));
+    Gdiplus::SolidBrush headerBg(Gdiplus::Color(static_cast<Gdiplus::ARGB>(chart_theme::kTableHeaderBgArgb)));
+    Gdiplus::SolidBrush stripe(Gdiplus::Color(static_cast<Gdiplus::ARGB>(chart_theme::kTableStripeArgb)));
+    Gdiplus::SolidBrush select(Gdiplus::Color(static_cast<Gdiplus::ARGB>(chart_theme::kTableSelectArgb)));
     const int table_top = mosaic.table_grid.y;
     const int table_bottom = mosaic.table_grid.Bottom();
     if (in.table_rect) {
@@ -476,7 +489,8 @@ void PaintMosaicFirstPage(Gdiplus::Graphics& g, MosaicPaintIn& in) {
     g.FillRectangle(&headerBg, mosaic.table_grid.x, table_top, mosaic.table_grid.w, kHeaderH);
     for (int c = 0; c < 6; ++c) {
         dwrite_text::QueueBox(static_cast<float>(cols[c] + 6), static_cast<float>(table_top + 4),
-                              static_cast<float>(cols[c + 1] - cols[c] - 10), 16, headers[c], 11.0f, 0xFF6B7280u,
+                              static_cast<float>(cols[c + 1] - cols[c] - 10), 16, headers[c], 11.0f,
+                              chart_theme::kSubtleTextArgb,
                               dwrite_text::Align::Near, dwrite_text::Align::Near, true);
     }
     g.SetClip(Gdiplus::Rect(mosaic.table_grid.x, table_top + kHeaderH, mosaic.table_grid.w,
@@ -518,8 +532,9 @@ void PaintMosaicFirstPage(Gdiplus::Graphics& g, MosaicPaintIn& in) {
             Gdiplus::RectF clip(static_cast<Gdiplus::REAL>(cols[c] + 6), static_cast<Gdiplus::REAL>(y + 4),
                                 static_cast<Gdiplus::REAL>(cols[c + 1] - cols[c] - 10), 18);
             g.SetClip(clip);
-            dwrite_text::QueueBox(clip.X, clip.Y, clip.Width, clip.Height, cells[c].c_str(), 12.0f, 0xFF111111u,
-                                  dwrite_text::Align::Near, dwrite_text::Align::Near, false, true, true);
+            dwrite_text::QueueBox(clip.X, clip.Y, clip.Width, clip.Height, cells[c].c_str(), 12.0f,
+                                  chart_theme::kTextArgb, dwrite_text::Align::Near, dwrite_text::Align::Near, false,
+                                  true, true);
             g.SetClip(Gdiplus::Rect(mosaic.table_grid.x, table_top + kHeaderH, mosaic.table_grid.w,
                                     (std::max)(1, table_bottom - table_top - kHeaderH)));
         }

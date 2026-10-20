@@ -46,11 +46,53 @@ int main() {
     if (kRankBadgeArgb != 0xFFC62828u) {
         return Fail("rank badge is #C62828");
     }
-    if (kGridArgb != 0xFFD9DEE7u || kMajorGridArgb != 0xFFBFC7D4u || kAxisArgb != 0xFF5E6A7Du) {
-        return Fail("grid/axis pens must match NativeBidChartControl");
+    if (kGridArgb != 0xFFE2E5ECu || kMajorGridArgb != 0xFFCBD0DCu || kAxisArgb != 0xFF525866u) {
+        return Fail("grid/axis pens must match Trowel 3.0 Quiet Plate theme");
     }
-    if (kBgArgb != 0xFFF6F8FBu || kPlotBgArgb != 0xFFFFFFFFu) {
-        return Fail("chart background #F6F8FB plot #FFFFFF");
+    if (kBgArgb != 0xFFF6F7F9u || kWindowBgArgb != 0xFFF6F7F9u || kPlotBgArgb != 0xFFFFFFFFu) {
+        return Fail("window/page background Quiet Plate #F6F7F9 plot #FFFFFF");
+    }
+    if (kTextArgb != 0xFF16191Fu || kSubtleTextArgb != 0xFF525866u || kMutedCaptionArgb != 0xFF848B98u) {
+        return Fail("Quiet Plate text hierarchy #16191F / #525866 / #848B98");
+    }
+    if (kAccentArgb != 0xFF1F5EFFu || kAccentBar0Argb != 0xFF1F5EFFu || kAccentBar1Argb != 0xFF127A48u) {
+        return Fail("accent is Trowel signature blue #1F5EFF with blue→green bar");
+    }
+    if (kStrokeSubtleArgb != 0xFFE2E5ECu || kHoverFillArgb != 0xFFEEF0F4u || kAccentSubtleArgb != 0xFFE8EFFFu) {
+        return Fail("pane stroke/hover/accent-subtle match Quiet Plate #E2E5EC / #EEF0F4 / #E8EFFF");
+    }
+    if (kHistFloorArgb != 0xFFFAFBFCu || kHistGridArgb != 0xFFE2E5ECu) {
+        return Fail("histogram floor/grid are Quiet Plate #FAFBFC / #E2E5EC");
+    }
+    if (kPageBg0Argb != 0xFFF6F7F9u || kPageBg1Argb != 0xFFFAFBFCu || kPageBloomArgb != 0xFFF6F7F9u) {
+        return Fail("page wash is Quiet Plate #F6F7F9→#FAFBFC");
+    }
+    {
+        const auto start = PageWashLocalStart(400, 8);
+        const auto wash_end = PageWashLocalEnd(1280, 400, 8);
+        const auto bloom_end = PageBloomLocalEnd(1280, 800, 400, 8);
+        if (start.x != -400 || start.y != -8) {
+            return Fail("page wash local start is -btn origin so the button DC continues PaintMain");
+        }
+        if (wash_end.x != 880 || wash_end.y != -8) {
+            return Fail("page wash local end is parent_w-btn_x, -btn_y (1280-400=880)");
+        }
+        if (bloom_end.x != 240 || bloom_end.y != 258) {
+            return Fail("page bloom local end is parent/2,/3 minus btn (800/3=266, 266-8=258)");
+        }
+    }
+    if (kOnSkyTextArgb != 0xFF16191Fu || kOnSkyMutedArgb != 0xFF525866u) {
+        return Fail("brand text on Quiet Plate is dark #16191F / secondary #525866");
+    }
+    if (kTableHeaderBgArgb != 0xFFEEF0F4u || kTableStripeArgb != 0xFFFAFBFCu
+        || kTableSelectArgb != 0xFFE8EFFFu) {
+        return Fail("table header/stripe/select are Quiet Plate #EEF0F4 / #FAFBFC / #E8EFFF");
+    }
+    if (kStatusBannerFillArgb != 0xFFFFF4C4u || kStatusBannerTextArgb != 0xFF7A4E00u) {
+        return Fail("update status banner is yellow #FFF4C4 / #7A4E00");
+    }
+    if (WindowBgColorRef() != 0x00F9F7F6u) {
+        return Fail("window brush COLORREF is Quiet Plate #F6F7F9");
     }
     if (kCardRadius != 22 || kDockRadius != 16 || kToolbarRadius != 16 || kResetBtnRadius != 14) {
         return Fail("card 22 / dock 16 / toolbar 16 / reset 14");
@@ -179,7 +221,7 @@ int main() {
         return Fail("전국|경북 is one 12px shell matching combo, not two overlapping pills");
     }
     if (std::fabs(kComboStrokeW - 1.2f) > 0.01f || kComboStrokeArgb != kStrokeStrongArgb) {
-        return Fail("분석 범위 cell stroke is 1.2 #BAC6D5 so the 칸 edge is visible");
+        return Fail("분석 범위 cell stroke is 1.2 #9CCBE6 so the 칸 edge is visible");
     }
     if (kCheckSize != 18 || kCheckRadius != 6 || kCheckGap != 10) {
         return Fail("업체 checkbox is 18x18 radius 6 gap 10");
@@ -187,15 +229,15 @@ int main() {
     if (kCardPad != 10 || kCardInner != 2 || kCardRadius != 22 || kCardStrokeW != 1.0f) {
         return Fail("map card pad 10 inner 2 radius 22 stroke 1");
     }
-    if (kCardFillArgb != 0xFFFFFFFFu || kCardStrokeArgb != 0xFFD8E0EAu || kCardShadowArgb != 0x14000000u
+    if (kCardFillArgb != 0xFFFFFFFFu || kCardStrokeArgb != 0xFFE2E5ECu || kCardShadowArgb != 0x14000000u
         || kCardShadowDepth != 4 || kCardShadowBlur != 22) {
-        return Fail("map card fill #FFFFFF stroke #D8E0EA shadow 8% black depth 4 blur 22");
+        return Fail("map card fill #FFFFFF stroke #E2E5EC shadow 8% black depth 4 blur 22");
     }
     if (kDockPadX != 14 || kDockPadY != 10 || kDockRadius != 16 || kEyebrowGap != 6) {
         return Fail("dock pad 14,10 radius 16 eyebrow gap 6");
     }
-    if (kAccentStrongArgb != 0xFFB45309u || std::fabs(kFontEyebrow - 11.0f) > 0.01f) {
-        return Fail("eyebrow 분석 범위 is 11px #B45309");
+    if (kAccentStrongArgb != 0xFF1749CCu || std::fabs(kFontEyebrow - 11.0f) > 0.01f) {
+        return Fail("eyebrow 분석 범위 is 11px #1749CC");
     }
     if (kResetShadowDepth != 4 || kResetShadowBlur != 16 || kToolbarShadowDepth != 6 || kToolbarShadowBlur != 22
         || kToolbarPad != 8 || kResetBtnRadius != 14 || kToolbarRadius != 16) {
@@ -431,18 +473,18 @@ int main() {
         return Fail("전체 uses ButtonBaseStyle 13px");
     }
     const auto primary = MainButtonLook(MainButtonKind::Primary);
-    if (!primary.gradient || primary.fill0 != 0xFFF59E0Bu || primary.fill2 != 0xFFB45309u
-        || primary.text != 0xFFFFFFFFu || primary.border != 0xFFB45309u) {
-        return Fail("업데이트 is AccentGradient #F59E0B→#B45309 white text");
+    if (!primary.gradient || primary.fill0 != 0xFF1F5EFFu || primary.fill1 != 0xFF1F5EFFu
+        || primary.fill2 != 0xFF1749CCu || primary.text != 0xFFFFFFFFu || primary.border != 0xFF1749CCu) {
+        return Fail("업데이트 is Trowel blue #1F5EFF→#1749CC white text");
     }
     const auto secondary = MainButtonLook(MainButtonKind::Secondary);
-    if (secondary.gradient || secondary.fill0 != 0xFFFFFFFFu || secondary.border != 0xFFD8E0EAu
-        || secondary.text != 0xFF111111u || secondary.transparent) {
-        return Fail("차트 화면 is Secondary white / #D8E0EA / #111111");
+    if (secondary.gradient || secondary.fill0 != 0xFFFFFFFFu || secondary.border != 0xFFCBD0DCu
+        || secondary.text != 0xFF16191Fu || secondary.transparent) {
+        return Fail("차트 화면 is Secondary white / #CBD0DC / #16191F");
     }
     const auto ghost = MainButtonLook(MainButtonKind::Ghost);
-    if (!ghost.transparent || ghost.border != 0x00000000u || ghost.text != 0xFF4B5563u) {
-        return Fail("중지 idle and 전체 are Ghost: no border, TextMuted #4B5563");
+    if (!ghost.transparent || ghost.border != 0x00000000u || ghost.text != 0xFF525866u) {
+        return Fail("중지 idle and 전체 are Ghost: no border, #525866");
     }
     const auto danger = MainButtonLook(MainButtonKind::Danger);
     if (danger.fill0 != 0xFFFEF2F2u || danger.text != 0xFFDC2626u || danger.border != 0xFFF5C2C7u) {
@@ -467,8 +509,9 @@ int main() {
     if (kMainWindowMinW != 1280 || kMainWindowMinH != 800 || MainTableSlotH(800) != 160) {
         return Fail("mosaic first page is 1280x800 with table 20% (160)");
     }
-    if (kMosaicYTickN != 4 || kMosaicAxisPad != 28 || kMosaicGridArgb != 0xFFE2E8F0u) {
-        return Fail("mosaic charts use 4 Y ticks, 28px axis pad, #E2E8F0 grid");
+    if (kMosaicYTickN != 4 || kMosaicAxisPad != 28 || kMosaicGridArgb != 0xFFE2E5ECu
+        || kMosaicAxisArgb != 0xFFCBD0DCu) {
+        return Fail("mosaic charts use 4 Y ticks, 28px axis pad, Quiet Plate grid");
     }
     if (std::fabs(MosaicYTick(0, 12, 0) - 12) > 1e-9 || std::fabs(MosaicYTick(0, 12, 3) - 0) > 1e-9
         || std::fabs(MosaicYTick(99.50, 100.10, 0) - 100.10) > 1e-9) {
