@@ -2,6 +2,11 @@
 
 #include <winsqlite/winsqlite3.h>
 
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
@@ -374,6 +379,108 @@ int main(int argc, char** argv) {
         }
         if (!has_2025) {
             return Fail("merged portable sqlite should contain the collect-period 2025 notices");
+        }
+    }
+
+    const auto hangul = dir / L"동국문화유산연구원";
+    std::filesystem::create_directories(hangul);
+    const auto hangul_exe = hangul / "nara_award_collect.exe";
+    const auto hangul_jsonl = hangul / "cpp_award_collect.jsonl";
+    const auto hangul_env = hangul / ".env";
+    {
+        std::ofstream out(hangul_exe, std::ios::binary);
+        out << "x";
+    }
+    {
+        std::ofstream out(hangul_env);
+        out << "SERVICE_KEY=test\n";
+    }
+    if (!nara::PathExistsWide(hangul_exe) || !nara::PathExistsWide(hangul_env)) {
+        return Fail("PathExistsWide must see collect exe and .env in a 한글 folder");
+    }
+    const auto acp = hangul_exe.string();
+    wchar_t as_utf8[MAX_PATH] = {};
+    MultiByteToWideChar(CP_UTF8, 0, acp.c_str(), -1, as_utf8, MAX_PATH);
+    if (GetFileAttributesW(as_utf8) != INVALID_FILE_ATTRIBUTES) {
+        return Fail("ACP path decoded as UTF-8 must not be treated as a valid collect path");
+    }
+    const auto gap_w =
+        nara::AwardCollectGapCommandLineW(hangul_exe, "2026-08-27", "2026-09-07", hangul_jsonl, hangul_env);
+    if (gap_w.find(L"동국문화유산연구원") == std::wstring::npos
+        || gap_w.find(L"--from-date 2026-08-27") == std::wstring::npos
+        || gap_w.find(L"--to-date 2026-09-07") == std::wstring::npos) {
+        return Fail("wide gap command must keep the 한글 folder and the missing-day window");
+    }
+
+    // M3: Lossless 25-column persistence + RepairMissingAdjustRatesInStore + UpcomingBids table
+    {
+        const auto rich_db = dir / "rich.db";
+        const auto rich_jsonl = dir / "rich.jsonl";
+        if (!nara::EnsureParticipantsSchema(rich_db)) {
+            return Fail("rich schema");
+        }
+        {
+            std::ofstream out(rich_jsonl, std::ios::binary);
+            const char* corps[] = {
+                "충청문화재연구원",
+                "백제문화재연구원",
+                "금강문화재연구원",
+                "한울문화재연구원",
+                "고대문화재연구원",
+                "동국문화재연구원",
+            };
+            for (int i = 0; i < 6; ++i) {
+                const bool missing_rate = (i == 5);
+                out << "{\"notice_number\":\"R26BK01676511-001\""
+                    << ",\"notice_name\":\"부여 가림성 발굴조사 용역\""
+                    << ",\"ordering_agency\":\"부여군\""
+                    << ",\"region\":\"전국\""
+                    << ",\"open_date\":\"2026-08-18 11:00:00\""
+                    << ",\"rank\":" << (i + 1)
+                    << ",\"company_name\":\"" << corps[i] << "\""
+                    << ",\"biz_no\":\"505-82-0000" << (i + 1) << "\""
+                    << ",\"bid_amount\":" << (i == 5 ? 86441380 : 86614880)
+                    << ",\"bid_rate_vs_estimate\":" << (i == 5 ? 87.569 : 87.745);
+                if (!missing_rate) {
+                    out << ",\"adjust_rate\":99.85000";
+                }
+                out << ",\"lower_rate\":87.745}\n";
+            }
+        }
+        const auto rich_merged = nara::MergeJsonlIntoStore(rich_jsonl, rich_db);
+        if (!rich_merged.ok || rich_merged.notices != 1) {
+            return Fail("rich jsonl merge must succeed");
+        }
+        const int repaired = nara::RepairMissingAdjustRatesInStore(rich_db);
+        if (repaired < 0) {
+            return Fail("RepairMissingAdjustRatesInStore must succeed");
+        }
+        const auto rich_rows = nara::LoadParticipants(rich_db);
+        bool found_dongguk_repaired = false;
+        for (const auto& r : rich_rows) {
+            if (r.notice_number == "R26BK01676511-001" && r.company_name.find("동국") != std::string::npos) {
+                if (r.biz_no == "505-82-00006" && r.bid_amount && *r.bid_amount == 86441380
+                    && r.adjust_rate && *r.adjust_rate > 99.60 && *r.adjust_rate < 99.85) {
+                    found_dongguk_repaired = true;
+                }
+            }
+        }
+        if (!found_dongguk_repaired) {
+            return Fail("MergeJsonlIntoStore + RepairMissingAdjustRatesInStore must preserve biz_no/bid_amount and restore NULL adjust_rate");
+        }
+
+        std::vector<nara::UpcomingBidNotice> upcoming = {
+            {"한국문화유산협회", "KAAH-69", "화성 남양성지 문화유산 시굴조사 용역", "한국문화유산협회", "전국", "2026-10-28 14:00", "2026-10-28 10:00", 88500000.0, 80454545.0},
+            {"국방전자조달", "2026-국방-001", "육군 OO부대 매장유산 지표조사 용역", "육군제1234부대", "경북", "2026-10-25 11:00", "2026-10-25 10:00", 45000000.0, std::nullopt},
+        };
+        if (!nara::SaveUpcomingBidsToStore(upcoming, rich_db)) {
+            return Fail("SaveUpcomingBidsToStore must store multi-source upcoming bids");
+        }
+        const auto loaded_all = nara::LoadUpcomingBidsFromStore(rich_db, "전국");
+        const auto loaded_gb = nara::LoadUpcomingBidsFromStore(rich_db, "경북");
+        if (loaded_all.size() != 1 || loaded_all[0].notice_number != "KAAH-69"
+            || loaded_gb.size() != 1 || loaded_gb[0].notice_number != "2026-국방-001") {
+            return Fail("LoadUpcomingBidsFromStore must separate 전국 and 경북 upcoming bids");
         }
     }
 

@@ -146,6 +146,14 @@ void BindOptDouble(sqlite3_stmt* stmt, int index, const std::optional<double>& v
     }
 }
 
+void BindOptInt64(sqlite3_stmt* stmt, int index, const std::optional<long long>& value) {
+    if (value) {
+        sqlite3_bind_int64(stmt, index, *value);
+    } else {
+        sqlite3_bind_null(stmt, index);
+    }
+}
+
 std::string NowStamp() {
     std::time_t now = std::time(nullptr);
     std::tm local{};
@@ -241,8 +249,26 @@ std::vector<ParticipantRow> LoadJsonlRows(const std::filesystem::path& jsonl_pat
         row.open_date = JsonString(line, "open_date");
         std::replace(row.open_date.begin(), row.open_date.end(), '/', '-');
         row.lower_rate = JsonNumber(line, "lower_rate");
+        row.biz_no = JsonString(line, "biz_no");
+        row.bid_date = JsonString(line, "bid_date");
         const auto bid_amount = JsonNumber(line, "bid_amount");
+        if (bid_amount) {
+            row.bid_amount = static_cast<long long>(std::llround(*bid_amount));
+        }
         const auto base_amount = JsonNumber(line, "base_amount");
+        if (base_amount) {
+            row.base_amount = static_cast<long long>(std::llround(*base_amount));
+        }
+        const auto estimate_price = JsonNumber(line, "estimate_price");
+        if (estimate_price) {
+            row.estimate_price = static_cast<long long>(std::llround(*estimate_price));
+        }
+        const auto lower_limit_price = JsonNumber(line, "lower_limit_price");
+        if (lower_limit_price) {
+            row.lower_limit_price = static_cast<long long>(std::llround(*lower_limit_price));
+        }
+        row.bid_rate_vs_estimate = JsonNumber(line, "bid_rate_vs_estimate");
+        row.price_adjustment_rate = JsonNumber(line, "price_adjustment_rate");
         const auto raw_rate = JsonNumber(line, "adjust_rate");
         if (raw_rate && *raw_rate >= 80.0 && *raw_rate <= 95.0) {
             row.bid_rate_vs_base = raw_rate;
@@ -261,7 +287,10 @@ std::vector<ParticipantRow> LoadJsonlRows(const std::filesystem::path& jsonl_pat
 }  // namespace
 
 std::string WorkspaceDashboardDbPath() {
-    return kWorkspaceDashboardDb;
+    if (std::filesystem::exists(kWorkspaceDashboardDb)) {
+        return kWorkspaceDashboardDb;
+    }
+    return DefaultDashboardDbPath();
 }
 
 std::string DefaultAppDir() {
@@ -326,6 +355,42 @@ std::string AwardCollectGapCommandLine(
            + QuoteArg(jsonl_path) + " --env " + QuoteArg(env_path);
 }
 
+namespace {
+
+std::wstring QuoteArgW(const std::filesystem::path& path) {
+    return L"\"" + path.lexically_normal().wstring() + L"\"";
+}
+
+std::wstring AsciiWide(const std::string& value) {
+    return std::wstring(value.begin(), value.end());
+}
+
+}  // namespace
+
+std::wstring AwardCollectCommandLineW(
+    const std::filesystem::path& exe_path,
+    const std::string& start_month,
+    const std::string& end_month,
+    const std::filesystem::path& jsonl_path,
+    const std::filesystem::path& env_path) {
+    return QuoteArgW(exe_path) + L" --start-month " + AsciiWide(start_month) + L" --end-month " + AsciiWide(end_month)
+           + L" --out " + QuoteArgW(jsonl_path) + L" --env " + QuoteArgW(env_path);
+}
+
+std::wstring AwardCollectGapCommandLineW(
+    const std::filesystem::path& exe_path,
+    const std::string& from_date,
+    const std::string& to_date,
+    const std::filesystem::path& jsonl_path,
+    const std::filesystem::path& env_path) {
+    return QuoteArgW(exe_path) + L" --from-date " + AsciiWide(from_date) + L" --to-date " + AsciiWide(to_date)
+           + L" --out " + QuoteArgW(jsonl_path) + L" --env " + QuoteArgW(env_path);
+}
+
+bool PathExistsWide(const std::filesystem::path& path) {
+    return GetFileAttributesW(path.lexically_normal().c_str()) != INVALID_FILE_ATTRIBUTES;
+}
+
 std::string MaxParticipantOpenDay(const std::filesystem::path& db_path) {
     sqlite3* db = nullptr;
     if (sqlite3_open(PathUtf8(db_path).c_str(), &db) != SQLITE_OK) {
@@ -369,6 +434,9 @@ bool EnsureParticipantsSchema(const std::filesystem::path& db_path) {
     }
     const bool ok = ExecSql(db, kUniqueNoticeCompanySql, nullptr);
     sqlite3_close(db);
+    if (ok) {
+        RepairMissingAdjustRatesInStore(db_path);
+    }
     return ok;
 }
 
@@ -529,18 +597,22 @@ JsonlMergeResult MergeJsonlIntoStore(
             sqlite3_bind_text(ins, 7, row.company_name.c_str(), -1, SQLITE_TRANSIENT);
             sqlite3_bind_text(ins, 8, row.normalized_company_name.c_str(), -1, SQLITE_TRANSIENT);
             sqlite3_bind_text(ins, 9, row.open_date.c_str(), -1, SQLITE_TRANSIENT);
-            sqlite3_bind_null(ins, 10);
-            sqlite3_bind_null(ins, 11);
-            sqlite3_bind_null(ins, 12);
+            if (!row.bid_date.empty()) {
+                sqlite3_bind_text(ins, 10, row.bid_date.c_str(), -1, SQLITE_TRANSIENT);
+            } else {
+                sqlite3_bind_null(ins, 10);
+            }
+            BindOptInt64(ins, 11, row.bid_amount);
+            BindOptDouble(ins, 12, row.bid_rate_vs_estimate);
             BindOptDouble(ins, 13, row.bid_rate_vs_base);
             BindOptDouble(ins, 14, row.adjust_rate);
-            sqlite3_bind_null(ins, 15);
-            sqlite3_bind_null(ins, 16);
-            sqlite3_bind_null(ins, 17);
-            sqlite3_bind_null(ins, 18);
+            BindOptInt64(ins, 15, row.estimate_price);
+            BindOptInt64(ins, 16, row.lower_limit_price);
+            BindOptInt64(ins, 17, row.base_amount);
+            BindOptDouble(ins, 18, row.price_adjustment_rate);
             BindOptDouble(ins, 19, row.lower_rate);
             sqlite3_bind_null(ins, 20);
-            sqlite3_bind_text(ins, 21, "", -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(ins, 21, row.biz_no.c_str(), -1, SQLITE_TRANSIENT);
             sqlite3_bind_text(ins, 22, "", -1, SQLITE_TRANSIENT);
             sqlite3_bind_text(ins, 23, "", -1, SQLITE_TRANSIENT);
             sqlite3_bind_int(ins, 24, row.is_awarded ? 1 : 0);
@@ -563,10 +635,215 @@ JsonlMergeResult MergeJsonlIntoStore(
         return result;
     }
     sqlite3_close(db);
+    RepairMissingAdjustRatesInStore(db_path);
     result.ok = true;
     result.notices = static_cast<int>(by_notice.size());
     result.rows = row_count;
     return result;
+}
+
+int RepairMissingAdjustRatesInStore(const std::filesystem::path& db_path) {
+    sqlite3* db = nullptr;
+    if (sqlite3_open(PathUtf8(db_path).c_str(), &db) != SQLITE_OK) {
+        if (db) {
+            sqlite3_close(db);
+        }
+        return -1;
+    }
+    struct NullCandidate {
+        long long rowid = 0;
+        std::string notice_number;
+        std::optional<double> bid_amount;
+        std::optional<double> bid_rate;
+        std::optional<double> adjust_rate;
+        int rank = 0;
+    };
+    std::map<std::string, std::vector<NullCandidate>> by_notice;
+    sqlite3_stmt* sel = nullptr;
+    const char* sel_sql =
+        "SELECT rowid, notice_number, bid_amount, COALESCE(bid_rate_vs_estimate, bid_rate_vs_base), adjust_rate, rank "
+        "FROM participants WHERE notice_number IN ("
+        "SELECT DISTINCT notice_number FROM participants WHERE adjust_rate IS NULL);";
+    if (sqlite3_prepare_v2(db, sel_sql, -1, &sel, nullptr) == SQLITE_OK) {
+        while (sqlite3_step(sel) == SQLITE_ROW) {
+            NullCandidate c;
+            c.rowid = sqlite3_column_int64(sel, 0);
+            c.notice_number = ColumnText(sel, 1);
+            c.bid_amount = ColumnDouble(sel, 2);
+            c.bid_rate = ColumnDouble(sel, 3);
+            c.adjust_rate = ColumnDouble(sel, 4);
+            c.rank = sqlite3_column_int(sel, 5);
+            by_notice[c.notice_number].push_back(std::move(c));
+        }
+        sqlite3_finalize(sel);
+    }
+    if (by_notice.empty()) {
+        sqlite3_close(db);
+        return 0;
+    }
+
+    int updated = 0;
+    ExecSql(db, "BEGIN;", nullptr);
+    sqlite3_stmt* upd = nullptr;
+    const char* upd_sql = "UPDATE participants SET adjust_rate=? WHERE rowid=?;";
+    if (sqlite3_prepare_v2(db, upd_sql, -1, &upd, nullptr) == SQLITE_OK) {
+        for (auto& [notice, rows] : by_notice) {
+            std::optional<double> anchor_rate;
+            std::optional<double> anchor_amount;
+            std::optional<double> anchor_bid_rate;
+            for (const auto& r : rows) {
+                if (r.adjust_rate && *r.adjust_rate >= 95.0 && *r.adjust_rate <= 105.0) {
+                    if ((r.bid_amount && *r.bid_amount > 0.0) || (r.bid_rate && *r.bid_rate > 0.0)) {
+                        anchor_rate = r.adjust_rate;
+                        anchor_amount = r.bid_amount;
+                        anchor_bid_rate = r.bid_rate;
+                        if (r.rank == 1) {
+                            break;
+                        }
+                    }
+                }
+            }
+            if (!anchor_rate) {
+                continue;
+            }
+            for (const auto& r : rows) {
+                if (r.adjust_rate) {
+                    continue;
+                }
+                std::optional<double> inferred;
+                if (r.bid_amount && anchor_amount && *anchor_amount > 0.0) {
+                    inferred = std::round(((*r.bid_amount / *anchor_amount) * *anchor_rate) * 100000.0) / 100000.0;
+                } else if (r.bid_rate && anchor_bid_rate && *anchor_bid_rate > 0.0) {
+                    inferred = std::round(((*r.bid_rate / *anchor_bid_rate) * *anchor_rate) * 100000.0) / 100000.0;
+                }
+                if (inferred) {
+                    sqlite3_reset(upd);
+                    sqlite3_bind_double(upd, 1, *inferred);
+                    sqlite3_bind_int64(upd, 2, r.rowid);
+                    if (sqlite3_step(upd) == SQLITE_DONE) {
+                        ++updated;
+                    }
+                }
+            }
+        }
+        sqlite3_finalize(upd);
+    }
+    ExecSql(db, "COMMIT;", nullptr);
+    sqlite3_close(db);
+    return updated;
+}
+
+namespace {
+
+const char* kCreateUpcomingBidsSql =
+    "CREATE TABLE IF NOT EXISTS upcoming_bids ("
+    "source TEXT NOT NULL,"
+    "notice_number TEXT NOT NULL,"
+    "notice_name TEXT NOT NULL,"
+    "ordering_agency TEXT NOT NULL,"
+    "region TEXT NOT NULL,"
+    "open_date TEXT NOT NULL,"
+    "deadline_date TEXT NULL,"
+    "base_amount REAL NULL,"
+    "estimate_price REAL NULL,"
+    "updated_at TEXT NOT NULL,"
+    "PRIMARY KEY(source, notice_number)"
+    ");";
+
+}  // namespace
+
+bool SaveUpcomingBidsToStore(
+    const std::vector<UpcomingBidNotice>& bids,
+    const std::filesystem::path& db_path) {
+    std::error_code ec;
+    std::filesystem::create_directories(db_path.parent_path(), ec);
+    sqlite3* db = nullptr;
+    if (sqlite3_open(PathUtf8(db_path).c_str(), &db) != SQLITE_OK) {
+        if (db) {
+            sqlite3_close(db);
+        }
+        return false;
+    }
+    if (!ExecSql(db, kCreateUpcomingBidsSql, nullptr) || !ExecSql(db, "BEGIN;", nullptr)) {
+        sqlite3_close(db);
+        return false;
+    }
+    sqlite3_stmt* ins = nullptr;
+    const char* sql =
+        "INSERT OR REPLACE INTO upcoming_bids("
+        "source, notice_number, notice_name, ordering_agency, region, "
+        "open_date, deadline_date, base_amount, estimate_price, updated_at)"
+        "VALUES(?,?,?,?,?,?,?,?,?,?);";
+    if (sqlite3_prepare_v2(db, sql, -1, &ins, nullptr) != SQLITE_OK) {
+        sqlite3_close(db);
+        return false;
+    }
+    const auto stamp = NowStamp();
+    for (const auto& b : bids) {
+        const auto reg = NormalizeStoredRegion(b.region);
+        if (reg != "전국" && reg != "경북") {
+            continue;
+        }
+        sqlite3_reset(ins);
+        sqlite3_bind_text(ins, 1, b.source.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(ins, 2, b.notice_number.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(ins, 3, b.notice_name.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(ins, 4, b.agency.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(ins, 5, reg.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(ins, 6, b.open_date.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(ins, 7, b.deadline_date.c_str(), -1, SQLITE_TRANSIENT);
+        BindOptDouble(ins, 8, b.base_amount);
+        BindOptDouble(ins, 9, b.estimate_price);
+        sqlite3_bind_text(ins, 10, stamp.c_str(), -1, SQLITE_TRANSIENT);
+        if (sqlite3_step(ins) != SQLITE_DONE) {
+            sqlite3_finalize(ins);
+            sqlite3_close(db);
+            return false;
+        }
+    }
+    sqlite3_finalize(ins);
+    const bool ok = ExecSql(db, "COMMIT;", nullptr);
+    sqlite3_close(db);
+    return ok;
+}
+
+std::vector<UpcomingBidNotice> LoadUpcomingBidsFromStore(
+    const std::filesystem::path& db_path,
+    const std::string& region_filter) {
+    std::vector<UpcomingBidNotice> out;
+    sqlite3* db = nullptr;
+    if (sqlite3_open_v2(PathUtf8(db_path).c_str(), &db, SQLITE_OPEN_READONLY, nullptr) != SQLITE_OK) {
+        if (db) {
+            sqlite3_close(db);
+        }
+        return out;
+    }
+    sqlite3_stmt* stmt = nullptr;
+    const char* sql =
+        "SELECT source, notice_number, notice_name, ordering_agency, region, "
+        "open_date, deadline_date, base_amount, estimate_price "
+        "FROM upcoming_bids ORDER BY open_date DESC, notice_number DESC;";
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            UpcomingBidNotice b;
+            b.source = ColumnText(stmt, 0);
+            b.notice_number = ColumnText(stmt, 1);
+            b.notice_name = ColumnText(stmt, 2);
+            b.agency = ColumnText(stmt, 3);
+            b.region = ColumnText(stmt, 4);
+            b.open_date = ColumnText(stmt, 5);
+            b.deadline_date = ColumnText(stmt, 6);
+            b.base_amount = ColumnDouble(stmt, 7);
+            b.estimate_price = ColumnDouble(stmt, 8);
+            if (!region_filter.empty() && b.region != region_filter) {
+                continue;
+            }
+            out.push_back(std::move(b));
+        }
+        sqlite3_finalize(stmt);
+    }
+    sqlite3_close(db);
+    return out;
 }
 
 }  // namespace nara
