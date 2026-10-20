@@ -221,7 +221,7 @@ int main() {
         return Fail("전국|경북 is one 12px shell matching combo, not two overlapping pills");
     }
     if (std::fabs(kComboStrokeW - 1.2f) > 0.01f || kComboStrokeArgb != kStrokeStrongArgb) {
-        return Fail("분석 범위 cell stroke is 1.2 #9CCBE6 so the 칸 edge is visible");
+        return Fail("분석 범위 cell stroke is 1.2 #CBD0DC so the 칸 edge is visible");
     }
     if (kCheckSize != 18 || kCheckRadius != 6 || kCheckGap != 10) {
         return Fail("업체 checkbox is 18x18 radius 6 gap 10");

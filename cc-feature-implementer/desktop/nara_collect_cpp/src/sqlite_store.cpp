@@ -711,9 +711,9 @@ int RepairMissingAdjustRatesInStore(const std::filesystem::path& db_path) {
                     continue;
                 }
                 std::optional<double> inferred;
-                if (r.bid_amount && anchor_amount && *anchor_amount > 0.0) {
+                if (r.bid_amount && *r.bid_amount > 0.0 && anchor_amount && *anchor_amount > 0.0) {
                     inferred = std::round(((*r.bid_amount / *anchor_amount) * *anchor_rate) * 100000.0) / 100000.0;
-                } else if (r.bid_rate && anchor_bid_rate && *anchor_bid_rate > 0.0) {
+                } else if (r.bid_rate && *r.bid_rate > 0.0 && anchor_bid_rate && *anchor_bid_rate > 0.0) {
                     inferred = std::round(((*r.bid_rate / *anchor_bid_rate) * *anchor_rate) * 100000.0) / 100000.0;
                 }
                 if (inferred) {

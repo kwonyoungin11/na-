@@ -513,7 +513,7 @@ void InferNoticeCompanyAdjustRates(AwardNotice& notice) {
         if (!company.adjust_rate || *company.adjust_rate < 95.0 || *company.adjust_rate > 105.0) {
             continue;
         }
-        if (company.bid_amount && *company.bid_amount > 0.0) {
+        if ((company.bid_amount && *company.bid_amount > 0.0) || (company.bid_rate && *company.bid_rate > 0.0)) {
             anchor_rate = company.adjust_rate;
             anchor_amount = company.bid_amount;
             anchor_bid_rate = company.bid_rate;
@@ -529,10 +529,10 @@ void InferNoticeCompanyAdjustRates(AwardNotice& notice) {
         if (company.adjust_rate) {
             continue;
         }
-        if (company.bid_amount && anchor_amount && *anchor_amount > 0.0) {
+        if (company.bid_amount && *company.bid_amount > 0.0 && anchor_amount && *anchor_amount > 0.0) {
             company.adjust_rate =
                 std::round(((*company.bid_amount / *anchor_amount) * *anchor_rate) * 100000.0) / 100000.0;
-        } else if (company.bid_rate && anchor_bid_rate && *anchor_bid_rate > 0.0) {
+        } else if (company.bid_rate && *company.bid_rate > 0.0 && anchor_bid_rate && *anchor_bid_rate > 0.0) {
             company.adjust_rate =
                 std::round(((*company.bid_rate / *anchor_bid_rate) * *anchor_rate) * 100000.0) / 100000.0;
         }
@@ -577,9 +577,15 @@ std::string StripHtmlTagsAndTrim(const std::string& html) {
 
 std::optional<double> ParseKoreanMoney(const std::string& text) {
     std::string digits;
+    bool started = false;
     for (unsigned char ch : text) {
         if (std::isdigit(ch) || ch == '.') {
             digits.push_back(static_cast<char>(ch));
+            started = true;
+        } else if (ch == ',' && started) {
+            continue;
+        } else if (started) {
+            break;
         }
     }
     if (digits.empty()) {
@@ -633,6 +639,9 @@ std::vector<UpcomingBidNotice> ParseD2bUpcomingBids(const std::string& json) {
         bid.notice_number = JsonString(item, "bidNtceNo");
         if (bid.notice_number.empty()) {
             bid.notice_number = JsonString(item, "pblancNo");
+        }
+        if (bid.notice_number.empty()) {
+            continue;
         }
         bid.notice_name = title;
         bid.agency = ResolveOrderingAgency(JsonString(item, "dminsttNm"), JsonString(item, "ntceInsttNm"));

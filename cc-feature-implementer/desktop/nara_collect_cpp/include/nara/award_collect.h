@@ -79,8 +79,6 @@ MissingCollectPlan PlanMissingCollect(
     const std::string& stored_max_open_day,
     const std::string& today,
     int lookback_months = kCollectLookbackMonths);
-std::string CollectCoverFromDay(const std::string& stored_all, const std::string& stored_gb);
-bool ShouldAutoCollectOnLaunch(const std::string& stored_max_open_day, const std::string& today);
 CollectWindow LookbackCollectMonthSpan(int year, int month, int lookback_months = kCollectLookbackMonths);
 std::vector<std::string> CollectMonths(const std::string& start_month, const std::string& end_month);
 std::vector<CollectWindow> CollectThreeMonthWindows(const std::string& start_month, const std::string& end_month);
