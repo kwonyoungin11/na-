@@ -371,7 +371,10 @@ int main(int argc, char** argv) {
         }
     };
     if (gap) {
-        run_pages(nara::YmdToInqryBegin(from_date), nara::YmdToInqryEnd(to_date), from_date + "~" + to_date);
+        for (const auto& slice : nara::SplitDateGapByMonth(from_date, to_date)) {
+            run_pages(nara::YmdToInqryBegin(slice.from_date), nara::YmdToInqryEnd(slice.to_date),
+                      slice.from_date + "~" + slice.to_date);
+        }
     } else {
         for (const auto& month : months) {
             run_pages(MonthStart(month), MonthEnd(month), month);

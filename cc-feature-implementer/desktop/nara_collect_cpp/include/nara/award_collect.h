@@ -75,10 +75,16 @@ inline std::string YmdToInqryEnd(const std::string& ymd) {
     }
     return ymd.substr(0, 4) + ymd.substr(5, 2) + ymd.substr(8, 2) + "2359";
 }
+struct DateGapSlice {
+    std::string from_date;
+    std::string to_date;
+};
+
 MissingCollectPlan PlanMissingCollect(
     const std::string& stored_max_open_day,
     const std::string& today,
     int lookback_months = kCollectLookbackMonths);
+std::vector<DateGapSlice> SplitDateGapByMonth(const std::string& from_date, const std::string& to_date);
 CollectWindow LookbackCollectMonthSpan(int year, int month, int lookback_months = kCollectLookbackMonths);
 std::vector<std::string> CollectMonths(const std::string& start_month, const std::string& end_month);
 std::vector<CollectWindow> CollectThreeMonthWindows(const std::string& start_month, const std::string& end_month);

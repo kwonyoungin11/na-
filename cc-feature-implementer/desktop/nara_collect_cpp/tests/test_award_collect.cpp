@@ -344,6 +344,19 @@ int main() {
         return Fail("ParseKaahNoticeDetailHtml should extract notice_name, base_amount, open_date");
     }
 
+    // M2-5: SplitDateGapByMonth splits multi-month date gaps so OpenAPI never returns resultCode=07
+    const auto slices = nara::SplitDateGapByMonth("2026-08-26", "2026-10-20");
+    if (slices.size() != 3
+        || slices[0].from_date != "2026-08-26" || slices[0].to_date != "2026-08-31"
+        || slices[1].from_date != "2026-09-01" || slices[1].to_date != "2026-09-30"
+        || slices[2].from_date != "2026-10-01" || slices[2].to_date != "2026-10-20") {
+        return Fail("SplitDateGapByMonth must split 2026-08-26~2026-10-20 into 3 single-month slices");
+    }
+    const auto same_month = nara::SplitDateGapByMonth("2026-08-26", "2026-08-28");
+    if (same_month.size() != 1 || same_month[0].from_date != "2026-08-26" || same_month[0].to_date != "2026-08-28") {
+        return Fail("SplitDateGapByMonth keeps same-month range as 1 slice");
+    }
+
     std::cerr << "ok award collect rules\n";
     return 0;
 }

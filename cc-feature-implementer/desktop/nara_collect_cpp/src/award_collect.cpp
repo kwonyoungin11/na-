@@ -691,4 +691,35 @@ std::optional<UpcomingBidNotice> ParseKaahNoticeDetailHtml(
     return bid;
 }
 
+std::vector<DateGapSlice> SplitDateGapByMonth(const std::string& from_date, const std::string& to_date) {
+    std::vector<DateGapSlice> out;
+    if (from_date.size() < 10 || to_date.size() < 10 || from_date > to_date) {
+        return out;
+    }
+    const auto start_month = from_date.substr(0, 7);
+    const auto end_month = to_date.substr(0, 7);
+    if (start_month == end_month) {
+        out.push_back({from_date, to_date});
+        return out;
+    }
+    const auto months = CollectMonths(start_month, end_month);
+    for (size_t i = 0; i < months.size(); ++i) {
+        const auto& m = months[i];
+        const int y = std::stoi(m.substr(0, 4));
+        const int mo = std::stoi(m.substr(5, 2));
+        const int days_in_month[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+        int last_day = days_in_month[mo - 1];
+        if (mo == 2 && ((y % 4 == 0 && y % 100 != 0) || (y % 400 == 0))) {
+            last_day = 29;
+        }
+        const std::string first_ymd = FormatYmd(y, mo, 1);
+        const std::string last_ymd = FormatYmd(y, mo, last_day);
+        out.push_back({
+            i == 0 ? from_date : first_ymd,
+            i + 1 == months.size() ? to_date : last_ymd,
+        });
+    }
+    return out;
+}
+
 }  // namespace nara
