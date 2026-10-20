@@ -26,3 +26,11 @@ jobs:
 
       - name: Build analytics CLI
         run: dotnet build cc-feature-implementer/desktop/NaraCollector.Analytics.Cli/NaraCollector.Analytics.Cli.csproj --configuration Release --verbosity minimal
+
+      - name: Configure and build C++ desktop & collector
+        run: |
+          cmake -S cc-feature-implementer/desktop/nara_collect_cpp -B cc-feature-implementer/desktop/nara_collect_cpp/build_ci
+          cmake --build cc-feature-implementer/desktop/nara_collect_cpp/build_ci --config Release
+
+      - name: Run C++ CTest suite
+        run: ctest --test-dir cc-feature-implementer/desktop/nara_collect_cpp/build_ci -C Release --output-on-failure

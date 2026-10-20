@@ -107,6 +107,34 @@ int main() {
     if (BuildShortLabel("한울문화재연구원") != "한울") {
         return Fail("BuildShortLabel 한울");
     }
+
+    if (CanonicalizeCompany("(재)세종문화유산재단") != "세종문화유산재단") {
+        std::cerr << "got " << CanonicalizeCompany("(재)세종문화유산재단") << "\n";
+        return Fail("(재)세종문화유산재단 keeps 유산재단");
+    }
+    if (CanonicalizeCompany("재단법인 세계문화유산연구재단") != "세계문화유산연구재단") {
+        return Fail("재단법인 세계문화유산연구재단 keeps 연구재단");
+    }
+    if (CanonicalizeCompany("(재)백제문화재단") != "백제문화재단") {
+        return Fail("(재)백제문화재단 keeps 문화재단");
+    }
+    if (CanonicalizeCompany("(재)경북문화재단 문화유산원") != CanonicalizeCompany("(재)경북문화재단")) {
+        return Fail("(재)경북문화재단 문화유산원 and (재)경북문화재단 must canonicalize to the same identity");
+    }
+    if (CanonicalizeCompany("(재)경기문화재단 경기역사문화유산원") != CanonicalizeCompany("(재)경기역사문화유산원")
+        || CanonicalizeCompany("(재)경기역사문화유산원") != CanonicalizeCompany("경기문화재연구원")) {
+        return Fail("경기역사문화유산원 / 경기문화재연구원 alias merge");
+    }
+    if (CanonicalizeCompany("(재)울산연구원 문화유산연구실") != CanonicalizeCompany("(재)울산연구원")) {
+        return Fail("(재)울산연구원 문화유산연구실 merges with 울산연구원");
+    }
+    if (CanonicalizeCompany("(재)경남연구원 경남학센터") != CanonicalizeCompany("(재)경남연구원")) {
+        return Fail("(재)경남연구원 경남학센터 merges with 경남연구원");
+    }
+    if (CanonicalizeCompany("(재)전남문화재단 국가유산연구소") != CanonicalizeCompany("(재)전라남도문화재단")) {
+        return Fail("(재)전남문화재단 국가유산연구소 merges with 전라남도문화재단");
+    }
+
     std::cerr << "ok company name identity and display map\n";
     return 0;
 }

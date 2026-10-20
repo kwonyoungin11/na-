@@ -141,12 +141,44 @@ std::string CompressedUniqueLabel(const std::vector<std::string>& chars) {
 std::string CanonicalizeCompany(const std::string& name) {
     auto output = TrimCopy(name);
     const std::vector<std::string> removals = {
-        "(재)", "(재단)", "재단법인", "재단", "(주)", "주식회사", "(사)", "사단법인"};
+        "(재)", "(재단)", "재단법인", "(주)", "주식회사", "㈜", "(사)", "사단법인"};
     for (const auto& token : removals) {
         output = ReplaceAllCopy(output, token, "");
     }
     output = TrimCopy(ReplaceAllCopy(output, "  ", " "));
+    if (StartsWithIgnoreAsciiCase(output, "재단 ")) {
+        output = TrimCopy(output.substr(std::string("재단 ").size()));
+    }
     const auto collapsed = ReplaceAllCopy(output, " ", "");
+    if (collapsed == "경북문화재단문화유산원" || collapsed == "경북문화문화유산원" || collapsed == "경북문화"
+        || collapsed == "경북문화재단") {
+        return "경북문화재단 문화유산원";
+    }
+    if (collapsed == "경기문화재단경기역사문화유산원" || collapsed == "경기역사문화유산원"
+        || collapsed == "경기문화재연구원" || collapsed == "경기문화재단경기문화재연구원") {
+        return "경기문화재연구원";
+    }
+    if (collapsed == "울산연구원문화유산연구실" || collapsed == "울산발전연구원"
+        || collapsed == "울산연구원") {
+        return "울산연구원";
+    }
+    if (collapsed == "경남연구원경남학센터" || collapsed == "경남연구원역사문화센터"
+        || collapsed == "경남발전연구원" || collapsed == "경남연구원") {
+        return "경남연구원";
+    }
+    if (collapsed == "전남문화재단국가유산연구소" || collapsed == "전라남도문화재단"
+        || collapsed == "전라남도문화" || collapsed == "전남문화재단") {
+        return "전라남도문화재단";
+    }
+    if (collapsed == "경상북도문화관광공사문화유산원" || collapsed == "경상북도문화관광공사") {
+        return "경상북도문화관광공사";
+    }
+    if (collapsed == "세종문화유산") {
+        return "세종문화유산재단";
+    }
+    if (collapsed == "세계문화유산연구") {
+        return "세계문화유산연구재단";
+    }
     if (collapsed.find("한국문화유산연구원") == std::string::npos) {
         output = ReplaceAllCopy(output, "문화유산연구원", "문화재연구원");
     }
