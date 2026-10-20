@@ -58,6 +58,8 @@ int g_notice_count = 0;
 int g_lookback_months = nara::kCollectLookbackMonths;
 std::string g_status;
 bool g_updating = false;
+bool g_cancel_collect = false;
+HANDLE g_collectProcess = nullptr;
 nara::BandResult g_year_band;
 RECT g_tableRect{};
 float g_dpi_scale = 1.0f;
@@ -85,6 +87,32 @@ void SyncDpi(HWND hwnd) {
 
 int ToPx(int dip) { return nara::chart_theme::DipToPx(dip, g_dpi_scale); }
 int ToDip(int px) { return nara::chart_theme::PxToDip(px, g_dpi_scale); }
+
+nara::chart_theme::PtI ButtonParentDipOrigin(HWND parent, HWND button) {
+    RECT wr{};
+    GetWindowRect(button, &wr);
+    POINT origin{wr.left, wr.top};
+    ScreenToClient(parent, &origin);
+    return {ToDip(origin.x), ToDip(origin.y)};
+}
+
+void PaintPageWashLocal(Gdiplus::Graphics& g, int parent_w, int parent_h, int btn_x, int btn_y, float dip_w,
+                        float dip_h) {
+    using namespace nara::chart_theme;
+    const auto start = PageWashLocalStart(btn_x, btn_y);
+    const auto wash_end = PageWashLocalEnd(parent_w, btn_x, btn_y);
+    const auto bloom_end = PageBloomLocalEnd(parent_w, parent_h, btn_x, btn_y);
+    Gdiplus::LinearGradientBrush page(
+        Gdiplus::Point(start.x, start.y), Gdiplus::Point(wash_end.x, wash_end.y),
+        Gdiplus::Color(static_cast<Gdiplus::ARGB>(kPageBg0Argb)),
+        Gdiplus::Color(static_cast<Gdiplus::ARGB>(kPageBg1Argb)));
+    g.FillRectangle(&page, 0.0f, 0.0f, dip_w, dip_h);
+    Gdiplus::LinearGradientBrush bloom(
+        Gdiplus::Point(start.x, start.y), Gdiplus::Point(bloom_end.x, bloom_end.y),
+        Gdiplus::Color(static_cast<Gdiplus::ARGB>(WithAlpha(kPageBloomArgb, 0x48))),
+        Gdiplus::Color(static_cast<Gdiplus::ARGB>(WithAlpha(kPageBloomArgb, 0x00))));
+    g.FillRectangle(&bloom, 0.0f, 0.0f, dip_w, dip_h);
+}
 
 void ApplyDpiTransform(Gdiplus::Graphics& g) { g.ScaleTransform(g_dpi_scale, g_dpi_scale); }
 
@@ -252,9 +280,8 @@ void ApplyMergedSnapshot(HWND hwnd, const nara::JsonlMergeResult& merged) {
     PumpUi(hwnd);
 }
 
-bool RunCollectCommand(HWND hwnd, const std::string& cmd_utf8, const std::wstring& dir, const std::string& label,
+bool RunCollectCommand(HWND hwnd, const std::wstring& cmd, const std::wstring& dir, const std::string& label,
                        const std::string& jsonl, const std::string& db) {
-    auto cmd = Utf8ToWide(cmd_utf8);
     std::vector<wchar_t> buf(cmd.begin(), cmd.end());
     buf.push_back(0);
     STARTUPINFOW si{};
@@ -267,13 +294,25 @@ bool RunCollectCommand(HWND hwnd, const std::string& cmd_utf8, const std::wstrin
         SetCollectStatus(hwnd, "수집 프로세스 실행 실패 " + label);
         return false;
     }
+    g_collectProcess = pi.hProcess;
     while (WaitForSingleObject(pi.hProcess, 200) == WAIT_TIMEOUT) {
         PumpUi(hwnd);
+        if (g_cancel_collect) {
+            TerminateProcess(pi.hProcess, 1);
+            WaitForSingleObject(pi.hProcess, 2000);
+            break;
+        }
     }
     DWORD code = 1;
     GetExitCodeProcess(pi.hProcess, &code);
     CloseHandle(pi.hThread);
     CloseHandle(pi.hProcess);
+    g_collectProcess = nullptr;
+    if (g_cancel_collect) {
+        SetCollectStatus(hwnd, "수집 중지");
+        ApplyMergedSnapshot(hwnd, nara::MergeJsonlIntoStore(jsonl, db));
+        return false;
+    }
     if (code != 0) {
         SetCollectStatus(hwnd, "수집 실패 " + label + " code=" + std::to_string(static_cast<int>(code)));
         ApplyMergedSnapshot(hwnd, nara::MergeJsonlIntoStore(jsonl, db));
@@ -284,10 +323,23 @@ bool RunCollectCommand(HWND hwnd, const std::string& cmd_utf8, const std::wstrin
     return true;
 }
 
-void OnUpdate(HWND hwnd) {
-    if (g_updating) {
+void OnStop(HWND hwnd) {
+    if (!g_updating) {
         return;
     }
+    g_cancel_collect = true;
+    if (g_collectProcess != nullptr) {
+        TerminateProcess(g_collectProcess, 1);
+    }
+    SetCollectStatus(hwnd, "수집 중지 요청");
+}
+
+void OnUpdate(HWND hwnd) {
+    if (g_updating) {
+        SetCollectStatus(hwnd, "이미 수집 중 · 중지 버튼을 누르세요");
+        return;
+    }
+    g_cancel_collect = false;
     SetUpdatingUi(hwnd, true);
     nara::EnsurePortableDatabase();
     const auto db = nara::DefaultDashboardDbPath();
@@ -296,22 +348,23 @@ void OnUpdate(HWND hwnd) {
     SetCollectStatus(hwnd, stored.empty() ? "업데이트 시작 · 저장된 공고 없음"
                                           : "업데이트 시작 · 저장 최신 개찰 " + stored);
 
-    const auto app_dir = nara::DefaultAppDir();
-    const auto exe = std::filesystem::path(app_dir) / "nara_award_collect.exe";
-    if (GetFileAttributesW(Utf8ToWide(exe.string()).c_str()) == INVALID_FILE_ATTRIBUTES) {
+    const auto app_dir_path = std::filesystem::path(nara::DefaultAppDir());
+    const auto exe = app_dir_path / "nara_award_collect.exe";
+    if (!nara::PathExistsWide(exe)) {
         SetCollectStatus(hwnd, "nara_award_collect.exe 없음");
         SetUpdatingUi(hwnd, false);
         return;
     }
-    const auto env = nara::DefaultServiceKeyEnvPath();
-    if (GetFileAttributesW(Utf8ToWide(env).c_str()) == INVALID_FILE_ATTRIBUTES) {
+    const auto env_path = std::filesystem::path(nara::DefaultServiceKeyEnvPath());
+    if (!nara::PathExistsWide(env_path)) {
         SetCollectStatus(hwnd, "SERVICE_KEY 없음: 앱 폴더에 .env를 두세요");
         SetUpdatingUi(hwnd, false);
         return;
     }
 
+    const auto jsonl_path = std::filesystem::path(jsonl);
     const auto plan = nara::PlanMissingCollect(stored, Today(), g_lookback_months);
-    const auto dir = Utf8ToWide(app_dir);
+    const auto dir = app_dir_path.wstring();
     if (plan.need == nara::CollectNeed::AlreadyCurrent) {
         SetCollectStatus(hwnd, "이미 최신 · 개찰 " + stored + " · 나라장터를 다시 받지 않음");
         SetUpdatingUi(hwnd, false);
@@ -319,7 +372,8 @@ void OnUpdate(HWND hwnd) {
     }
     if (plan.need == nara::CollectNeed::GapFromStore) {
         SetCollectStatus(hwnd, "빠진 구간만 수집 " + plan.from_date + "~" + plan.to_date + " · 나라장터 조회 중");
-        const auto cmd = nara::AwardCollectGapCommandLine(exe.string(), plan.from_date, plan.to_date, jsonl, env);
+        const auto cmd =
+            nara::AwardCollectGapCommandLineW(exe, plan.from_date, plan.to_date, jsonl_path, env_path);
         if (!RunCollectCommand(hwnd, cmd, dir, plan.from_date + "~" + plan.to_date, jsonl, db)) {
             SetUpdatingUi(hwnd, false);
             return;
@@ -336,7 +390,8 @@ void OnUpdate(HWND hwnd) {
         const auto& window = windows[i];
         SetCollectStatus(hwnd, "나라장터 월단위 수집 " + window.start_month + "~" + window.end_month + " ("
                                    + std::to_string(i + 1) + "/" + std::to_string(windows.size()) + ")");
-        const auto cmd = nara::AwardCollectCommandLine(exe.string(), window.start_month, window.end_month, jsonl, env);
+        const auto cmd =
+            nara::AwardCollectCommandLineW(exe, window.start_month, window.end_month, jsonl_path, env_path);
         if (!RunCollectCommand(hwnd, cmd, dir, window.start_month + "~" + window.end_month, jsonl, db)) {
             SetUpdatingUi(hwnd, false);
             return;
@@ -437,24 +492,21 @@ void PaintMain(HWND hwnd, HDC hdc) {
     Gdiplus::Graphics g(mem);
     ApplyCrispGraphics(g);
     ApplyDpiTransform(g);
-    Gdiplus::SolidBrush page{Gdiplus::Color(nara::chart_theme::kWindowBgArgb)};
+    Gdiplus::LinearGradientBrush page(
+        Gdiplus::Point(0, 0), Gdiplus::Point(w, 0),
+        Gdiplus::Color(static_cast<Gdiplus::ARGB>(nara::chart_theme::kPageBg0Argb)),
+        Gdiplus::Color(static_cast<Gdiplus::ARGB>(nara::chart_theme::kPageBg1Argb)));
     g.FillRectangle(&page, 0, 0, w, h);
-    Gdiplus::SolidBrush accent(Gdiplus::Color(255, 217, 119, 6));
-    g.FillRectangle(&accent, 0, 0, w, 3);
-
-    Gdiplus::FontFamily family(L"Malgun Gothic");
-    Gdiplus::Font eyebrow(&family, 12.0f, Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
-    Gdiplus::Font body(&family, 13.0f, Gdiplus::FontStyleRegular, Gdiplus::UnitPixel);
-    Gdiplus::Font bodyBold(&family, 13.0f, Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
-    Gdiplus::Font headerFont(&family, 12.0f, Gdiplus::FontStyleBold, Gdiplus::UnitPixel);
-    Gdiplus::SolidBrush ink(Gdiplus::Color(255, 17, 17, 17));
-    Gdiplus::SolidBrush muted(Gdiplus::Color(255, 107, 114, 128));
-    Gdiplus::SolidBrush copper(Gdiplus::Color(255, 185, 83, 9));
-    Gdiplus::SolidBrush white(Gdiplus::Color(252, 255, 255, 255));
-    Gdiplus::SolidBrush headerBg(Gdiplus::Color(255, 238, 242, 246));
-    Gdiplus::SolidBrush stripe(Gdiplus::Color(255, 248, 250, 252));
-    Gdiplus::SolidBrush select(Gdiplus::Color(255, 255, 247, 237));
-    Gdiplus::Pen copperPen(Gdiplus::Color(255, 231, 196, 140), 1.5f);
+    Gdiplus::LinearGradientBrush bloom(
+        Gdiplus::Point(0, 0), Gdiplus::Point(w / 2, h / 3),
+        Gdiplus::Color(static_cast<Gdiplus::ARGB>(nara::chart_theme::WithAlpha(nara::chart_theme::kPageBloomArgb, 0x48))),
+        Gdiplus::Color(static_cast<Gdiplus::ARGB>(nara::chart_theme::WithAlpha(nara::chart_theme::kPageBloomArgb, 0x00))));
+    g.FillRectangle(&bloom, 0, 0, w, h);
+    Gdiplus::LinearGradientBrush accent(
+        Gdiplus::Point(0, 0), Gdiplus::Point(w, 0),
+        Gdiplus::Color(static_cast<Gdiplus::ARGB>(nara::chart_theme::kAccentBar0Argb)),
+        Gdiplus::Color(static_cast<Gdiplus::ARGB>(nara::chart_theme::kAccentBar1Argb)));
+    g.FillRectangle(&accent, 0, 0, w, static_cast<INT>(nara::chart_theme::kAccentBarH));
 
     nara::MosaicPaintIn mosaic_in;
     mosaic_in.w = w;
@@ -468,18 +520,6 @@ void PaintMain(HWND hwnd, HDC hdc) {
     mosaic_in.scroll = &g_scroll;
     mosaic_in.table_rect = &g_tableRect;
     nara::PaintMosaicFirstPage(g, mosaic_in);
-    (void)eyebrow;
-    (void)body;
-    (void)bodyBold;
-    (void)headerFont;
-    (void)ink;
-    (void)muted;
-    (void)copper;
-    (void)white;
-    (void)headerBg;
-    (void)stripe;
-    (void)select;
-    (void)copperPen;
     g.Flush();
     nara::dwrite_text::Flush(mem, pixel_w, pixel_h, g_dpi_scale);
     BitBlt(hdc, 0, 0, pixel_w, pixel_h, mem, 0, 0, SRCCOPY);
@@ -508,7 +548,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         ReloadTable(hwnd);
         const auto stored = nara::MaxParticipantOpenDay(nara::DefaultDashboardDbPath());
         g_status = stored.empty() ? "준비됨 · 저장된 공고 없음 · 업데이트하면 1년치를 받습니다"
-                                  : "준비됨 · 저장 최신 개찰 " + stored + " · 업데이트는 그 다음 날부터만 조회";
+                                  : "준비됨 · 저장 최신 개찰 " + stored + " · 업데이트는 그 당일부터 다시 조회";
         return 0;
     }
     case WM_SIZE:
@@ -589,16 +629,20 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         const int pw = item->rcItem.right - item->rcItem.left;
         const int ph = item->rcItem.bottom - item->rcItem.top;
         Gdiplus::RectF r(0, 0, static_cast<Gdiplus::REAL>(ToDip(pw)), static_cast<Gdiplus::REAL>(ToDip(ph)));
+        RECT parent_rc{};
+        GetClientRect(hwnd, &parent_rc);
+        const int parent_w = (std::max)(1, ToDip(parent_rc.right));
+        const int parent_h = (std::max)(1, ToDip(parent_rc.bottom));
+        const auto btn_origin = ButtonParentDipOrigin(hwnd, item->hwndItem);
         {
             Gdiplus::Graphics g(item->hDC);
             ApplyCrispGraphics(g);
             ApplyDpiTransform(g);
-            Gdiplus::SolidBrush card(Gdiplus::Color(255, 255, 255, 255));
-            g.FillRectangle(&card, r);
-            Gdiplus::RectF inner(r.X + 0.5f, r.Y + 0.5f, r.Width - 1.0f, r.Height - 1.0f);
-            Gdiplus::GraphicsPath path;
-            RoundRectPath(path, inner, static_cast<float>(nara::chart_theme::kMainBtnRadius));
+            PaintPageWashLocal(g, parent_w, parent_h, btn_origin.x, btn_origin.y, r.Width, r.Height);
             if (!look.transparent) {
+                Gdiplus::RectF inner(r.X + 0.5f, r.Y + 0.5f, r.Width - 1.0f, r.Height - 1.0f);
+                Gdiplus::GraphicsPath path;
+                RoundRectPath(path, inner, static_cast<float>(nara::chart_theme::kMainBtnRadius));
                 if (look.gradient) {
                     Gdiplus::LinearGradientBrush fill(
                         Gdiplus::PointF(inner.X, inner.Y),
@@ -631,6 +675,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             }
         } else if (LOWORD(wParam) == kIdUpdate) {
             OnUpdate(hwnd);
+        } else if (LOWORD(wParam) == kIdStop) {
+            OnStop(hwnd);
         }
         return 0;
     case WM_DESTROY:
@@ -656,7 +702,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
     wc.lpfnWndProc = WndProc;
     wc.hInstance = instance;
     wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
-    wc.hbrBackground = CreateSolidBrush(RGB(243, 245, 248));
+    wc.hbrBackground = CreateSolidBrush(nara::chart_theme::WindowBgColorRef());
     wc.lpszClassName = L"NaraDesktopMain";
     RegisterClassW(&wc);
     HWND hwnd = CreateWindowExW(0, wc.lpszClassName, L"동국문화유산연구원 낙찰분석프로그램",
