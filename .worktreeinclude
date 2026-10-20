@@ -1,4 +1,0 @@
-# Gitignored secrets copied (not symlinked) into each new worktree.
-.env
-.agents/skills/API/.api_key.env
-nara-workspace/.env

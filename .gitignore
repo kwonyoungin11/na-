@@ -2,42 +2,23 @@
 .env
 **/igunsul.local.env
 nara-workspace/app/igunsul.local.env
-
-# local codex/bkit tooling
-.bkit-codex/
-.codex/
-.omx/
-.tools/
-.vscode/
 .agents/skills/API/.api_key.env
-.agents/skills/bkend-*
-.agents/skills/bkit-*
-.agents/skills/code-review
-.agents/skills/codex-learning
-.agents/skills/desktop-app
-.agents/skills/development-pipeline
-.agents/skills/dynamic
-.agents/skills/enterprise
-.agents/skills/mobile-app
-.agents/skills/pdca
-.agents/skills/phase-*
-.agents/skills/plan-plus
-.agents/skills/starter
-.agents/skills/zero-script-qa
+
+# IDE / local editor settings
+.vscode/
+.tools/
 
 # python caches
 **/__pycache__/
 **/*.py[cod]
 .pytest_cache/
 .ruff_cache/
-**/.bkit-memory.json
-**/.pdca-status.json
 
 # .NET build outputs
 **/bin/
 **/obj/
 
-# C++ ingest (nara_collect_cpp) cmake output
+# C++ (nara_collect_cpp) cmake output
 cc-feature-implementer/desktop/nara_collect_cpp/build/
 
 # local generated work/data
@@ -52,35 +33,19 @@ tmp-verify-force-refresh/
 배포/
 /docs/
 /PLANS.md
-/launch_nara_current.ps1
 .agents/**/output/
 *.xlsx
 *.docx
 전체_통합_데이터_전처리요약_*.json
 image.png
+/image copy*.png
 nul
-.aider*
 
 # nara workspace generated data
 /nara-workspace/*
 !/nara-workspace/README.md
 !/nara-workspace/scripts/
 !/nara-workspace/scripts/**
-
-# grok hook runtime (project hooks in .grok/hooks/*.json are tracked)
-.grok/hooks/state/
-.unlazy/
-.unlazy-hook-state.json
-/GATES.md
-
-# local runtime scratch
-/.omc/
-/규칙.md
-/image copy 2.png
-/image copy 3.png
-/image copy 4.png
-/image copy 5.png
-/image copy 6.png
 
 # cli-anything local session
 **/agent-harness/.session/

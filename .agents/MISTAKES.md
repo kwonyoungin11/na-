@@ -42,7 +42,7 @@
 
 33. **업데이트 버튼이 먹통처럼 보이고 12개월을 다시 받음**
    - 잘못: 진행 문구가 회색 푸터에만 있어 안 보임. 이미 sqlite에 있는 달을 OpenAPI에 다시 친다.
-   - 규칙: 노란 상태 줄 + 버튼 `수집 중`. `PlanMissingCollect`는 저장 최신 개찰 다음날~오늘만. 빈 DB만 1년 창.
+   - 규칙: 노란 상태 줄 + 버튼 `수집 중`. `PlanMissingCollect`는 저장 최신 개찰 **당일**~오늘. 같은 날 늦게 올라온 낙찰을 다시 받는다. 빈 DB만 1년 창. 이미 있는 달을 통째로 다시 치지 않는다.
 
 32. **맵 Y를 최신 위로 뒤집으면 원래 공고가 사라지고 위아래가 반대가 됨**
    - 잘못: 최신이 안 보인다고 행 순서를 뒤집음. 맵은 C#처럼 오래된 공고가 위, 최신이 아래. 뒤집으면 6월이 아래로 가고 8월만 위에 남는다.
@@ -101,6 +101,14 @@
 6. **영향진단 수집**
    - 잘못: `국가유산영향진단`을 도메인 토큰에 넣음. 금강 공주 공고가 차트에 뜸.
    - 규칙: 영향진단은 수집·저장·차트 금지. `배수영향구간`은 영향진단이 아니다.
+
+6b. **검색 키워드가 전처리 도메인보다 좁음**
+   - 잘못: OpenAPI 검색은 발굴/시굴 계열만 치고, `PassesCollectRules`는 지표조사·표본조사·문화유산을 drop. `국가유산`을 검색하면 영향진단이 홍수처럼 들어온다.
+   - 규칙: search keywords must match preprocess domain (지표/표본/매장유산/문화재조사/문화유산). Do not search 국가유산.
+
+51. **L: 동국문화재연구원 C# exe를 C++로 덮음**
+   - 잘못: `L:\동국문화유산연구원`이 없다고 `L:\동국문화재연구원\동국문화재연구원.exe`(C# 포터블)를 `nara_desktop`으로 덮음. 2026-09-13에도 바탕화면 `동국문화재연구원`을 C++ 696KB로 덮음. 백업 `D:\20260710\동국문화재연구원\동국문화재연구원.exe`(41631386)에서 복구.
+   - 규칙: 포터블 복사는 지정된 `동국문화유산연구원` 폴더만. 다른 이름·C# exe는 덮지 않는다.
 
 7. **5개사 이하 공고를 올림**
    - 규칙: 고유 업체 6개 미만 공고는 저장·표시하지 않는다.
@@ -184,9 +192,9 @@
    - 잘못: 팬 중에 라벨을 생략한 프레임을 정적 비트맵으로 캐시하고, 호버는 그 비트맵만 BitBlt함. ClearType은 메모리 DC에 글자가 안 남음.
    - 규칙: 라벨을 뺀 드래그 프레임은 캐시하지 않는다. 팬은 라벨이 이미 들어 있는 overscan 플롯 비트맵을 BitBlt한다. DirectWrite 칩을 매 마우스 이동마다 다시 만들지 않는다.
 
-15. **Windows 훅 command에 `${GROK_WORKSPACE_ROOT}`를 넣음**
-   - 잘못: `-File "${GROK_WORKSPACE_ROOT}/.grok/hooks/dev-engineering.ps1"` → 변수가 비어 `/.grok/hooks/...`가 되고 PowerShell이 exit 1. 매 프롬프트/툴마다 빨간 글자.
-   - 규칙: 훅 command에 `${GROK_WORKSPACE_ROOT}`를 쓰지 않는다. cwd 상대 `.grok\hooks\dev-engineering.ps1` 또는 절대 경로만 `-File`에 넘긴다.
+15. **Windows 훅 command에 미정의 환경변수를 넣음**
+   - 잘못: 훅 `command`에 정의되지 않은 워크스페이스 환경변수를 넣어 경로가 깨지고 PowerShell이 exit 1을 반환함. 매 프롬프트/툴마다 오류 발생.
+   - 규칙: `.agents/hooks.json`의 `command`에는 미정의 환경변수를 쓰지 않고 `.agents/` 기준 상대 경로를 넘긴다.
 
 21. **수집 CLI 기본 기간이 2~8월(7개월)인데 표/푸터는 1년**
    - 잘못: `nara_award_collect` argv 기본값이 `2026-02`~`2026-08`. 업데이트 버튼은 12개월을 넘기지만, 인자 없이 돌리면 7개월만 모인다.
@@ -195,6 +203,18 @@
 22. **한글 사용자 경로에서 sqlite를 ACP `path.string()`으로 열어 빈 표**
    - 잘못: `sqlite3_open`은 UTF-8인데 `PathString`이 `.string()`(ACP)을 넘김. `C:\Users\권을\...`에서 `EnsureParticipantsSchema` 실패, db 없음, 공고 0건.
    - 규칙: sqlite open은 `path.u8string()`/`sqlite3_open16`. 빈 표는 먼저 db/jsonl 존재와 `GetLocalTime` 연도를 나눈다. OS가 2026이면 푸터는 2025-08-28~2026-08-28이다.
+
+49. **저장 최신 개찰 다음날부터만 조회해서 당일 낙찰이 안 들어옴**
+   - 잘못: `PlanMissingCollect`가 `stored+1`~오늘. 최신 개찰이 오늘이면 `AlreadyCurrent`로 나라장터를 안 침.
+   - 규칙: 구간은 저장 최신 **당일**~오늘. 같은 날 추가 낙찰을 다시 받는다.
+
+50. **오너드로우 버튼을 단색/흰 사각형으로 먼저 채워 라운드 밖에 사각 실루엣이 남음**
+   - 잘못: `WM_DRAWITEM`에서 `FillRectangle` 흰색 또는 단색 중간 하늘(`kWindowBgArgb` #D6F2FF) 뒤 둥근 경로만 그림. `PaintMain`은 가로 그라데이션 #B8E6FF→#E8F9FF + bloom이라 모서리가 사각 실루엣으로 남음. 단색 중간 하늘만으로는 부족하다.
+   - 규칙: 버튼 DC는 페이지와 같은 두 워시를 버튼의 부모 원점 기준 로컬 DIP로 이어서 칠한다(`PageWashLocalStart`/`PageWashLocalEnd`/`PageBloomLocalEnd`, `GetWindowRect`+`ScreenToClient`+`ToDip`). 그 위에 둥근 경로만 그린다. 흰 사각형·단색 하늘을 깔지 않는다. Ghost는 코너에 페이지 워시만, 추가 흰/단색 path fill 없음.
+
+48. **한글 포터블 폴더에서 업데이트 버튼이 수집을 못 띄움**
+   - 잘못: `nara_award_collect.exe` 경로를 `.string()`(ACP)으로 만든 뒤 `Utf8ToWide`(CP_UTF8)로 풀어 `GetFileAttributesW`/`CreateProcessW`. 바탕화면 `동국문화유산연구원`에서 `nara_award_collect.exe 없음`이 되고 나라장터를 안 친다.
+   - 규칙: 존재 확인은 `PathExistsWide`(`path.wstring()`). 수집 커맨드라인은 `AwardCollectGapCommandLineW`. cwd도 wide.
 
 23. **「깨끗해 보인다」를 「안 깨끗하다」로 읽고 C#을 고침**
    - 잘못: C#이 깨끗하고 C++가 더럽다는 비교인데, C# 글꼴·그림자를 바꿈.
@@ -219,3 +239,11 @@
 24. **C#처럼 보이게 GDI+ 0.4펜을 글자 위에 그음 / 칩을 둥글게 / 그림자를 하드 오프셋**
    - 잘못: C# `DrawGeometry(white, 0.4 pen)`·`DrawRectangle`·`DropShadowEffect(blur)`를 그대로 GDI+에 옮김. 가는 펜은 ~1px로 번지고, radius 3 칩은 모서리가 흐리며, blur 토큰을 안 쓰고 사각형만 한 장 밑으로 복제함.
    - 규칙: 칩은 C#처럼 직각·테두리 `#21252B`. 글자 외곽은 먼저 스트로크하고 흰색으로 덮는다. 텍스트는 WPF Ideal = `TextRenderingHintAntiAlias`. 그림자는 `BlurShadowLayerCount` 레이어. C#을 바꾸지 않는다.
+
+52. **업데이트가 됐는데 표가 그대로라 안 된다고 보임**
+   - 잘못: 상태 문구가 표 제목 옆 10px 회색. 동국 98.79·1위 101.19는 99–101 창 밖이라 경북 탭 표가 공고를 버림. `중지`는 WM_COMMAND가 없어 수집 중 클릭이 죽은 것처럼 보임. `전국`에 경북을 섞어 전장맵이 섞였다.
+   - 규칙: 노란 상태 배너. 토큰은 `전국`|`경북`만, 섞지 않는다. 동국 참여 공고는 그 지역 탭에서 동국/1위가 창 밖이어도 표에 남긴다. `중지`는 수집 프로세스를 끊는다.
+
+53. **전국 전장맵에 경북 공고를 넣음**
+   - 잘못: 청도 수의를 전국 탭에 보이려고 `MatchesRegion(경북, 전국)`을 통과시킴. 표와 전장맵이 같은 `BuildChartUniverse`라 전국 맵에 경북 칩이 올라감.
+   - 규칙: `전국`은 참가가능=전국만. 경북 공고는 경북 탭. 맵과 표는 같은 지역 우주.

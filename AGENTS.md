@@ -1,121 +1,79 @@
 # AGENTS.md
 
-## Scope
+## Scope & Antigravity Official Customizations
 
-This file contains durable repository instructions only.
+This repository uses the official **Google Antigravity** workspace customization layout:
 
-- Put personal communication preferences in `~/.codex/AGENTS.md`.
-- Put directory-specific rules in the closest nested `AGENTS.md`.
-- Put C++ / Win32 design workflows in `.grok/skills/`.
-- Use `.agents/PLANS.md` (or a task-specific plan file) for complex or long-running work.
+- **Workspace Rules**: `AGENTS.md` (root and directory-scoped)
+- **Workspace Skills**: `.agents/skills/<skill-name>/SKILL.md`
+  - Load [`cpp-nara-desktop`](.agents/skills/cpp-nara-desktop/SKILL.md) when working on the C++ desktop application, OpenAPI collector, SQLite store, award table, or battlefield map (`전장 맵`).
+- **Mistake Log**: [`.agents/MISTAKES.md`](.agents/MISTAKES.md)
+- **Execution Plans**: [`.agents/PLANS.md`](.agents/PLANS.md)
 
-## Tooling
+## Mistake Log
 
-Grok **skills**, **hooks**, and **MCP** are on in this project.
-
-C++ and design skills live in `.grok/skills/`. Load the matching skill for C++ work. Add more with `/create-skill`.
-
-Forced at usage points (hooks in `.grok/hooks/`):
-
-- Production `.cpp` / `.h` / `.cs` → `superpowers` + `test-driven-development` + `cpp-tdd-cmake`
-- Substantial completion → `unlazy` (`GATES.md` with `CHECK`/`EXPECT`)
-
-MCP: `search_tool` then `use_tool`. Project servers are in `.grok/config.toml`.
-
-Canonical domain text: `.grok/rules/00-dev-engineering.md`.
-
-Short form: loop (failing check → smallest fix → same check), graph (표 스냅샷 = 전장 맵), region is `전국`|`경북` only, C++ collect, read `.agents/MISTAKES.md` before chart/collect/table edits.
-
-Live C++ desktop: `cc-feature-implementer/desktop/nara_collect_cpp/build/Release/nara_desktop.exe` via explorer. C# Debug exe only when the user asked for the C# app.
-
-## Mistake log
-
-- Before coding, read `.agents/MISTAKES.md`. Do not repeat a listed mistake.
+- Before coding, collecting, or editing chart/table logic, read [`.agents/MISTAKES.md`](.agents/MISTAKES.md). Do not repeat any listed mistake.
 - When a new mistake is confirmed, append one item there (what went wrong + the rule). Do not only mention it in chat.
+
+## Domain Invariants
+
+- **Development Loop**: Hypothesis → failing check (`test_*.cpp`) → smallest fix → re-run the **same** check.
+- **Single Snapshot Graph**: `업데이트` → C++ `nara_award_collect` JSONL → SQLite (`nara-dashboard.db`) → main table (`ReloadTable`) → in-memory snapshot (`g_snapshot`) → battlefield map (`전장 맵`). The chart popup copies `g_snapshot` and never re-reads SQLite on its own.
+- **Region Tokens**: Strictly `전국` | `경북` only. Normalize `경상북도` / `경상북` / `대구,경북` to `경북`. Never expose `대구` in the UI, and never mix `전국` and `경북` notices in the same universe.
+- **Award Filter**: Collect and display award notices only (`낙찰`). Drop notices with `< 6` unique companies. Exclude `국가유산영향진단` (`배수영향구간` is allowed).
+- **Live Desktop Application**:
+  - Live C++ desktop executable: `cc-feature-implementer/desktop/nara_collect_cpp/build/Release/nara_desktop.exe`
+  - Launch on the user's interactive `Default` desktop (never leave it hidden in a background/isolated desktop or killed by a shell job).
+  - Launch the C# Debug executable only when the user explicitly asks for the C# app.
 
 ## Core Rules
 
 - Do not guess. Inspect relevant files, tests, configs, and logs before editing.
 - Prefer the smallest safe diff that solves the request.
-- Follow existing repository patterns before introducing new abstractions.
+- Follow existing repository patterns (`nara::` helpers, `chart_theme.h` tokens, `dwrite_text` DirectWrite queue) before introducing new abstractions.
 - Do not change unrelated code unless required for correctness.
 - Do not present assumptions as verified facts. State uncertainty clearly.
 
 ## Routing
 
 - Start with the smallest set of files likely to answer the task.
-- Prioritize these entry points first: repository instructions, root build/config files, and the nearest application or test directories that actually exist.
+- Prioritize repository instructions (`AGENTS.md`, `.agents/MISTAKES.md`), `cc-feature-implementer/desktop/nara_collect_cpp/CMakeLists.txt`, and the nearest `tests/test_*.cpp` files.
 - If behavior is unclear, check the nearest relevant tests before widening the search.
-- If you are reading too broadly, stop and narrow the search using file paths, build scripts, and test names.
 
-## Planning
+## Planning & Execution
 
-- For small or local changes, do not stop to present an upfront plan; inspect, edit, and verify.
-- Use an ExecPlan (`.agents/PLANS.md` or a task-specific plan file) before major edits when the work is complex, ambiguous, cross-cutting, risky, or likely to require multiple edit/verify loops.
-- An ExecPlan must define:
-
-  - milestones
-  - acceptance criteria
-  - validation commands
-  - a stop-and-fix rule if validation fails
-- Keep the plan updated as work progresses.
-
-## Execution
-
+- Use an ExecPlan ([`.agents/PLANS.md`](.agents/PLANS.md) or a task-specific plan artifact) before major or cross-cutting edits, defining milestones, acceptance criteria, validation commands, and a stop-and-fix rule.
 - Keep diffs scoped to the requested change.
 - After each meaningful milestone, run the relevant checks and fix failures before moving on.
-- Update docs when behavior, commands, configuration, or developer workflow changes.
 
-## Verification
+## Verification & Repo Commands
 
 Do not claim completion without running the relevant checks that exist in this repo.
 
 Preferred order:
 
-1. focused test(s)
-2. broader test suite when needed
-3. lint
-4. typecheck
-5. build
+1. Focused C++ test executable:
+   ```powershell
+   cmake --build cc-feature-implementer/desktop/nara_collect_cpp/build --config Release --target nara_<area>_tests
+   .\cc-feature-implementer\desktop\nara_collect_cpp\build\Release\nara_<area>_tests.exe
+   ```
+2. Full C++ test suite:
+   ```powershell
+   ctest --test-dir cc-feature-implementer/desktop/nara_collect_cpp/build -C Release --output-on-failure
+   ```
+3. Live C++ desktop & collector build:
+   ```powershell
+   cmake --build cc-feature-implementer/desktop/nara_collect_cpp/build --config Release --target nara_desktop nara_award_collect
+   ```
 
 Always report:
 
-- exact commands run
+- exact commands run and exit codes
 - pass/fail result
 - unresolved issues or follow-ups
 
-## Safety
+## Safety & Dependencies
 
-For auth, permissions, secrets, payments, infra, production config, migrations, data deletion, or security-sensitive changes:
-
-- inspect surrounding code and callers before editing
-- call out risks explicitly
-- prefer reversible, narrowly scoped changes
-- avoid opportunistic refactors
-
-## Dependencies and CI
-
-- Do not add or upgrade dependencies unless necessary.
-- Reuse existing libraries, helpers, and patterns before introducing new ones.
-- Call out dependency, lockfile, package manager, or CI/CD changes explicitly.
-
-## Repo Commands
-
-Keep these commands exact and current for this repo.
-
-- Add install, dev, test, lint, typecheck, and build commands only after confirming the repository toolchain.
-- Do not guess command names, package managers, or scripts.
-
-## Review Output
-
-For team-facing summaries, keep the final report brief and review-friendly:
-
-- changed files
-- what changed
-- verification run
-- risks / side effects
-- follow-up actions
-
-## Maintenance
-
-When a mistake, routing correction, or recurring review comment repeats, update the closest applicable `AGENTS.md` so the fix persists.
+- Never commit secrets (`.env`, `**/igunsul.local.env`).
+- Never hardcode machine-specific user or drive paths in source code or rules.
+- Do not add or upgrade external dependencies unless explicitly approved.
